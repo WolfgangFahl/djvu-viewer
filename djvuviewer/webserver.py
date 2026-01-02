@@ -7,17 +7,18 @@ Refactored to Focus on DjVu functionality
 
 from typing import Dict
 
+from ngwidgets.input_webserver import InputWebserver, InputWebSolution
+from ngwidgets.webserver import WebserverConfig
+from ngwidgets.widgets import Link
+from nicegui import Client, app, ui
+from starlette.responses import FileResponse, HTMLResponse
+
 from djvuviewer.djvu_catalog import DjVuCatalog
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_debug import DjVuDebug
 from djvuviewer.djvu_viewer import DjVuViewer
 from djvuviewer.version import Version
 from djvuviewer.wiki_images import MediaWikiImages
-from ngwidgets.input_webserver import InputWebserver, InputWebSolution
-from ngwidgets.webserver import WebserverConfig
-from ngwidgets.widgets import Link
-from nicegui import Client, app, ui
-from starlette.responses import FileResponse, HTMLResponse
 
 
 class DjVuViewerWebServer(InputWebserver):
@@ -55,9 +56,9 @@ class DjVuViewerWebServer(InputWebserver):
             return await self.page(client, DjVuSolution.djvu_browse)
 
         @ui.page("/djvu/debug/{path:path}")
-        async def djvu_debug_route(client:Client, path: str) -> HTMLResponse:
+        async def djvu_debug_route(client: Client, path: str) -> HTMLResponse:
             """Route for DjVu debug page"""
-            return await self.page(client, DjVuSolution.djvu_debug,path)
+            return await self.page(client, DjVuSolution.djvu_debug, path)
 
         @app.get("/djvu/content/{file:path}")
         def get_content(file: str) -> FileResponse:
@@ -127,12 +128,11 @@ class DjVuViewerWebServer(InputWebserver):
             html_response = self.djvu_viewer.get_page(path, page)
             return html_response
 
-
-    def get_mediawiki_images_client(self,url:str)->MediaWikiImages:
+    def get_mediawiki_images_client(self, url: str) -> MediaWikiImages:
         """
         get the images client for the given url
         """
-        mw_client=None
+        mw_client = None
         if url:
             api_epp = "api.php"
             base = url if url.endswith("/") else f"{url}/"
@@ -148,12 +148,15 @@ class DjVuViewerWebServer(InputWebserver):
         configure me
         """
         super().configure_run()
-        self.djvu_config=DjVuConfig.get_instance()
+        self.djvu_config = DjVuConfig.get_instance()
         # make helper classes available
         self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config)
         # Initialize MediaWiki clients if using API mode
-        self.mw_client_base=self.get_mediawiki_images_client(self.djvu_config.base_url)
-        self.mw_client_new=self.get_mediawiki_images_client(self.djvu_config.new_url)
+        self.mw_client_base = self.get_mediawiki_images_client(
+            self.djvu_config.base_url
+        )
+        self.mw_client_new = self.get_mediawiki_images_client(self.djvu_config.new_url)
+
 
 class DjVuSolution(InputWebSolution):
     """
@@ -169,13 +172,13 @@ class DjVuSolution(InputWebSolution):
             client (Client): The client instance this context is associated with.
         """
         super().__init__(webserver, client)
-        self.djvu_config=webserver.djvu_config
+        self.djvu_config = webserver.djvu_config
 
     def add_links(self, view_record: Dict[str, any], filename: str):
         """
         Add the DjVu links.
         """
-        config=self.djvu_config
+        config = self.djvu_config
         if filename:
             wiki_url = f"{config.base_url}/Datei:{filename}"
             view_record["wiki"] = Link.create(url=wiki_url, text=filename)
@@ -212,7 +215,7 @@ class DjVuSolution(InputWebSolution):
 
         await self.setup_content_div(show)
 
-    async def djvu_modal_catalog(self,browse_wiki:bool=False):
+    async def djvu_modal_catalog(self, browse_wiki: bool = False):
         """Show the DjVu Catalog page"""
 
         def show():

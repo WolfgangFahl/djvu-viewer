@@ -1,9 +1,64 @@
+"""
+Created on 2026-01-02
+
+@author: wf
+"""
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Dict, Iterable, List, Optional, Union
+
 import requests
-from typing import List, Dict, Iterable, Optional
+
+
+@dataclass
+class MediaWikiImage:
+    """
+    Represents a single image resource from MediaWiki.
+    """
+
+    name: str
+    url: str
+    mime: str
+    size: int
+    user: Optional[str] = None
+    timestamp: Optional[datetime] = None
+    description_url: Optional[str] = None
+    height: Optional[int] = None
+    width: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MediaWikiImage":
+        """
+        Factory method to create an instance from a MediaWiki API result dict.
+        """
+        # Parse timestamp if available, usually ISO 8601 format like "2023-01-01T12:00:00Z"
+        ts_str = data.get("timestamp")
+        ts = None
+        if ts_str:
+            try:
+                # Basic ISO parsing
+                ts = datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%SZ")
+            except ValueError:
+                pass
+
+        mw_image = cls(
+            name=data.get("name") or data.get("title", "?"),
+            url=data.get("url", ""),
+            mime=data.get("mime", "application/octet-stream"),
+            size=data.get("size", 0),
+            user=data.get("user", None),
+            timestamp=ts,
+            description_url=data.get("descriptionurl"),
+            height=data.get("height"),
+            width=data.get("width"),
+        )
+        return mw_image
+
 
 class MediaWikiImages:
     """
-    Fetch images from a MediaWiki API via the 'allimages' list.
+    Fetch images from a MediaWiki API via the 'allimages' list or by title.
 
     Example:
         client = MediaWikiImages(
@@ -12,7 +67,11 @@ class MediaWikiImages:
             aiprop=("url", "mime", "size", "timestamp", "user"),
             timeout=20,
         )
-        images = mwi.fetch_allimages(limit=120)  # returns a list of dicts
+        # Fetch list of images
+        images = client.fetch_allimages(limit=120)
+
+        # Fetch single image details
+        single_img = client.fetch_image("File:Example.djvu")
     """
 
     def __init__(
@@ -26,9 +85,8 @@ class MediaWikiImages:
         """
         Args:
             api_url: Full API endpoint, e.g. 'https://genwiki.genealogy.net/w/api.php'
-                     You can also use 'https://genwiki.genealogy.net/api.php' (redirects followed).
-            mime_types: MIME types to filter by (joined with '|'). If None, no filter is applied.
-            aiprop: Properties to request for each image. If None, defaults to common fields.
+            mime_types: MIME types to filter by (joined with '|'). e.g. ("image/jpeg",).
+            aiprop: Properties to request. Defaults to url, mime, size, timestamp, user, dimensions.
             timeout: Per-request timeout in seconds.
             session: Optional requests.Session to reuse connections.
         """
@@ -38,29 +96,68 @@ class MediaWikiImages:
 
         # Default filters
         self.mime_types = tuple(mime_types) if mime_types else ()
+
+        # Default properties if none provided
         if aiprop is None:
-            self.aiprop = ("url", "mime", "size", "timestamp", "user")
+            self.aiprop = ("url", "mime", "size", "timestamp", "user", "dimensions")
         else:
             self.aiprop = tuple(aiprop)
+
+    def fetch_image(self, title: str) -> Optional[MediaWikiImage]:
+        """
+        Retrieve a single image by its file title (e.g., 'File:Example.jpg').
+
+        Args:
+            title: The exact page title of the file.
+
+        Returns:
+            MediaWikiImage object if found, None otherwise.
+        """
+        params = {
+            "action": "query",
+            "prop": "imageinfo",
+            "titles": title,
+            "format": "json",
+            "iiprop": "|".join(self.aiprop),
+        }
+
+        data = self._make_request(params)
+        pages = data.get("query", {}).get("pages", {})
+        mw_image = None
+        for page_id, page_data in pages.items():
+            # If page_id is negative (e.g., "-1"), the page does not exist
+            if int(page_id) < 0:
+                continue
+
+            imageinfo = page_data.get("imageinfo", [])
+            if imageinfo:
+                # Merge page title into the image info dict to match 'allimages' structure
+                info_dict = imageinfo[0]
+                info_dict["title"] = page_data.get("title")
+                mw_image = MediaWikiImage.from_dict(info_dict)
+
+        return mw_image
 
     def fetch_allimages(
         self,
         limit: int,
         per_request: int = 50,
         extra_params: Optional[Dict[str, str]] = None,
-    ) -> List[Dict]:
+        as_objects: bool = False,
+    ) -> Union[List[MediaWikiImage], List[Dict]]:
         """
-        Retrieve up to 'limit' images with details as a list of dicts.
+        Retrieve up to 'limit' images.
 
         Args:
             limit: Maximum number of image records to return.
-            per_request: Page size for each API call (MediaWiki typical max is 50 for non-bot).
+            per_request: Page size for each API call (max 50 normally, 500 for bots).
             extra_params: Extra query params to merge into the request.
+            as_objects: If True, returns List[MediaWikiImage]. If False, returns List[Dict].
 
         Returns:
-            List of image dicts (as returned under 'query' -> 'allimages').
+            List of MediaWikiImage objects or dictionaries.
         """
-        results: List[Dict] = []
+        results = []
         remaining = max(0, int(limit))
         if remaining == 0:
             return results
@@ -69,10 +166,9 @@ class MediaWikiImages:
             "action": "query",
             "list": "allimages",
             "format": "json",
-            # 'continue' behavior: MW returns a dict with tokens; we pass them back verbatim.
         }
 
-        # Filters
+        # Apply Configuration filters
         if self.mime_types:
             base_params["aimime"] = "|".join(self.mime_types)
         if self.aiprop:
@@ -88,31 +184,46 @@ class MediaWikiImages:
             params.update(continue_params)
             params["ailimit"] = min(per_request, remaining)
 
-            resp = self.session.get(self.api_url, params=params, timeout=self.timeout, allow_redirects=True)
-            resp.raise_for_status()
-            data = resp.json()
+            data = self._make_request(params)
 
-            if "error" in data:
-                # Raise a helpful exception
-                code = data["error"].get("code", "unknown")
-                info = data["error"].get("info", "")
-                raise RuntimeError(f"MediaWiki API error: {code} - {info}")
-
-            images = data.get("query", {}).get("allimages", [])
-            if not images:
+            # Extract list
+            images_raw = data.get("query", {}).get("allimages", [])
+            if not images_raw:
                 break
 
             # Append up to 'remaining'
-            take = min(remaining, len(images))
-            results.extend(images[:take])
+            take = min(remaining, len(images_raw))
+            batch = images_raw[:take]
+
+            if as_objects:
+                results.extend([MediaWikiImage.from_dict(img) for img in batch])
+            else:
+                results.extend(batch)
+
             remaining -= take
 
-            # If we still need more, continue only if API gave us a continue token
+            # Handle pagination
             cont = data.get("continue")
             if remaining > 0 and cont:
-                # Pass all keys from 'continue' back (not just 'aicontinue')
                 continue_params = cont
             else:
                 break
 
         return results
+
+    def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Helper to execute the request and handle basic errors.
+        """
+        resp = self.session.get(
+            self.api_url, params=params, timeout=self.timeout, allow_redirects=True
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if "error" in data:
+            code = data["error"].get("code", "unknown")
+            info = data["error"].get("info", "")
+            raise RuntimeError(f"MediaWiki API error: {code} - {info}")
+
+        return data

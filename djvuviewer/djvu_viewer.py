@@ -7,17 +7,19 @@ Created on 2025-02-25
 
 import logging
 import mimetypes
-from pathlib import Path
 import traceback
+from pathlib import Path
 from typing import Optional, Tuple
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile, DjVuViewPage
 from djvuviewer.image_convert import ImageConverter
 from djvuviewer.tarball import Tarball
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, Response
-from fastapi.staticfiles import StaticFiles
+
 
 class DjVuViewer:
     """
@@ -26,9 +28,7 @@ class DjVuViewer:
 
     _static_mounted = False
 
-    def __init__(
-        self, app: FastAPI, config:DjVuConfig
-    ):
+    def __init__(self, app: FastAPI, config: DjVuConfig):
         """
         Initialize the DjVu viewer.
 
@@ -36,7 +36,7 @@ class DjVuViewer:
             app: FastAPI application instance
             config:DjVu configuration
         """
-        self.config=config
+        self.config = config
         self.url_prefix = self.config.url_prefix.rstrip("/")
         self.app = app
 

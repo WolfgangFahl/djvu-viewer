@@ -4,11 +4,11 @@ Created on 2025-02-24
 @author: wf
 """
 
+from basemkit.profiler import Profiler
+from lodstorage.sql import SQLDB
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.multilang_querymanager import MultiLanguageQueryManager
-from lodstorage.sql import SQLDB
-from basemkit.profiler import Profiler
 
 
 class DjVuManager:
@@ -16,14 +16,14 @@ class DjVuManager:
     manager for DjVu files
     """
 
-    def __init__(self, config:DjVuConfig):
+    def __init__(self, config: DjVuConfig):
         """
         Initialize a DjVuManager instance.
 
         Args:
            config:DjVuConfig - the DjVu configuration to use
         """
-        self.config=config
+        self.config = config
         self.mlqm = MultiLanguageQueryManager(yaml_path=self.config.queries_path)
         self.sql_db = SQLDB(self.config.db_path, check_same_thread=False)
 
@@ -52,7 +52,7 @@ class DjVuManager:
         primary_key: str,
         with_drop: bool = False,
         profile: bool = True,
-        sampleRecordCount:int=20
+        sampleRecordCount: int = 20,
     ):
         """
         Store a list of records (list of dicts) into the database.

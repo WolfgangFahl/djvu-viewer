@@ -3,19 +3,21 @@ Created on 2026-01-02
 
 @author: wf
 """
+
 import os
 import time
+import traceback
 from dataclasses import asdict
-from typing import List, Dict, Tuple, Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+from lodstorage.lod import LOD
+from tqdm import tqdm
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.tarball import Tarball
-from lodstorage.lod import LOD
-from tqdm import tqdm
-import traceback
 
 
 class DjVuActions:
@@ -120,9 +122,7 @@ class DjVuActions:
         return lod
 
     def get_djvu_files(
-        self,
-        djvu_lod: List[Dict[str, Any]],
-        url: Optional[str] = None
+        self, djvu_lod: List[Dict[str, Any]], url: Optional[str] = None
     ) -> List[str]:
         """
         Extract DjVu file paths from the record list.
@@ -228,9 +228,7 @@ class DjVuActions:
         if not self.output_path:
             raise ValueError("output_path is not set")
         # Select processing function based on serial flag
-        process_func = (
-            self.dproc.process if serial else self.dproc.process_parallel
-        )
+        process_func = self.dproc.process if serial else self.dproc.process_parallel
 
         with tqdm(total=len(djvu_files), desc="DjVu", unit="file") as pbar:
             page_count = 0
@@ -309,7 +307,7 @@ class DjVuActions:
         """
         page_lod = []
         yaml_data = Tarball.read_from_tar(tarball_file, yaml_file).decode("utf-8")
-        djvu_file = DjVuFile.from_yaml(yaml_data) # @UndefinedVariable
+        djvu_file = DjVuFile.from_yaml(yaml_data)  # @UndefinedVariable
 
         for page in djvu_file.pages:
             page_record = asdict(page)
@@ -451,7 +449,11 @@ class DjVuActions:
             for i, error in enumerate(self.errors, 1):
                 print(f"📝 {i}. {error}")
                 if self.verbose:
-                    tb = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+                    tb = "".join(
+                        traceback.format_exception(
+                            type(error), error, error.__traceback__
+                        )
+                    )
                     print("📜", tb)
 
     def catalog_and_store(self, limit: int, sample_record_count: int = 1) -> None:
@@ -466,9 +468,7 @@ class DjVuActions:
         self.store(djvu_lod, page_lod, sample_record_count=sample_record_count)
 
     def convert_from_database(
-        self,
-        serial: bool = False,
-        url: Optional[str] = None
+        self, serial: bool = False, url: Optional[str] = None
     ) -> None:
         """
         Convert DjVu files to PNG format using database records.
@@ -482,9 +482,7 @@ class DjVuActions:
         self.convert_djvu(djvu_files, serial=serial)
 
     def update_from_database(
-        self,
-        max_errors: float = 1.0,
-        url: Optional[str] = None
+        self, max_errors: float = 1.0, url: Optional[str] = None
     ) -> None:
         """
         Update database with metadata from processed files.

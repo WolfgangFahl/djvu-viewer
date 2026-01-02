@@ -3,13 +3,15 @@ Created on 2025-02-25
 
 @author: wf
 """
-from argparse import ArgumentParser, Namespace
+
 import argparse
 import logging
+from argparse import ArgumentParser, Namespace
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 from basemkit.profiler import Profiler
+
 from djvuviewer.djvu_actions import DjVuActions
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
@@ -175,7 +177,7 @@ class DjVuCmd(BaseCmd):
         handler = command_handlers.get(self.args.command)
         if handler:
             handler()
-            handled=True
+            handled = True
         else:
             print(f"unknown command {self.args.command}")
         return handled
@@ -186,10 +188,7 @@ class DjVuCmd(BaseCmd):
 
         Scans DjVu files and stores their metadata in the database.
         """
-        self.actions.catalog_and_store(
-            limit=self.args.limit,
-            sample_record_count=1
-        )
+        self.actions.catalog_and_store(limit=self.args.limit, sample_record_count=1)
         self.actions.report_errors(profiler_time_func=self.profiler.time)
 
     def convert(self) -> None:
@@ -198,10 +197,7 @@ class DjVuCmd(BaseCmd):
 
         Converts DjVu files to PNG format using database records.
         """
-        self.actions.convert_from_database(
-            serial=self.args.serial,
-            url=self.args.url
-        )
+        self.actions.convert_from_database(serial=self.args.serial, url=self.args.url)
         self.actions.report_errors(profiler_time_func=self.profiler.time)
 
     def dbupdate(self) -> None:
@@ -211,8 +207,7 @@ class DjVuCmd(BaseCmd):
         Updates the DjVu database with metadata from processed files.
         """
         self.actions.update_from_database(
-            max_errors=self.args.max_errors,
-            url=self.args.url
+            max_errors=self.args.max_errors, url=self.args.url
         )
         self.actions.report_errors(profiler_time_func=self.profiler.time)
 

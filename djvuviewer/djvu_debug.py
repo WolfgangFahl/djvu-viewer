@@ -10,13 +10,14 @@ from datetime import datetime
 from pathlib import Path
 
 import djvu.decode
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuFile
-from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
-from djvuviewer.wiki_images import MediaWikiImages
+
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVuFile
+from djvuviewer.djvu_processor import DjVuProcessor
+
 
 class DjVuDebug:
     """
@@ -69,7 +70,9 @@ class DjVuDebug:
             iso_date = datetime.fromtimestamp(stat_info.st_mtime).isoformat()
 
             # Create processor and load document
-            dproc = DjVuProcessor(verbose=self.solution.debug, debug=self.solution.debug)
+            dproc = DjVuProcessor(
+                verbose=self.solution.debug, debug=self.solution.debug
+            )
             url = djvu.decode.FileURI(str(djvu_path))
             document = dproc.context.new_document(url)
             document.decoding_job.wait()
@@ -81,10 +84,7 @@ class DjVuDebug:
             # Process pages to get detailed metadata
             pages = []
             for image_job in dproc.process(
-                str(djvu_path),
-                str(path),
-                save_png=False,
-                output_path=None
+                str(djvu_path), str(path), save_png=False, output_path=None
             ):
                 image = image_job.image
                 pages.append(image)
@@ -96,7 +96,7 @@ class DjVuDebug:
                 bundled=bundled,
                 iso_date=iso_date,
                 filesize=filesize,
-                pages=pages
+                pages=pages,
             )
 
             return True
@@ -115,13 +115,17 @@ class DjVuDebug:
                 "#": idx,
                 "Page": page.page_index,
                 "Filename": page.path if page.path else "—",
-                "Dimensions": f"{page.width}×{page.height}" if page.width and page.height else "—",
+                "Dimensions": (
+                    f"{page.width}×{page.height}" if page.width and page.height else "—"
+                ),
                 "DPI": page.dpi if page.dpi else "—",
                 "Size": f"{page.filesize:,}" if page.filesize else "—",
             }
 
             # Add view link
-            page_url = f"{self.config.url_prefix}/djvu/{filename}?page={page.page_index}"
+            page_url = (
+                f"{self.config.url_prefix}/djvu/{filename}?page={page.page_index}"
+            )
             view_record["view"] = Link.create(url=page_url, text="view")
 
             # Add download link using png_file property
@@ -141,11 +145,19 @@ class DjVuDebug:
         filename = Path(self.path).name
         total_pages = self.djvu_file.page_count
         format_type = "Bundled" if self.djvu_file.bundled else "Non-bundled"
-        total_page_size = sum(page.filesize or 0 for page in self.djvu_file.pages) if not self.djvu_file.bundled else None
+        total_page_size = (
+            sum(page.filesize or 0 for page in self.djvu_file.pages)
+            if not self.djvu_file.bundled
+            else None
+        )
 
         # Get dimensions from first page
         first_page = self.djvu_file.pages[0] if self.djvu_file.pages else None
-        dimensions = f"{first_page.width}×{first_page.height}" if first_page and first_page.width and first_page.height else "N/A"
+        dimensions = (
+            f"{first_page.width}×{first_page.height}"
+            if first_page and first_page.width and first_page.height
+            else "N/A"
+        )
         dpi = first_page.dpi if first_page and first_page.dpi else "N/A"
 
         # Build links
@@ -164,7 +176,9 @@ class DjVuDebug:
         ]
 
         if total_page_size is not None:
-            html_parts.append(f"<strong>Total Size (pages):</strong><span>{total_page_size:,} bytes</span>")
+            html_parts.append(
+                f"<strong>Total Size (pages):</strong><span>{total_page_size:,} bytes</span>"
+            )
 
         # Add links
         if "wiki" in info_record:
@@ -199,7 +213,9 @@ class DjVuDebug:
                 ui.html(header_html)
 
                 # Pages section
-                ui.label(f"Pages ({len(self.djvu_file.pages)} total)").classes("text-h6 mt-4")
+                ui.label(f"Pages ({len(self.djvu_file.pages)} total)").classes(
+                    "text-h6 mt-4"
+                )
 
                 # Grid
                 self.lod_grid = ListOfDictsGrid()
@@ -224,6 +240,7 @@ class DjVuDebug:
 
     def on_refresh(self):
         """Handle refresh button click."""
+
         def cancel_running():
             if self.load_task:
                 self.load_task.cancel()

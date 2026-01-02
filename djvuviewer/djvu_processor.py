@@ -24,8 +24,9 @@ from typing import Generator, List, Optional, Tuple
 import cairo
 import djvu.decode
 import numpy
-from djvuviewer.djvu_core import DjVuImage
 from ngwidgets.profiler import Profiler
+
+from djvuviewer.djvu_core import DjVuImage
 
 
 @dataclass
@@ -462,7 +463,7 @@ class DjVuProcessor:
                 djvu_path=image_job.relurl,
                 path=image_job.filename,
             )
-            image._buffer=color_buffer,
+            image._buffer = (color_buffer,)
 
             # Update the image job with the rendered image
             image_job.image = image

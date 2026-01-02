@@ -6,10 +6,12 @@ Created on 2024-08-26
 @author: wf
 """
 
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_manager import DjVuManager
 from ngwidgets.lod_grid import ListOfDictsGrid
 from nicegui import background_tasks, run, ui
+
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_manager import DjVuManager
+
 
 class DjVuCatalog:
     """
@@ -35,7 +37,7 @@ class DjVuCatalog:
         self.config = config
         self.browse_wiki = browse_wiki
         self.webserver = self.solution.webserver
-        self.ui_container=None
+        self.ui_container = None
 
         # Initialize database manager if using DB mode
         self.dvm = DjVuManager(config=self.config) if not browse_wiki else None
@@ -48,7 +50,7 @@ class DjVuCatalog:
         self.timeout = 10.0
         self.limit_options = [15, 30, 50, 100, 500, 1500, 5000]
         self.limit = 100 if self.browse_wiki else 10000
-        self.images_url=self.config.base_url
+        self.images_url = self.config.base_url
 
     def get_view_lod(self, lod: list) -> list:
         """Convert records to view format with row numbers and links."""
@@ -62,9 +64,9 @@ class DjVuCatalog:
     def get_view_record(self, record: dict, index: int) -> dict:
         """Delegate to appropriate handler based on record type."""
         if self.browse_wiki:
-            record=self.get_api_view_record(record, index)
+            record = self.get_api_view_record(record, index)
         else:
-            record=self.get_db_view_record(record, index)
+            record = self.get_db_view_record(record, index)
         return record
 
     def get_api_view_record(self, record: dict, index: int) -> dict:
@@ -86,7 +88,7 @@ class DjVuCatalog:
 
         raw_name = record.get("name", record.get("title", ""))
         filename = raw_name.replace("File:", "").replace("Datei:", "")
-        self.solution.add_links(view_record,filename)
+        self.solution.add_links(view_record, filename)
         view_record["size"] = record.get("size")
         view_record["pages"] = record.get("pagecount")
         view_record["timestamp"] = record.get("timestamp")
@@ -139,11 +141,15 @@ class DjVuCatalog:
         Returns:
             List of dictionaries containing DjVu file records
         """
-        lod=[]
+        lod = []
         try:
             if self.browse_wiki:
                 # Assuming max_images limits the fetch, might need adjustment for full catalog
-                images_client=self.solution.webserver.mw_client_base if self.images_url==self.config.base_url else self.solution.webserver.mw_client_new
+                images_client = (
+                    self.solution.webserver.mw_client_base
+                    if self.images_url == self.config.base_url
+                    else self.solution.webserver.mw_client_new
+                )
                 lod = images_client.fetch_allimages(limit=self.limit)
             else:
                 # Fetch from SQLite Database
@@ -161,7 +167,9 @@ class DjVuCatalog:
         if self.lod_grid:
             self.lod_grid.ag_grid.options["pagination"] = True
             self.lod_grid.ag_grid.options["paginationPageSize"] = 15
-            self.lod_grid.ag_grid.options["paginationPageSizeSelector"] = self.limit_options
+            self.lod_grid.ag_grid.options["paginationPageSizeSelector"] = (
+                self.limit_options
+            )
 
     async def load_catalog(self):
         """
@@ -185,10 +193,12 @@ class DjVuCatalog:
                 with self.grid_row:
                     record_count = len(self.view_lod)
                     mode = "MediaWiki API" if self.browse_wiki else "Tarball Database"
-                    ui.label(f"{record_count} records from {mode}").classes("text-caption")
+                    ui.label(f"{record_count} records from {mode}").classes(
+                        "text-caption"
+                    )
 
                     self.lod_grid = ListOfDictsGrid()
-                    self.configure_grid_options() # Apply pagination settings
+                    self.configure_grid_options()  # Apply pagination settings
                     self.lod_grid.load_lod(self.view_lod)
 
             if self.lod_grid:
@@ -204,7 +214,6 @@ class DjVuCatalog:
         self.limit = new_limit
         self.on_refresh()
 
-
     def reload_catalog(self):
         self.load_task = background_tasks.create(self.load_catalog())
 
@@ -212,6 +221,7 @@ class DjVuCatalog:
         """
         Handle refresh button click.
         """
+
         def cancel_running():
             if self.load_task:
                 self.load_task.cancel()
@@ -240,20 +250,18 @@ class DjVuCatalog:
             ui.label(f"DjVu Catalog ({mode})").classes("text-h6")
             if self.browse_wiki:
                 # Url Selector
-                url_options=[self.config.base_url]
+                url_options = [self.config.base_url]
                 if self.config.new_url:
                     url_options.append(self.config.new_url)
                 ui.select(
-                    options=url_options,
-                    label="wiki",
-                    on_change=self.on_refresh
-                ).classes("w-64").bind_value(self, 'images_url')
+                    options=url_options, label="wiki", on_change=self.on_refresh
+                ).classes("w-64").bind_value(self, "images_url")
                 # Limit Selector
                 ui.select(
                     options=self.limit_options,
                     value=self.limit,
                     label="Limit",
-                    on_change=lambda e: self.update_limit(e.value)
+                    on_change=lambda e: self.update_limit(e.value),
                 ).classes("w-16")
 
             self.refresh_button = ui.button(

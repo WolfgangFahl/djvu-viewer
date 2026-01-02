@@ -48,7 +48,7 @@ class DjVuPage:
     @classmethod
     def get_sample(cls):
         """Returns a sample DjVuPage instance for testing."""
-        sample_page=cls(
+        sample_page = cls(
             path="s_455_0001.djvu",
             page_index=1,
             valid=False,
@@ -59,10 +59,9 @@ class DjVuPage:
             dpi=216,
             djvu_path="b/b3/AB1951-Suenninghausen.djvu",
             page_key="b/b3/AB1951-Suenninghausen.djvu#0001",
-            error_msg="-sample error message-"
+            error_msg="-sample error message-",
         )
-        return sample_page;
-
+        return sample_page
 
 
 @dataclass
@@ -81,7 +80,7 @@ class DjVu:
     @classmethod
     def get_sample(cls):
         """Returns a sample DjVu instance for testing."""
-        sample_djvu=cls(
+        sample_djvu = cls(
             path="images/b/b3/AB1951-Suenninghausen.djvu",
             iso_date="2009-06-02",
             filesize=85,
@@ -89,7 +88,8 @@ class DjVu:
             tar_iso_date="2026-01-02",
             page_count=4,
             dir_pages=5,
-            bundled=False)
+            bundled=False,
+        )
         return sample_djvu
 
 
