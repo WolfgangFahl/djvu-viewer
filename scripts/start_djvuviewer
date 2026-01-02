@@ -12,8 +12,6 @@ options="-s --url_prefix /djvu-viewer"
 
 # Log directory and file; created on demand.
 LOG_DIR="/var/log/djvu-viewer"
-sudo mkdir -p $LOG_DIR
-sudo chown www-data:www-data $LOG_DIR
 LOG_FILE="$LOG_DIR/djvu-viewer.log"
 
 # Defaults for remote debugging (override via env if needed)
@@ -33,10 +31,11 @@ CONFIG_FILE="$HOME/.djvuviewer/config.yaml"
 
 REMOTE_DEBUG="false"
 
-# ---------------------------------------------------------------------------
-
 # Make sure the log directory exists so redirection works.
 mkdir -p "$LOG_DIR"
+sudo mkdir -p $LOG_DIR
+sudo chown www-data:www-data $LOG_DIR
+sudo chmod g+w $LOG_DIR
 
 # show usage
 usage() {
