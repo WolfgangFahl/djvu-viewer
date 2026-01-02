@@ -2,6 +2,7 @@
 Created on 2024-08-26
 
 2026-02-02: Refactored to support dual-mode browsing (Database vs MediaWiki API).
+2026-02-02: Added paging and page size selection.
 @author: wf
 """
 
@@ -171,7 +172,8 @@ class DjVuCatalog:
         lod=[]
         try:
             if self.browse_wiki:
-                lod = self.mw_client.fetch_allimages(limit=200)
+                # Assuming max_images limits the fetch, might need adjustment for full catalog
+                lod = self.mw_client.fetch_allimages(limit=5000)
             else:
                 # Fetch from SQLite Database
                 if self.dvm:
@@ -180,6 +182,17 @@ class DjVuCatalog:
             self.solution.handle_exception(ex)
 
         return lod
+
+    def configure_grid_options(self):
+        """
+        Configure pagination options for the grid.
+        """
+        if self.lod_grid:
+            self.lod_grid.ag_grid.options["pagination"] = True
+            self.lod_grid.ag_grid.options["paginationPageSize"] = 15
+            self.lod_grid.ag_grid.options["paginationPageSizeSelector"] = [
+                15, 30, 50, 100, 500, 1500, 5000
+            ]
 
     async def load_catalog(self):
         """
@@ -203,7 +216,9 @@ class DjVuCatalog:
                 record_count = len(self.view_lod)
                 mode = "MediaWiki API" if self.browse_wiki else "Local Database"
                 ui.label(f"{record_count} records from {mode}").classes("text-caption")
+
                 self.lod_grid = ListOfDictsGrid()
+                self.configure_grid_options() # Apply pagination settings
                 self.lod_grid.load_lod(self.view_lod)
 
             if self.lod_grid:
