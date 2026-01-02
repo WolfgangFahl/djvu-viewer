@@ -38,6 +38,7 @@ class DjVuCatalog:
         self.config = config
         self.browse_wiki = browse_wiki
         self.webserver = self.solution.webserver
+        self.ui_container=None
 
         # Initialize database manager if using DB mode
         self.dvm = DjVuManager(config=self.config) if not browse_wiki else None
@@ -232,13 +233,13 @@ class DjVuCatalog:
     def update_limit(self, new_limit):
         """Handler for limit dropdown change."""
         self.limit = new_limit
-        background_tasks.create(self.on_refresh())
+        self.on_refresh()
 
 
     def reload_catalog(self):
         self.load_task = background_tasks.create(self.load_catalog())
 
-    async def on_refresh(self):
+    def on_refresh(self):
         """
         Handle refresh button click.
         """
@@ -255,7 +256,6 @@ class DjVuCatalog:
         # Cancel any running task
         cancel_running()
 
-        # Set timeout for task cancellation
         ui.timer(self.timeout, lambda: cancel_running(), once=True)
 
         self.reload_catalog()
@@ -264,6 +264,7 @@ class DjVuCatalog:
         """
         Set up the user interface components for the DjVu catalog.
         """
+        self.ui_container = self.solution.container
         # Header row with title and refresh button
         with ui.row() as self.header_row:
             mode = "MediaWiki API" if self.browse_wiki else "Local Database"
