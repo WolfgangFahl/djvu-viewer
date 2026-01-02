@@ -39,6 +39,10 @@ dependencies = [
 	# https://github.com/FriedrichFroebel/python-djvulibre
 	# https://pypi.org/project/djvulibre-python/
 	"djvulibre-python>=0.9.3",
+
+	# PNG generation
+	# https://pypi.org/project/pycairo/
+	"pycairo>=1.29.0"
 ]
 
 requires-python = ">=3.10"
