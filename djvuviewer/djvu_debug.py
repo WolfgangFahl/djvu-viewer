@@ -5,18 +5,19 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+import os
 from datetime import datetime
 from pathlib import Path
 
 import djvu.decode
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVuFile
+from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
 
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuFile
-from djvuviewer.djvu_processor import DjVuProcessor
+from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 
 
 class DjVuDebug:
@@ -42,7 +43,8 @@ class DjVuDebug:
         self.config = config
         self.webserver = self.solution.webserver
         self.page_title=page_title
-        self.djvu_file = None
+        self.mw_image=None
+        self.mw_image_new=None
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
@@ -54,12 +56,12 @@ class DjVuDebug:
         get the djvu file for the given path
         """
         djvu_path = self.config.djvu_abspath(path)
-
-        if not djvu_path.exists():
+        if not os.path.exists(djvu_path):
             raise FileNotFoundError(f"DjVu file not found: {djvu_path}")
 
         # Get file-level metadata
-        stat_info = djvu_path.stat()
+        djvu_image_file=Path(djvu_path)
+        stat_info = djvu_image_file.stat()
         filesize = stat_info.st_size
         iso_date = datetime.fromtimestamp(stat_info.st_mtime).isoformat()
 
@@ -67,7 +69,7 @@ class DjVuDebug:
         dproc = DjVuProcessor(
             verbose=self.solution.debug, debug=self.solution.debug
         )
-        url = djvu.decode.FileURI(str(djvu_path))
+        url = djvu.decode.FileURI(djvu_path)
         document = dproc.context.new_document(url)
         document.decoding_job.wait()
 
@@ -78,7 +80,7 @@ class DjVuDebug:
         # Process pages to get detailed metadata
         pages = []
         for image_job in dproc.process(
-            str(djvu_path), str(path), save_png=False, output_path=None
+            djvu_path, path, save_png=False, output_path=None
         ):
             image = image_job.image
             pages.append(image)
@@ -102,13 +104,13 @@ class DjVuDebug:
             bool: True if successful, False otherwise
         """
         try:
-            # Sanitize and get the full path
-            mw_image=self.solution.webserver.mw_client_base.fetch_image(title=self.page_title)
+            self.mw_image=self.solution.webserver.mw_client_base.fetch_image(title=self.page_title)
             if self.solution.webserver.mw_client_new:
-                mw_image_new=self.solution.webserver.mw_client_new.fetch_image(title=self.page_title)
-
-            pass
-
+                self.mw_image_new=self.solution.webserver.mw_client_new.fetch_image(title=self.page_title)
+                self.mw_image_new.djvu_path=DjVuMediaWikiImages.extract_and_clean_path(self.mw_image_new.url)
+                self.mw_image_new.djvu_file=self.get_djvu_file(self.mw_image_new.djvu_path)
+            self.mw_image.djvu_path=DjVuMediaWikiImages.extract_and_clean_path(self.mw_image.url)
+            self.mw_image.djvu_file=self.get_djvu_file(self.mw_image.djvu_path)
             return True
 
         except Exception as ex:

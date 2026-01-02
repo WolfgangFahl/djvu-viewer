@@ -3,8 +3,6 @@ Created on 2026-01-02
 
 @author: wf
 """
-import urllib.parse
-import re
 
 import os
 import time
@@ -149,32 +147,6 @@ class DjVuActions:
         return djvu_files
 
 
-    def extract_and_clean_path(self,url:str)->str:
-        """
-        URL decode, extract path from /images, and remove duplicate slashes.
-
-        Args:
-            url (str): The URL to process
-
-        Returns:
-            str: The cleaned path starting from /images
-        """
-        cleaned_path=None
-        # URL decode
-        decoded_url = urllib.parse.unquote(url)
-
-        # Extract path from /images using regex
-        match = re.search(r'/images/.*', decoded_url)
-
-        if match:
-            path = match.group(0)
-
-            # Remove duplicate slashes
-            cleaned_path = re.sub(r'/+', '/', path)
-
-        return cleaned_path
-
-
     def catalog_djvu(self, limit: int = 10000000) -> Tuple[List[Dict], List[Dict]]:
         """
         Catalog DjVu files by scanning and extracting metadata.
@@ -203,7 +175,7 @@ class DjVuActions:
 
         for index, r in enumerate(images, start=1):
             url = r.get("url")
-            path=self.extract_and_clean_path(url)
+            path=DjVuMediaWikiImages.extract_and_clean_path(url)
             djvu_path = self.config.djvu_abspath(path)
 
             if not djvu_path or not os.path.exists(djvu_path):

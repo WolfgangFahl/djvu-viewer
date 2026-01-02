@@ -485,15 +485,18 @@ class DjVuProcessor:
             profiler (Profiler): Profiler instance for tracking processing time.
         """
         self.final_output_path = output_path
+        self.profiler = Profiler(
+            f"processing {relurl}", profile=self.verbose or self.debug
+        )
+        # process without any output
+        if output_path is None:
+            return
         if self.tar:
             # Use a temporary directory for intermediate PNG storage
             self.temp_dir = tempfile.mkdtemp()
             self.output_path = self.temp_dir
         else:
             self.output_path = output_path
-        self.profiler = Profiler(
-            f"processing {relurl}", profile=self.verbose or self.debug
-        )
         # Prepare output directory if needed
         os.makedirs(self.final_output_path, exist_ok=True)
 
