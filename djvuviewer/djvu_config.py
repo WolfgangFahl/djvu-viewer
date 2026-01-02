@@ -21,6 +21,7 @@ class DjVuConfig:
     db_path: Optional[str]=None
     queries_path: Optional[str]=None
     base_url: Optional[str]="https://wiki.genealogy.net/"
+    new_url:  Optional[str]= None
 
     def __post_init__(self):
         """

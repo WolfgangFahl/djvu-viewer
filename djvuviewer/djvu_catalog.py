@@ -106,7 +106,7 @@ class DjVuCatalog:
         wiki_url = record.get("descriptionurl") or f"https://wiki.genealogy.net/index.php?title=Datei%3A{filename}"
         local_url = f"{self.url_prefix}/djvu/{filename}"
         view_record["wiki"] = Link.create(url=wiki_url, text=filename)
-        view_record["view"] = Link.create(url=local_url, text=filename)
+        view_record["tarball"] = Link.create(url=local_url, text=filename)
 
         view_record["size"] = record.get("size")
         view_record["pages"] = record.get("pagecount")
@@ -140,10 +140,13 @@ class DjVuCatalog:
                 filename = val
 
         if filename:
-            wiki_url = f"https://wiki.genealogy.net/index.php?title=Datei%3A{filename}"
+            wiki_url = f"{self.config.base_url}/Datei:{filename}"
+            if self.config.new_url:
+                new_url=f"{self.config.base_url}/index.php?title=Datei:{filename}"
+                view_record["new"]= Link.create(url=new_url, text=filename)
             local_url = f"{self.url_prefix}/djvu/{filename}"
             view_record["wiki"] = Link.create(url=wiki_url, text=filename)
-            view_record["view"] = Link.create(url=local_url, text=filename)
+            view_record["tarball"] = Link.create(url=local_url, text=filename)
 
         view_record["filesize"] = record.get("filesize")
         view_record["pages"] = record.get("page_count")
