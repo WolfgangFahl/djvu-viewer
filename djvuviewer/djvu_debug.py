@@ -5,13 +5,13 @@ Created on 2026-01-02
 
 @author: wf
 """
-import os
 from datetime import datetime
+import os
 from pathlib import Path
 
 import djvu.decode
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuFile
+from djvuviewer.djvu_core import DjVuFile, DjVuPage
 from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.widgets import Link
@@ -45,6 +45,7 @@ class DjVuDebug:
         self.page_title=page_title
         self.mw_image=None
         self.mw_image_new=None
+        self.total_pages=0
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
@@ -117,94 +118,116 @@ class DjVuDebug:
             self.solution.handle_exception(ex)
             raise
 
-    def get_view_lod(self) -> list:
-        """Convert page records to view format with row numbers and links."""
-        view_lod = []
-        filename = Path(self.path).name
+    def _get_sources(self):
+        """
+        Yields tuples of (Source Label, WikiImage Instance) for generic iteration.
+        This makes adding a 3rd or 4th source trivial in the future.
+        """
+        sources = [
+            ("Current Wiki", self.mw_image),
+            ("New Wiki", getattr(self, "mw_image_new", None))
+        ]
 
-        for idx, page in enumerate(self.djvu_file.pages, 1):
-            view_record = {
-                "#": idx,
-                "Page": page.page_index,
-                "Filename": page.path if page.path else "—",
-                "Dimensions": (
-                    f"{page.width}×{page.height}" if page.width and page.height else "—"
-                ),
-                "DPI": page.dpi if page.dpi else "—",
-                "Size": f"{page.filesize:,}" if page.filesize else "—",
-            }
+        for label, image_obj in sources:
+            if image_obj and hasattr(image_obj, 'djvu_file') and image_obj.djvu_file:
+                yield label, image_obj.djvu_file
 
-            # Add view link
-            page_url = (
-                f"{self.config.url_prefix}/djvu/{filename}?page={page.page_index}"
-            )
-            view_record["view"] = Link.create(url=page_url, text="view")
+    def _get_single_header_html(self, title: str, djvu_file: DjVuFile) -> str:
+        """Helper to generate HTML summary for a single DjVuFile instance."""
+        format_type = "Bundled" if djvu_file.bundled else "Indirect/Indexed"
 
-            # Add download link using png_file property
-            png_file = page.png_file
-            png_url = f"{self.config.url_prefix}/djvu/content/{Path(filename).stem}/{png_file}"
-            view_record["png"] = Link.create(url=png_url, text="png")
+        # Safe aggregations
+        total_page_size = sum((p.filesize or 0) for p in (djvu_file.pages or []))
 
-            view_lod.append(view_record)
+        # Safe first page access
+        first_page = djvu_file.pages[0] if djvu_file.pages else None
 
-        return view_lod
+        dims = f"{first_page.width}×{first_page.height}" if (first_page and first_page.width) else "—"
+        dpi = first_page.dpi if (first_page and first_page.dpi) else "—"
 
-    def get_header_html(self) -> str:
-        """Generate document info as HTML."""
-        if not self.djvu_file:
-            return ""
-
-        filename = Path(self.path).name
-        total_pages = self.djvu_file.page_count
-        format_type = "Bundled" if self.djvu_file.bundled else "Non-bundled"
-        total_page_size = (
-            sum(page.filesize or 0 for page in self.djvu_file.pages)
-            if not self.djvu_file.bundled
-            else None
-        )
-
-        # Get dimensions from first page
-        first_page = self.djvu_file.pages[0] if self.djvu_file.pages else None
-        dimensions = (
-            f"{first_page.width}×{first_page.height}"
-            if first_page and first_page.width and first_page.height
-            else "N/A"
-        )
-        dpi = first_page.dpi if first_page and first_page.dpi else "N/A"
-
-        # Build links
-        info_record = {}
-        self.solution.add_links(info_record, filename)
+        tar_info = ""
+        if djvu_file.tar_filesize:
+            tar_info = f"<strong>Tarball:</strong><span>{djvu_file.tar_filesize:,} bytes ({djvu_file.tar_iso_date})</span>"
 
         # Build HTML
         html_parts = [
-            f"<h5>DjVu Debug: {filename}</h5>",
-            "<div style='display: grid; grid-template-columns: auto 1fr; gap: 8px; margin: 16px 0;'>",
+            f"<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'>",
+            f"<h6 style='margin: 0 0 10px 0; color: #1976D2;'>{title}</h6>",
+            "<div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>",
+            f"<strong>Path:</strong><span style='word-break: break-all;'>{djvu_file.path}</span>",
             f"<strong>Format:</strong><span>{format_type}</span>",
-            f"<strong>Total Pages:</strong><span>{total_pages}</span>",
-            f"<strong>Dimensions:</strong><span>{dimensions}</span>",
+            f"<strong>Pages (Doc):</strong><span>{djvu_file.page_count}</span>",
+            f"<strong>Pages (Dir):</strong><span>{djvu_file.dir_pages or '—'}</span>",
+            f"<strong>Dimensions:</strong><span>{dims}</span>",
             f"<strong>DPI:</strong><span>{dpi}</span>",
-            f"<strong>File Size:</strong><span>{self.djvu_file.filesize:,} bytes</span>",
+            f"<strong>File Date:</strong><span>{djvu_file.iso_date or '—'}</span>",
+            f"<strong>Main Size:</strong><span>{djvu_file.filesize:,} bytes</span>" if djvu_file.filesize else "",
+            f"<strong>Pages Size:</strong><span>{total_page_size:,} bytes</span>",
+            tar_info,
+            "</div></div>"
+        ]
+        return "".join(html_parts)
+
+    def get_header_html(self) -> str:
+        """Generate document info as HTML using a loop over available sources."""
+        html_blocks = [
+            self._get_single_header_html(label, djvu_file)
+            for label, djvu_file in self._get_sources()
         ]
 
-        if total_page_size is not None:
-            html_parts.append(
-                f"<strong>Total Size (pages):</strong><span>{total_page_size:,} bytes</span>"
-            )
+        if not html_blocks:
+            return "<div>No DjVu file information loaded.</div>"
 
-        # Add links
-        if "wiki" in info_record:
-            html_parts.append(f"<strong>Wiki:</strong>{info_record['wiki']}")
-        if "new" in info_record:
-            html_parts.append(f"<strong>New Wiki:</strong>{info_record['new']}")
-        if "tarball" in info_record:
-            html_parts.append(f"<strong>Tarball:</strong>{info_record['tarball']}")
-        if "debug" in info_record:
-            html_parts.append(f"<strong>Debug:</strong>{info_record['debug']}")
+        return f"<div style='display: flex; flex-wrap: wrap; gap: 16px;'>{''.join(html_blocks)}</div>"
 
-        html_parts.append("</div>")
+    def _create_page_record(self, source_name: str, djvu_path: str, page: DjVuPage) -> dict:
+        """Helper to create a single dictionary record for the LOD."""
+        filename_stem = Path(djvu_path).name
 
-        return "\n".join(html_parts)
+        record = {
+            "Source": source_name,
+            "#": page.page_index,
+            "Page": page.page_index,
+            "Filename": page.path or "—",
+            "Valid": "✅" if page.valid else "❌",
+            "Dimensions": f"{page.width}×{page.height}" if (page.width and page.height) else "—",
+            "DPI": page.dpi or "—",
+            "Size": f"{page.filesize:,}" if page.filesize else "—",
+            "Error": page.error_msg or ""
+        }
+
+        # Add Links if config exists
+        if hasattr(self, 'config') and hasattr(self.config, 'url_prefix'):
+            base_url = f"{self.config.url_prefix}/djvu"
+
+            # View Link
+            view_url = f"{base_url}/{filename_stem}?page={page.page_index}"
+            record["view"] = Link.create(url=view_url, text="view")
+
+            # PNG Download Link
+            # Logic assumes content is served under content/{stem}/{png_file}
+            stem_only = Path(filename_stem).stem
+            png_url = f"{base_url}/content/{stem_only}/{page.png_file}"
+            record["png"] = Link.create(url=png_url, text="png")
+
+        return record
+
+    def get_view_lod(self) -> list:
+        """
+        Convert page records into a List of Dicts by iterating over abstract sources.
+        """
+        view_lod = []
+
+        for source_name, djvu_file in self._get_sources():
+            if not djvu_file.pages:
+                continue
+
+            for page in djvu_file.pages:
+                record = self._create_page_record(source_name, djvu_file.path, page)
+                view_lod.append(record)
+                self.total_pages+=1
+
+        return view_lod
 
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
@@ -225,7 +248,7 @@ class DjVuDebug:
                 ui.html(header_html)
 
                 # Pages section
-                ui.label(f"Pages ({len(self.djvu_file.pages)} total)").classes(
+                ui.label(f"Pages ({self.total_pages} total)").classes(
                     "text-h6 mt-4"
                 )
 
@@ -244,7 +267,7 @@ class DjVuDebug:
             self.content_row.clear()
             with self.content_row:
                 ui.notify(f"Error loading DjVu file: {str(ex)}", type="negative")
-                ui.label(f"Failed to load: {self.path}").classes("text-negative")
+                ui.label(f"Failed to load: {self.page_title}").classes("text-negative")
 
     def reload_debug_info(self):
         """Create background task to reload debug info."""
