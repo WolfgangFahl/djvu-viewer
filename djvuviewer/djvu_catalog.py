@@ -11,7 +11,7 @@ from djvuviewer.wiki_images import MediaWikiImages
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
-
+from typing import Dict
 
 class DjVuCatalog:
     """
@@ -83,6 +83,21 @@ class DjVuCatalog:
             record=self.get_db_view_record(record, index)
         return record
 
+    def add_links(self,view_record:Dict[str,any],filename:str):
+        """
+        add the DjVu links
+        """
+        if filename:
+            wiki_url = f"{self.config.base_url}/Datei:{filename}"
+            if self.config.new_url:
+                new_url=f"{self.config.base_url}/index.php?title=Datei:{filename}"
+                view_record["new"]= Link.create(url=new_url, text=filename)
+            view_record["wiki"] = Link.create(url=wiki_url, text=filename)
+            if new_url:
+                view_record["new"] = Link.create(url=new_url, text=filename)
+            local_url = f"{self.url_prefix}/djvu/{filename}"
+            view_record["tarball"] = Link.create(url=local_url, text=filename)
+
     def get_api_view_record(self, record: dict, index: int) -> dict:
         """
         Handle MediaWiki API format records.
@@ -102,12 +117,7 @@ class DjVuCatalog:
 
         raw_name = record.get("name", record.get("title", ""))
         filename = raw_name.replace("File:", "").replace("Datei:", "")
-
-        wiki_url = record.get("descriptionurl") or f"https://wiki.genealogy.net/index.php?title=Datei%3A{filename}"
-        local_url = f"{self.url_prefix}/djvu/{filename}"
-        view_record["wiki"] = Link.create(url=wiki_url, text=filename)
-        view_record["tarball"] = Link.create(url=local_url, text=filename)
-
+        self.add_links(view_record,filename)
         view_record["size"] = record.get("size")
         view_record["pages"] = record.get("pagecount")
         view_record["timestamp"] = record.get("timestamp")
@@ -138,16 +148,7 @@ class DjVuCatalog:
                 filename = val.split("/")[-1]
             else:
                 filename = val
-
-        if filename:
-            wiki_url = f"{self.config.base_url}/Datei:{filename}"
-            if self.config.new_url:
-                new_url=f"{self.config.base_url}/index.php?title=Datei:{filename}"
-                view_record["new"]= Link.create(url=new_url, text=filename)
-            local_url = f"{self.url_prefix}/djvu/{filename}"
-            view_record["wiki"] = Link.create(url=wiki_url, text=filename)
-            view_record["tarball"] = Link.create(url=local_url, text=filename)
-
+        self.add_links(view_record, filename)
         view_record["filesize"] = record.get("filesize")
         view_record["pages"] = record.get("page_count")
         view_record["date"] = record.get("iso_date")
