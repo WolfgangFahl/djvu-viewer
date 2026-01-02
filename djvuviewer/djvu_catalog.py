@@ -63,6 +63,8 @@ class DjVuCatalog:
         self.lod_grid = None
         self.load_task = None
         self.timeout = 10.0
+        self.limit_options = [15, 30, 50, 100, 500, 1500, 5000]
+        self.limit = 100 # Default
 
     def get_view_lod(self, lod: list) -> list:
         """Convert records to view format with row numbers and links."""
@@ -173,7 +175,7 @@ class DjVuCatalog:
         try:
             if self.browse_wiki:
                 # Assuming max_images limits the fetch, might need adjustment for full catalog
-                lod = self.mw_client.fetch_allimages(limit=5000)
+                lod = self.mw_client.fetch_allimages(limit=self.limit)
             else:
                 # Fetch from SQLite Database
                 if self.dvm:
@@ -190,9 +192,7 @@ class DjVuCatalog:
         if self.lod_grid:
             self.lod_grid.ag_grid.options["pagination"] = True
             self.lod_grid.ag_grid.options["paginationPageSize"] = 15
-            self.lod_grid.ag_grid.options["paginationPageSizeSelector"] = [
-                15, 30, 50, 100, 500, 1500, 5000
-            ]
+            self.lod_grid.ag_grid.options["paginationPageSizeSelector"] = self.limit_options
 
     async def load_catalog(self):
         """
@@ -228,6 +228,12 @@ class DjVuCatalog:
         except Exception as ex:
             self.solution.handle_exception(ex)
 
+    def update_limit(self, new_limit):
+        """Handler for limit dropdown change."""
+        self.limit = new_limit
+        background_tasks.create(self.on_refresh())
+
+
     async def on_refresh(self):
         """
         Handle refresh button click.
@@ -259,6 +265,14 @@ class DjVuCatalog:
         with ui.row() as self.header_row:
             mode = "MediaWiki API" if self.browse_wiki else "Local Database"
             ui.label(f"DjVu Catalog ({mode})").classes("text-h6")
+            # Limit Selector
+            ui.select(
+                options=self.limit_options,
+                value=self.limit,
+                label="Limit",
+                on_change=lambda e: self.update_limit(e.value)
+            ).classes("w-24")
+
             self.refresh_button = ui.button(
                 icon="refresh",
                 on_click=self.on_refresh,
