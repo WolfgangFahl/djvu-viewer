@@ -90,7 +90,7 @@ class DjVuCatalog:
         if filename:
             wiki_url = f"{self.config.base_url}/Datei:{filename}"
             if self.config.new_url:
-                new_url=f"{self.config.base_url}/index.php?title=Datei:{filename}"
+                new_url=f"{self.config.new_url}/index.php?title=Datei:{filename}"
                 view_record["new"]= Link.create(url=new_url, text=filename)
             view_record["wiki"] = Link.create(url=wiki_url, text=filename)
             if new_url:
