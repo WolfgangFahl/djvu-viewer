@@ -191,7 +191,7 @@ class DjVuSolution(InputWebSolution):
             )
             debug_view.setup_ui()
 
-    await self.setup_content_div(show)
+        await self.setup_content_div(show)
 
     async def djvu_modal_catalog(self,browse_wiki:bool=False):
         """Show the DjVu Catalog page"""
