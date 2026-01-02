@@ -223,7 +223,8 @@ class DjVuCatalog:
 
             if self.lod_grid:
                 self.lod_grid.sizeColumnsToFit()
-            self.grid_row.update()
+            with self.solution.container:
+                self.grid_row.update()
 
         except Exception as ex:
             self.solution.handle_exception(ex)
@@ -235,9 +236,7 @@ class DjVuCatalog:
 
 
     def reload_catalog(self):
-        # Run task in background
-        with self.grid_row:
-            self.load_task = background_tasks.create(self.load_catalog())
+        self.load_task = background_tasks.create(self.load_catalog())
 
     async def on_refresh(self):
         """
