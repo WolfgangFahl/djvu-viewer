@@ -234,6 +234,11 @@ class DjVuCatalog:
         background_tasks.create(self.on_refresh())
 
 
+    def reload_catalog(self):
+        # Run task in background
+        with self.grid_row:
+            self.load_task = background_tasks.create(self.load_catalog())
+
     async def on_refresh(self):
         """
         Handle refresh button click.
@@ -254,8 +259,7 @@ class DjVuCatalog:
         # Set timeout for task cancellation
         ui.timer(self.timeout, lambda: cancel_running(), once=True)
 
-        # Run task in background
-        self.load_task = background_tasks.create(self.load_catalog())
+        self.reload_catalog()
 
     def setup_ui(self):
         """
@@ -282,4 +286,4 @@ class DjVuCatalog:
         self.grid_row = ui.row()
 
         # Initial load
-        background_tasks.create(self.load_catalog())
+        self.reload_catalog()
