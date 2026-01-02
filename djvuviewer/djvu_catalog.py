@@ -85,6 +85,7 @@ class DjVuCatalog:
         add the DjVu links
         """
         if filename:
+            new_url=None
             wiki_url = f"{self.config.base_url}/Datei:{filename}"
             if self.config.new_url:
                 new_url=f"{self.config.new_url}/index.php?title=Datei:{filename}"
