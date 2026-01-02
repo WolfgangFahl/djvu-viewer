@@ -3,6 +3,8 @@ Created on 2026-01-02
 
 @author: wf
 """
+import urllib.parse
+import re
 
 import os
 import time
@@ -18,7 +20,7 @@ from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.tarball import Tarball
-
+from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 
 class DjVuActions:
     """
@@ -146,6 +148,33 @@ class DjVuActions:
         djvu_files = [r.get("path").replace("./", "/") for r in djvu_lod]
         return djvu_files
 
+
+    def extract_and_clean_path(self,url:str)->str:
+        """
+        URL decode, extract path from /images, and remove duplicate slashes.
+
+        Args:
+            url (str): The URL to process
+
+        Returns:
+            str: The cleaned path starting from /images
+        """
+        cleaned_path=None
+        # URL decode
+        decoded_url = urllib.parse.unquote(url)
+
+        # Extract path from /images using regex
+        match = re.search(r'/images/.*', decoded_url)
+
+        if match:
+            path = match.group(0)
+
+            # Remove duplicate slashes
+            cleaned_path = re.sub(r'/+', '/', path)
+
+        return cleaned_path
+
+
     def catalog_djvu(self, limit: int = 10000000) -> Tuple[List[Dict], List[Dict]]:
         """
         Catalog DjVu files by scanning and extracting metadata.
@@ -160,15 +189,21 @@ class DjVuActions:
             A tuple of (djvu_lod, page_lod) containing the list of DjVu records
             and page records respectively
         """
-        bootstrap_dvm = DjVuManager(config=self.config)
-        lod = bootstrap_dvm.query("all_djvu")
+        # @FIXME bootstrap differently e.g. directly from wiki images
+        #bootstrap_dvm = DjVuManager(config=self.config)
+        #lod = bootstrap_dvm.query("all_djvu")
+        mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(
+            self.config.base_url
+        )
         total = 0
         start_time = time.time()
         djvu_lod = []
         page_lod = []
+        images=mw_client.fetch_allimages(limit)
 
-        for index, r in enumerate(lod, start=1):
-            path = r.get("path")
+        for index, r in enumerate(images, start=1):
+            url = r.get("url")
+            path=self.extract_and_clean_path(url)
             djvu_path = self.config.djvu_abspath(path)
 
             if not djvu_path or not os.path.exists(djvu_path):
@@ -319,7 +354,7 @@ class DjVuActions:
         self,
         djvu_lod: List[Dict[str, Any]],
         page_lod: List[Dict[str, Any]],
-        sample_record_count: int = 20,
+        sample_record_count: int = 1,
     ) -> None:
         """
         Store DjVu and page records in the database.

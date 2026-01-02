@@ -38,7 +38,9 @@ class DjVuConfig:
         if self.queries_path is None:
             self.queries_path = os.path.join(examples_path, "djvu_queries.yaml")
         if self.tarball_path is None:
-            self.tarball_path = examples_path
+            self.tarball_path = os.path.join(examples_path, "djvu_images")
+        if self.images_path is None:
+            self.images_path = os.path.join(examples_path,"images")
         if self.db_path is None:
             self.db_path = os.path.join(examples_path, "djvu_data.db")
 
@@ -62,13 +64,13 @@ class DjVuConfig:
         return str(config_dir / "config.yaml")
 
     @classmethod
-    def get_instance(cls) -> "DjVuConfig":
+    def get_instance(cls,test:bool=False) -> "DjVuConfig":
         """
         get my instance
         """
         if cls._instance is None:
             config_path = cls.get_config_file_path()
-            if os.path.exists(config_path):
+            if os.path.exists(config_path) and not test:
                 # load_from_yaml_file is provided by the @lod_storable decorator
                 instance = cls.load_from_yaml_file(config_path)
             else:

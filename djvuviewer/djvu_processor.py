@@ -444,30 +444,27 @@ class DjVuProcessor:
             ImageJob: Updated image job with rendered image
         """
         try:
-            image_job.log(" render start")
-            if not image_job.pagejob:
-                raise ValueError(
-                    f"PageJob not available for page {image_job.page_index}"
+            if image_job.pagejob:
+                image_job.log(" render start")
+
+                width, height = image_job.get_size()
+                color_buffer = self.render_pagejob_to_buffer(image_job, mode)
+
+                image = DjVuImage(
+                    width=width,
+                    height=height,
+                    dpi=image_job.pagejob.dpi,
+                    iso_date=image_job.iso_date,
+                    filesize=image_job.filesize,
+                    page_index=image_job.page_index,
+                    djvu_path=image_job.relurl,
+                    path=image_job.filename,
                 )
+                image._buffer = (color_buffer,)
 
-            width, height = image_job.get_size()
-            color_buffer = self.render_pagejob_to_buffer(image_job, mode)
-
-            image = DjVuImage(
-                width=width,
-                height=height,
-                dpi=image_job.pagejob.dpi,
-                iso_date=image_job.iso_date,
-                filesize=image_job.filesize,
-                page_index=image_job.page_index,
-                djvu_path=image_job.relurl,
-                path=image_job.filename,
-            )
-            image._buffer = (color_buffer,)
-
-            # Update the image job with the rendered image
-            image_job.image = image
-            image_job.log(" render done")
+                # Update the image job with the rendered image
+                image_job.image = image
+                image_job.log(" render done")
         except Exception as e:
             # Store exception but don't raise
             image_job.error = e

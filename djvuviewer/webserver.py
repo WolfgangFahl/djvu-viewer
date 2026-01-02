@@ -18,8 +18,7 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_debug import DjVuDebug
 from djvuviewer.djvu_viewer import DjVuViewer
 from djvuviewer.version import Version
-from djvuviewer.wiki_images import MediaWikiImages
-
+from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 
 class DjVuViewerWebServer(InputWebserver):
     """WebServer class that manages the server and handles DjVu operations."""
@@ -128,21 +127,6 @@ class DjVuViewerWebServer(InputWebserver):
             html_response = self.djvu_viewer.get_page(path, page)
             return html_response
 
-    def get_mediawiki_images_client(self, url: str) -> MediaWikiImages:
-        """
-        get the images client for the given url
-        """
-        mw_client = None
-        if url:
-            api_epp = "api.php"
-            base = url if url.endswith("/") else f"{url}/"
-            mw_client = MediaWikiImages(
-                api_url=f"{base}{api_epp}",
-                mime_types=("image/vnd.djvu", "image/x-djvu"),
-                timeout=10,
-            )
-        return mw_client
-
     def configure_run(self):
         """
         configure me
@@ -152,10 +136,10 @@ class DjVuViewerWebServer(InputWebserver):
         # make helper classes available
         self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config)
         # Initialize MediaWiki clients if using API mode
-        self.mw_client_base = self.get_mediawiki_images_client(
+        self.mw_client_base = DjVuMediaWikiImages.get_mediawiki_images_client(
             self.djvu_config.base_url
         )
-        self.mw_client_new = self.get_mediawiki_images_client(self.djvu_config.new_url)
+        self.mw_client_new = DjVuMediaWikiImages.get_mediawiki_images_client(self.djvu_config.new_url)
 
 
 class DjVuSolution(InputWebSolution):
