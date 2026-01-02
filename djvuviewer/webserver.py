@@ -5,14 +5,20 @@ Created on 2024-08-15
 Refactored to Focus on DjVu functionality
 """
 
+from typing import Dict
+
 from djvuviewer.djvu_catalog import DjVuCatalog
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_viewer import DjVuViewer
 from djvuviewer.version import Version
+from ngwidgets.widgets import Link
+
 from ngwidgets.input_webserver import InputWebserver, InputWebSolution
 from ngwidgets.webserver import WebserverConfig
 from nicegui import Client, app, ui
 from starlette.responses import FileResponse, HTMLResponse
+
+from djvuviewer.djvu_debug import DjVuDebug
 
 
 class DjVuViewerWebServer(InputWebserver):
@@ -48,6 +54,11 @@ class DjVuViewerWebServer(InputWebserver):
         @ui.page("/djvu/browse")
         async def djvu_browse(client: Client):
             return await self.page(client, DjVuSolution.djvu_browse)
+
+        @app.get("/djvu/debug/{path:path}")
+        def djvu_debug_route(client:Client, path: str) -> HTMLResponse:
+            """Route for DjVu debug page"""
+            return await self.page(client, lambda: DjVuSolution.djvu_debug(path))
 
         @app.get("/djvu/content/{file:path}")
         def get_content(file: str) -> FileResponse:
@@ -117,15 +128,15 @@ class DjVuViewerWebServer(InputWebserver):
             html_response = self.djvu_viewer.get_page(path, page)
             return html_response
 
+
     def configure_run(self):
         """
         configure me
         """
         super().configure_run()
         self.djvu_config=DjVuConfig.get_instance()
-        # Note: We are instantiating the helper class DjVuViewer here.
+        # make helper classes available
         self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config)
-
 
 class DjVuSolution(InputWebSolution):
     """
@@ -142,6 +153,24 @@ class DjVuSolution(InputWebSolution):
         """
         super().__init__(webserver, client)
 
+    def add_links(self, view_record: Dict[str, any], filename: str):
+        """
+        Add the DjVu links.
+        """
+        if filename:
+            wiki_url = f"{self.config.base_url}/Datei:{filename}"
+            view_record["wiki"] = Link.create(url=wiki_url, text=filename)
+
+            if self.config.new_url:
+                new_url = f"{self.config.new_url}/index.php?title=Datei:{filename}"
+                view_record["new"] = Link.create(url=new_url, text=filename)
+
+            local_url = f"{self.config.url_prefix}/djvu/{filename}"
+            view_record["tarball"] = Link.create(url=local_url, text=filename)
+
+            debug_url = f"{self.config.url_prefix}/djvu/debug/{filename}"
+            view_record["debug"] = Link.create(url=debug_url, text="debug")
+
     def setup_menu(self, detailed: bool = True):
         """
         setup the menu
@@ -150,6 +179,19 @@ class DjVuSolution(InputWebSolution):
         with self.header:
             self.link_button("DjVu Tarballs", "/djvu/catalog", "library_books")
             self.link_button("DjVu Wiki Images", "/djvu/browse", "image")
+
+    async def djvu_debug(self, path: str):
+        """Show the DjVu Debug page"""
+
+        def show():
+            debug_view = DjVuDebug(
+                self,
+                config=self.webserver.djvu_config,
+                path=path,
+            )
+            debug_view.setup_ui()
+
+    await self.setup_content_div(show)
 
     async def djvu_modal_catalog(self,browse_wiki:bool=False):
         """Show the DjVu Catalog page"""

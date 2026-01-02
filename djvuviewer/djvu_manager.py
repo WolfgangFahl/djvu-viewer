@@ -4,7 +4,7 @@ Created on 2025-02-24
 @author: wf
 """
 
-import os
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.multilang_querymanager import MultiLanguageQueryManager
 from lodstorage.sql import SQLDB

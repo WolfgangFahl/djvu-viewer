@@ -3,9 +3,14 @@
 
 # Check if running in GitHub Actions CI
 if [ -n "$GITHUB_ACTIONS" ]; then
-  echo "Running in GitHub Actions - installing DjVu system dependencies"
+  echo "Running in GitHub Actions - installing system dependencies"
   sudo apt-get update
-  sudo apt-get install -y djvulibre-bin libdjvulibre-dev pkg-config
+  sudo apt-get install -y \
+    djvulibre-bin \
+    libdjvulibre-dev \
+    libcairo2-dev \
+    pkg-config \
+    build-essential
 fi
 
 pip install .
