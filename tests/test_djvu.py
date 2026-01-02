@@ -4,6 +4,7 @@ Created on 2025-02-24
 @author: wf
 """
 
+from argparse import Namespace
 import argparse
 import glob
 import json
@@ -73,19 +74,22 @@ class TestDjVu(Basetest):
             max_workers=None,
             debug=self.debug,
             verbose=False,
+            quiet=False,
+            about=False,
             serial=False,
         )
         return args
 
-    def check_command(self,command:str,expected_errors:int=0):
+    def check_command(self,command:str,expected_errors:int=0,args:Namespace=None):
         """
         check the given command
         """
-        args =self.get_args(
-            command=command,
-        )
+        if args is None:
+            args =self.get_args(
+                command=command,
+            )
         djvu_cmd = DjVuCmd(args=args)
-        djvu_cmd.handle_args()
+        djvu_cmd.handle_args(args)
         error_count=len(djvu_cmd.actions.errors)
         if self.debug and error_count>expected_errors:
             print(djvu_cmd.actions.errors)
@@ -213,26 +217,11 @@ class TestDjVu(Basetest):
         """
         test the conversion
         """
-        args = argparse.Namespace(
-            command="convert",
-            db_path=self.config.db_path,
-            images_path=self.config.images_path,
-            limit=50,
-            force=True,
-            sort="asc",
-            output_path=self.output_dir,
-            parallel=True,
-            # url="/images/2/2f/Sorau-AB-1913.djvu",
-            url="/9/96/vz1890-neuenhausen-zb04.djvu",
-            debug=True,
-            serial=False,
-            batch_size=100,
-            limit_gb=16,
-            max_workers=None,
-            verbose=True,
-        )
-        djvu_cmd = DjVuCmd(args=args)
-        djvu_cmd.handle_args()
+        # url="/images/2/2f/Sorau-AB-1913.djvu",
+        url="9/96/vz1890-neuenhausen-zb04.djvu"
+        args=self.get_args("convert")
+        args.url=url
+        self.check_command("convert",args=args)
 
     def test_issue49(self):
         """
@@ -281,5 +270,7 @@ class TestDjVu(Basetest):
         lod = dvm.query("total")
         if self.debug:
             print(json.dumps(lod, indent=2))
-        self.assertEqual(lod, [{"files": 1, "pages": 4}])
-        #self.assertEqual(lod, [{"files": 4288, "pages": 1028225}])
+        if self.local:
+            self.assertEqual(lod, [{"files": 4288, "pages": 1028225}])
+        else:
+            self.assertEqual(lod, [{"files": 1, "pages": 4}])
