@@ -1,0 +1,254 @@
+"""
+Created on 2024-08-26
+
+2026-02-02: Refactored to support dual-mode browsing (Database vs MediaWiki API).
+@author: wf
+"""
+
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_manager import DjVuManager
+from djvuviewer.wiki_images import MediaWikiImages
+from ngwidgets.lod_grid import ListOfDictsGrid
+from ngwidgets.widgets import Link
+from nicegui import background_tasks, run, ui
+
+
+class DjVuCatalog:
+    """
+    UI for browsing and querying the DjVu document catalog.
+    Supports fetching records from a local SQLite DB or a remote MediaWiki API.
+    """
+
+    def __init__(
+        self,
+        solution,
+        config: DjVuConfig,
+        browse_wiki: bool = False,
+        url_prefix: str = "",
+    ):
+        """
+        Initialize the DjVu catalog view.
+
+        Args:
+            solution: The solution instance
+            config: Configuration object containing connection and mode details
+            browse_wiki: If True, browse MediaWiki API; if False, use local DB
+            url_prefix: URL prefix for proxied deployments
+        """
+        self.solution = solution
+        self.config = config
+        self.url_prefix = url_prefix
+        self.browse_wiki = browse_wiki
+        self.webserver = self.solution.webserver
+
+        # Initialize database manager if using DB mode
+        self.dvm = DjVuManager(config=self.config) if not browse_wiki else None
+
+        # Initialize MediaWiki client if using API mode
+        if browse_wiki:
+            api_epp = "api.php"
+            base = (
+                self.config.base_url
+                if self.config.base_url.endswith("/")
+                else f"{self.config.base_url}/"
+            )
+            self.mw_client = MediaWikiImages(
+                api_url=f"{base}{api_epp}",
+                mime_types=("image/vnd.djvu", "image/x-djvu"),
+                timeout=10,
+            )
+        else:
+            self.mw_client = None
+
+        self.lod = []
+        self.view_lod = []
+        self.lod_grid = None
+        self.load_task = None
+        self.timeout = 10.0
+
+    def get_view_lod(self, lod: list) -> list:
+        """Convert records to view format with row numbers and links."""
+        view_lod = []
+        for i, record in enumerate(lod):
+            index = i + 1
+            view_record = self.get_view_record(record, index)
+            view_lod.append(view_record)
+        return view_lod
+
+    def get_view_record(self, record: dict, index: int) -> dict:
+        """Delegate to appropriate handler based on record type."""
+        if self.browse_wiki:
+            record=self.get_api_view_record(record, index)
+        else:
+            record=self.get_db_view_record(record, index)
+        return record
+
+    def get_api_view_record(self, record: dict, index: int) -> dict:
+        """
+        Handle MediaWiki API format records.
+
+        Expected fields:
+            - name/title: "Datei:02_Amt_Loewenburg.djvu"
+            - size: 838675
+            - timestamp: "2011-12-11T11:15:20Z"
+            - pagecount: 1
+            - user: "MLCarl3"
+            - width: 4175
+            - height: 5014
+            - url: "https://wiki.genealogy.net/images//3/3b/..."
+            - descriptionurl, mime, ns
+        """
+        view_record = {"#": index}
+
+        raw_name = record.get("name", record.get("title", ""))
+        filename = raw_name.replace("File:", "").replace("Datei:", "")
+
+        wiki_url = record.get("descriptionurl") or f"https://wiki.genealogy.net/index.php?title=Datei%3A{filename}"
+        local_url = f"{self.url_prefix}/djvu/{filename}"
+        view_record["wiki"] = Link.create(url=wiki_url, text=filename)
+        view_record["view"] = Link.create(url=local_url, text=filename)
+
+        view_record["size"] = record.get("size")
+        view_record["pages"] = record.get("pagecount")
+        view_record["timestamp"] = record.get("timestamp")
+        view_record["user"] = record.get("user")
+        if record.get("width") and record.get("height"):
+            view_record["dimensions"] = f"{record['width']}×{record['height']}"
+
+        return view_record
+
+    def get_db_view_record(self, record: dict, index: int) -> dict:
+        """
+        Handle Database format records (DjVu dataclass).
+
+        Expected fields:
+            - path: str (filename)
+            - page_count: int
+            - filesize: int
+            - iso_date: str
+            - bundled: bool
+            - tar_filesize, tar_iso_date, dir_pages (optional)
+        """
+        view_record = {"#": index}
+
+        filename = None
+        if "path" in record:
+            val = record["path"]
+            if isinstance(val, str) and "/" in val:
+                filename = val.split("/")[-1]
+            else:
+                filename = val
+
+        if filename:
+            wiki_url = f"https://wiki.genealogy.net/index.php?title=Datei%3A{filename}"
+            local_url = f"{self.url_prefix}/djvu/{filename}"
+            view_record["wiki"] = Link.create(url=wiki_url, text=filename)
+            view_record["view"] = Link.create(url=local_url, text=filename)
+
+        view_record["filesize"] = record.get("filesize")
+        view_record["pages"] = record.get("page_count")
+        view_record["date"] = record.get("iso_date")
+        view_record["bundled"] = "✓" if record.get("bundled") else ""
+
+        if record.get("tar_filesize"):
+            view_record["tar_size"] = record.get("tar_filesize")
+        if record.get("tar_iso_date"):
+            view_record["tar_date"] = record.get("tar_iso_date")
+        if record.get("dir_pages"):
+            view_record["dir_pages"] = record.get("dir_pages")
+
+        return view_record
+
+    def get_query_lod(self) -> list:
+        """
+        Fetch DjVu catalog data based on mode (DB or API).
+
+        Returns:
+            List of dictionaries containing DjVu file records
+        """
+        lod=[]
+        try:
+            if self.browse_wiki:
+                lod = self.mw_client.fetch_allimages(limit=200)
+            else:
+                # Fetch from SQLite Database
+                if self.dvm:
+                    lod = self.dvm.query("all_djvu")
+        except Exception as ex:
+            self.solution.handle_exception(ex)
+
+        return lod
+
+    async def load_catalog(self):
+        """
+        Load the catalog data and display it in the grid.
+        """
+        try:
+            # Fetch data
+            self.lod = await run.io_bound(self.get_query_lod)
+
+            if not self.lod:
+                with self.solution.container:
+                    ui.notify("No DjVu files found")
+                return
+
+            # Convert to view format with links
+            self.view_lod = self.get_view_lod(self.lod)
+
+            # Clear and update grid
+            self.grid_row.clear()
+            with self.grid_row:
+                record_count = len(self.view_lod)
+                mode = "MediaWiki API" if self.browse_wiki else "Local Database"
+                ui.label(f"{record_count} records from {mode}").classes("text-caption")
+                self.lod_grid = ListOfDictsGrid()
+                self.lod_grid.load_lod(self.view_lod)
+
+            if self.lod_grid:
+                self.lod_grid.sizeColumnsToFit()
+            self.grid_row.update()
+
+        except Exception as ex:
+            self.solution.handle_exception(ex)
+
+    async def on_refresh(self):
+        """
+        Handle refresh button click.
+        """
+        def cancel_running():
+            if self.load_task:
+                self.load_task.cancel()
+
+        # Show loading spinner
+        self.grid_row.clear()
+        with self.grid_row:
+            ui.spinner()
+        self.grid_row.update()
+
+        # Cancel any running task
+        cancel_running()
+
+        # Set timeout for task cancellation
+        ui.timer(self.timeout, lambda: cancel_running(), once=True)
+
+        # Run task in background
+        self.load_task = background_tasks.create(self.load_catalog())
+
+    def setup_ui(self):
+        """
+        Set up the user interface components for the DjVu catalog.
+        """
+        # Header row with title and refresh button
+        with ui.row() as self.header_row:
+            mode = "MediaWiki API" if self.browse_wiki else "Local Database"
+            ui.label(f"DjVu Catalog ({mode})").classes("text-h6")
+            self.refresh_button = ui.button(
+                icon="refresh",
+                on_click=self.on_refresh,
+            ).tooltip("Refresh catalog")
+
+        # Grid row for displaying results
+        self.grid_row = ui.row()
+
+        # Initial load
+        background_tasks.create(self.load_catalog())
