@@ -163,7 +163,7 @@ class DjVuSolution(InputWebSolution):
             wiki_url = f"{config.base_url}/Datei:{filename}"
             view_record["wiki"] = Link.create(url=wiki_url, text=filename)
 
-            if self.config.new_url:
+            if config.new_url:
                 new_url = f"{config.new_url}/index.php?title=Datei:{filename}"
                 view_record["new"] = Link.create(url=new_url, text=filename)
 
