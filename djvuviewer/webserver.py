@@ -124,7 +124,7 @@ class DjVuViewerWebServer(InputWebserver):
         super().configure_run()
         self.djvu_config=DjVuConfig.get_instance()
         # Note: We are instantiating the helper class DjVuViewer here.
-        self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config,url_prefix=self.url_prefix)
+        self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config)
 
 
 class DjVuSolution(InputWebSolution):
