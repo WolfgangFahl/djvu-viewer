@@ -1,0 +1,140 @@
+#!/bin/bash
+# WF 2025-11-11 start djvuviewer
+# WF 2026-01-02 refactored to djvuviewer to fix https://github.com/WolfgangFahl/djvu-viewer/issues/5
+#
+# This script launches the  DjVu viewer service.
+# It ensures only one instance runs at a time, writes log output
+# to /var/log/djvu-viewer/djvu-viewer.log
+
+# --- configuration ----------------------------------------------------------
+# default options for startup
+options="-s --url_prefix /djvu-viewer"
+
+# Log directory and file; created on demand.
+LOG_DIR="/var/log/djvu-viewer"
+LOG_FILE="$LOG_DIR/djvu-viewer.log"
+
+# Defaults for remote debugging (override via env if needed)
+DEBUG_SERVER="${DEBUG_SERVER:-localhost}"
+DEBUG_PORT="${DEBUG_PORT:-5678}"
+
+# see https://raw.githubusercontent.com/WolfgangFahl/pybasemkit/refs/heads/main/basemkit/base_cmd.py
+# Path on your development machine (IDE)  ⟵ local prefix seen in breakpoints
+# e.g. fixit.bitplan.com
+DEBUG_REMOTE_PATH="${DEBUG_REMOTE_PATH:-/Users/$USER/py-workspace}"
+# Path on this server/container where the code runs python is executed  ⟵ remote prefix
+# e.g. Genwiki39.genealogy.net
+DEBUG_LOCAL_PATH="${DEBUG_LOCAL_PATH:-$HOME/source/python}"
+
+# Configuration file
+CONFIG_FILE="$HOME/.djvuviewer/config.yaml"
+
+REMOTE_DEBUG="false"
+
+# ---------------------------------------------------------------------------
+
+# Make sure the log directory exists so redirection works.
+mkdir -p "$LOG_DIR"
+
+# show usage
+usage() {
+  echo "usage: $0 [-h] [-debug]"
+  echo
+  echo "options:"
+  echo "  -h|--help     show this help message and exit"
+  echo "  -d|--debug    enable debug mode enable remote debugging "
+  echo "  -u|--update   update djvu-viewer from source before starting"
+  exit 0
+}
+
+# update sources and reinstall
+update() {
+  echo "$(date '+%F %T') - Updating djvu-viewer from source..." | tee -a "$LOG_FILE"
+  cd "$HOME/source/python/djvu-viewer"
+  git pull
+  pipx install -e . --force 2>&1 | tee -a "$LOG_FILE"
+}
+
+# start the djvu-viewer
+start_djvu_viewer() {
+
+  # If another djvuviewer -s instance is running, terminate it
+  # to avoid duplicate viewers using the same port or files.
+  if pgrep -f -- "djvuviewer -s" >/dev/null 2>&1; then
+    echo "$(date '+%F %T') - Existing djvuviewer -s process found; stopping it." >>"$LOG_FILE"
+    pkill -f -- "djvuviewer -s" || true
+    sleep 1
+  fi
+
+  # Change into the project directory containing the viewer
+  cd "$HOME/source/python/djvu-viewer"
+
+  # Start the viewer in the background with nohup so it keeps running
+  # after logout; all stdout/stderr is appended to the log file.
+  echo "$(date '+%F %T') - Starting djvuviewer -s." >>"$LOG_FILE"
+
+  if [[ "$REMOTE_DEBUG" == "true" ]]; then
+	   cat <<EOF
+📡 Prepare Remote Debug
+  1.  e.g. Eclipse PyDev/Start Debug server so that
+      Debug Server at port: 5678
+      appears
+  2. Establish reverse SSH tunnel allowing this machine to connect
+     to your devlopment machine
+       ssh -R $DEBUG_PORT:localhost:$DEBUG_PORT $USER@$(hostname -f)
+EOF
+
+  read -p "Have you set up the remote debug server and SSH tunnel? (y/n): " confirm
+  if [[ "$confirm" != "y" ]]; then
+    echo "❌ Remote debug not started. Please set up the environment and rerun."
+    exit 1
+  fi
+  echo "✅ Starting djvuviewer with remote debugging..."
+    nohup djvuviewer $options --debug \
+      --debugServer "$DEBUG_SERVER" \
+      --debugPort "$DEBUG_PORT" \
+      --debugLocalPath "$DEBUG_LOCAL_PATH" \
+      --debugRemotePath "$DEBUG_REMOTE_PATH" >>"$LOG_FILE" 2>&1 &
+  else
+    nohup djvuviewer $options  >>"$LOG_FILE" 2>&1 &
+  fi
+  PID=$!
+  msg="$(date '+%F %T') - djvuviewer $options started with PID $PID log at $LOG_FILE"
+  echo $msg
+  echo $msg >>"$LOG_FILE"
+}
+
+# Check if configuration file exists
+check_config() {
+  if [[ ! -f "$CONFIG_FILE" ]]; then
+        cat <<EOF
+❌ Configuration file not found: $CONFIG_FILE
+
+Example
+# $USER $(date '+%Y-%m-%d')
+tarball_path: $HOME/genwiki/djvu_images
+images_path: $HOME/genwiki/images
+base_url: https://wiki.genealogy.net
+db_path: /var/www/mediawiki/sites/genwiki.genealogy.net/djvu/genwiki_djvu.db
+EOF
+    exit 1
+  fi
+
+}
+
+check_config
+# check command line arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+       usage;;
+    -d|--debug)
+      REMOTE_DEBUG="true"
+      ;;
+    -u|--update)
+       update
+       ;;
+  esac
+  shift
+done
+start_djvu_viewer
