@@ -8,7 +8,7 @@
 
 # --- configuration ----------------------------------------------------------
 # default options for startup
-options="-s --url_prefix /djvu-viewer"
+options="-s"
 
 # Log directory and file; created on demand.
 LOG_DIR="/var/log/djvu-viewer"
