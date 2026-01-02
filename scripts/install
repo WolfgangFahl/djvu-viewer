@@ -5,10 +5,12 @@
 if [ -n "$GITHUB_ACTIONS" ]; then
   echo "Running in GitHub Actions - installing system dependencies"
   sudo apt-get update
+  # https://github.com/pygobject/pycairo/issues/386
   sudo apt-get install -y \
     djvulibre-bin \
     libdjvulibre-dev \
     libcairo2-dev \
+    python3-dev \
     pkg-config \
     build-essential
 fi
