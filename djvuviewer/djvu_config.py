@@ -22,6 +22,9 @@ class DjVuConfig:
     queries_path: Optional[str]=None
     base_url: Optional[str]="https://wiki.genealogy.net/"
     new_url:  Optional[str]= None
+    url_prefix: Optional[str]= "" # URL prefix for proxied deployments (e.g., "/djvu-viewer")
+
+    """
 
     def __post_init__(self):
         """

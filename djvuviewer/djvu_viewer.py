@@ -27,7 +27,7 @@ class DjVuViewer:
     _static_mounted = False
 
     def __init__(
-        self, app: FastAPI, config:DjVuConfig, url_prefix: str = ""
+        self, app: FastAPI, config:DjVuConfig
     ):
         """
         Initialize the DjVu viewer.
@@ -35,10 +35,9 @@ class DjVuViewer:
         Args:
             app: FastAPI application instance
             config:DjVu configuration
-            url_prefix: URL prefix for proxied deployments (e.g., "/djvu-viewer")
         """
         self.config=config
-        self.url_prefix = url_prefix.rstrip("/")
+        self.url_prefix = self.config.url_prefix.rstrip("/")
         self.app = app
 
         if not DjVuViewer._static_mounted:

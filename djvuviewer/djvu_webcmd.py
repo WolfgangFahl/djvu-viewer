@@ -18,20 +18,6 @@ class DjVuViewerCmd(WebserverCmd):
     command line handling for DjVu Viewer and tarball converter
     """
 
-    def add_arguments(self, parser):
-        """
-        Add djvuviewer-specific CLI arguments.
-
-        Args:
-            parser: The argument parser
-        """
-        super().add_arguments(parser)
-        parser.add_argument(
-            "--url_prefix",
-            default="",
-            help="URL prefix for proxied deployments (e.g., '/djvu-viewer')",
-        )
-
     def __init__(self):
         """
         constructor

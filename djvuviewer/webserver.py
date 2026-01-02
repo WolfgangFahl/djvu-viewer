@@ -122,7 +122,6 @@ class DjVuViewerWebServer(InputWebserver):
         configure me
         """
         super().configure_run()
-        self.url_prefix = self.args.url_prefix
         self.djvu_config=DjVuConfig.get_instance()
         # Note: We are instantiating the helper class DjVuViewer here.
         self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config,url_prefix=self.url_prefix)
@@ -160,7 +159,6 @@ class DjVuSolution(InputWebSolution):
                 self,
                 config=self.webserver.djvu_config,
                 browse_wiki=browse_wiki,
-                url_prefix=self.webserver.url_prefix
             )
             self.djvu_catalog_view.setup_ui()
 

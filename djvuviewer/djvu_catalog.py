@@ -24,7 +24,6 @@ class DjVuCatalog:
         solution,
         config: DjVuConfig,
         browse_wiki: bool = False,
-        url_prefix: str = "",
     ):
         """
         Initialize the DjVu catalog view.
@@ -33,11 +32,9 @@ class DjVuCatalog:
             solution: The solution instance
             config: Configuration object containing connection and mode details
             browse_wiki: If True, browse MediaWiki API; if False, use local DB
-            url_prefix: URL prefix for proxied deployments
         """
         self.solution = solution
         self.config = config
-        self.url_prefix = url_prefix
         self.browse_wiki = browse_wiki
         self.webserver = self.solution.webserver
 
@@ -95,7 +92,7 @@ class DjVuCatalog:
             view_record["wiki"] = Link.create(url=wiki_url, text=filename)
             if new_url:
                 view_record["new"] = Link.create(url=new_url, text=filename)
-            local_url = f"{self.url_prefix}/djvu/{filename}"
+            local_url = f"{self.config.url_prefix}/djvu/{filename}"
             view_record["tarball"] = Link.create(url=local_url, text=filename)
 
     def get_api_view_record(self, record: dict, index: int) -> dict:
