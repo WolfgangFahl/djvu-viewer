@@ -8,11 +8,8 @@ Created on 2024-08-26
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
-from djvuviewer.wiki_images import MediaWikiImages
 from ngwidgets.lod_grid import ListOfDictsGrid
-from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
-from typing import Dict
 
 class DjVuCatalog:
     """
@@ -43,29 +40,15 @@ class DjVuCatalog:
         # Initialize database manager if using DB mode
         self.dvm = DjVuManager(config=self.config) if not browse_wiki else None
 
-        # Initialize MediaWiki client if using API mode
-        if browse_wiki:
-            api_epp = "api.php"
-            base = (
-                self.config.base_url
-                if self.config.base_url.endswith("/")
-                else f"{self.config.base_url}/"
-            )
-            self.mw_client = MediaWikiImages(
-                api_url=f"{base}{api_epp}",
-                mime_types=("image/vnd.djvu", "image/x-djvu"),
-                timeout=10,
-            )
-        else:
-            self.mw_client = None
-
         self.lod = []
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
+        self.grid_row = None
         self.timeout = 10.0
         self.limit_options = [15, 30, 50, 100, 500, 1500, 5000]
         self.limit = 100 if self.browse_wiki else 10000
+        self.images_url=self.config.base_url
 
     def get_view_lod(self, lod: list) -> list:
         """Convert records to view format with row numbers and links."""
@@ -160,7 +143,8 @@ class DjVuCatalog:
         try:
             if self.browse_wiki:
                 # Assuming max_images limits the fetch, might need adjustment for full catalog
-                lod = self.mw_client.fetch_allimages(limit=self.limit)
+                images_client=self.solution.webserver.mw_client_base if self.images_url==self.config.base_url else self.solution.webserver.mw_client_new
+                lod = images_client.fetch_allimages(limit=self.limit)
             else:
                 # Fetch from SQLite Database
                 if self.dvm:
@@ -195,16 +179,17 @@ class DjVuCatalog:
             # Convert to view format with links
             self.view_lod = self.get_view_lod(self.lod)
 
-            # Clear and update grid
-            self.grid_row.clear()
-            with self.grid_row:
-                record_count = len(self.view_lod)
-                mode = "MediaWiki API" if self.browse_wiki else "Local Database"
-                ui.label(f"{record_count} records from {mode}").classes("text-caption")
+            if self.grid_row:
+                # Clear and update grid
+                self.grid_row.clear()
+                with self.grid_row:
+                    record_count = len(self.view_lod)
+                    mode = "MediaWiki API" if self.browse_wiki else "Tarball Database"
+                    ui.label(f"{record_count} records from {mode}").classes("text-caption")
 
-                self.lod_grid = ListOfDictsGrid()
-                self.configure_grid_options() # Apply pagination settings
-                self.lod_grid.load_lod(self.view_lod)
+                    self.lod_grid = ListOfDictsGrid()
+                    self.configure_grid_options() # Apply pagination settings
+                    self.lod_grid.load_lod(self.view_lod)
 
             if self.lod_grid:
                 self.lod_grid.sizeColumnsToFit()
@@ -254,13 +239,22 @@ class DjVuCatalog:
             mode = "MediaWiki API" if self.browse_wiki else "Local Database"
             ui.label(f"DjVu Catalog ({mode})").classes("text-h6")
             if self.browse_wiki:
+                # Url Selector
+                url_options=[self.config.base_url]
+                if self.config.new_url:
+                    url_options.append(self.config.new_url)
+                ui.select(
+                    options=url_options,
+                    label="wiki",
+                    on_change=self.on_refresh
+                ).classes("w-64").bind_value(self, 'images_url')
                 # Limit Selector
                 ui.select(
                     options=self.limit_options,
                     value=self.limit,
                     label="Limit",
                     on_change=lambda e: self.update_limit(e.value)
-                ).classes("w-24")
+                ).classes("w-16")
 
             self.refresh_button = ui.button(
                 icon="refresh",

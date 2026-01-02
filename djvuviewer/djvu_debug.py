@@ -16,7 +16,7 @@ from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
-
+from djvuviewer.wiki_images import MediaWikiImages
 
 class DjVuDebug:
     """
