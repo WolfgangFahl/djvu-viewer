@@ -10,3 +10,6 @@ DjVu Viewer and tarball converter
 
 # Demo
 - [genwik39-demo](https://genwiki39.genealogy.net/djvu-viewer/)
+
+# Documentation
+- [DjVu catalog and Viewer](https://wiki.bitplan.com/index.php/djvu-viewer)
