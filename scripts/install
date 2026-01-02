@@ -1,3 +1,11 @@
 #!/bin/bash
-# WF 2023-11-06
+# WF 2026-02-02
+
+# Check if running in GitHub Actions CI
+if [ -n "$GITHUB_ACTIONS" ]; then
+  echo "Running in GitHub Actions - installing DjVu system dependencies"
+  sudo apt-get update
+  sudo apt-get install -y djvulibre-bin libdjvulibre-dev pkg-config
+fi
+
 pip install .
