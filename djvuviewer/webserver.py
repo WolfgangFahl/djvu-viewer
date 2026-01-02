@@ -56,7 +56,7 @@ class DjVuViewerWebServer(InputWebserver):
             return await self.page(client, DjVuSolution.djvu_browse)
 
         @app.get("/djvu/debug/{path:path}")
-        def djvu_debug_route(client:Client, path: str) -> HTMLResponse:
+        async def djvu_debug_route(client:Client, path: str) -> HTMLResponse:
             """Route for DjVu debug page"""
             return await self.page(client, lambda: DjVuSolution.djvu_debug(path))
 
