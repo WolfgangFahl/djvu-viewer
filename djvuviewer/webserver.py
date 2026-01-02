@@ -157,18 +157,19 @@ class DjVuSolution(InputWebSolution):
         """
         Add the DjVu links.
         """
+        config=self.djvu_config
         if filename:
-            wiki_url = f"{self.config.base_url}/Datei:{filename}"
+            wiki_url = f"{config.base_url}/Datei:{filename}"
             view_record["wiki"] = Link.create(url=wiki_url, text=filename)
 
             if self.config.new_url:
-                new_url = f"{self.config.new_url}/index.php?title=Datei:{filename}"
+                new_url = f"{config.new_url}/index.php?title=Datei:{filename}"
                 view_record["new"] = Link.create(url=new_url, text=filename)
 
-            local_url = f"{self.config.url_prefix}/djvu/{filename}"
+            local_url = f"{config.url_prefix}/djvu/{filename}"
             view_record["tarball"] = Link.create(url=local_url, text=filename)
 
-            debug_url = f"{self.config.url_prefix}/djvu/debug/{filename}"
+            debug_url = f"{config.url_prefix}/djvu/debug/{filename}"
             view_record["debug"] = Link.create(url=debug_url, text="debug")
 
     def setup_menu(self, detailed: bool = True):
