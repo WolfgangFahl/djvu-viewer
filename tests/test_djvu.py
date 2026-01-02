@@ -45,14 +45,15 @@ class TestDjVu(Basetest):
         self.config = DjVuConfig.get_instance()
         self.limit = 50 if not self.local else 10000000
         self.test_tuples = [
-            ("c/ce/Plauen-AB-1938.djvu", 2, True),
-            ("b/b3/AB1951-Suenninghausen.djvu", 5, False),
+            ("/images/c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu", 3, False),
+            ("/images/c/ce/Plauen-AB-1938.djvu", 2, True),
+            ("/images/f/ff/AB1932-Ramrath.djvu", 2, True)
         ]
         self.test_tuples_2024 = [
-            ("2/2f/Sorau-AB-1913.djvu", 255, False),
-            ("9/96/vz1890-neuenhausen-zb04.djvu", 3, True),
-            ("0/08/Deutsches-Kirchliches-AB-1927.djvu", 1188, False),
-            ("a/a1/Treuen-Vogtland-AB-1905.djvu", 38, False),
+            ("/images/2/2f/Sorau-AB-1913.djvu", 255, False),
+            ("/images/9/96/vz1890-neuenhausen-zb04.djvu", 3, True),
+            ("/images/0/08/Deutsches-Kirchliches-AB-1927.djvu", 1188, False),
+            ("/images/a/a1/Treuen-Vogtland-AB-1905.djvu", 38, False),
         ]
 
     def get_args(self, command: str) -> argparse.Namespace:

@@ -28,7 +28,7 @@ class DjVuDebug:
         self,
         solution,
         config: DjVuConfig,
-        path: str,
+        page_title: str,
     ):
         """
         Initialize the DjVu debug view.
@@ -36,18 +36,63 @@ class DjVuDebug:
         Args:
             solution: The solution instance
             config: Configuration object
-            path: Path to the DjVu file
+            page_title: pagetitle of the DjVu file
         """
         self.solution = solution
         self.config = config
         self.webserver = self.solution.webserver
-        self.path = path
+        self.page_title=page_title
         self.djvu_file = None
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
+
+    def get_djvu_file(self,path:str):
+        """
+        get the djvu file for the given path
+        """
+        djvu_path = self.config.djvu_abspath(path)
+
+        if not djvu_path.exists():
+            raise FileNotFoundError(f"DjVu file not found: {djvu_path}")
+
+        # Get file-level metadata
+        stat_info = djvu_path.stat()
+        filesize = stat_info.st_size
+        iso_date = datetime.fromtimestamp(stat_info.st_mtime).isoformat()
+
+        # Create processor and load document
+        dproc = DjVuProcessor(
+            verbose=self.solution.debug, debug=self.solution.debug
+        )
+        url = djvu.decode.FileURI(str(djvu_path))
+        document = dproc.context.new_document(url)
+        document.decoding_job.wait()
+
+        # Get document-level info
+        page_count = len(document.files)
+        bundled = document.type == 2
+
+        # Process pages to get detailed metadata
+        pages = []
+        for image_job in dproc.process(
+            str(djvu_path), str(path), save_png=False, output_path=None
+        ):
+            image = image_job.image
+            pages.append(image)
+
+        # Create DjVuFile object
+        djvu_file = DjVuFile(
+            path=str(path),
+            page_count=page_count,
+            bundled=bundled,
+            iso_date=iso_date,
+            filesize=filesize,
+            pages=pages,
+        )
+        return djvu_file
 
     def load_djvu_file(self) -> bool:
         """
@@ -58,46 +103,11 @@ class DjVuDebug:
         """
         try:
             # Sanitize and get the full path
-            path = self.webserver.djvu_viewer.sanitize_path(self.path)
-            djvu_path = Path(self.config.images_path) / path
+            mw_image=self.solution.webserver.mw_client_base.fetch_image(title=self.page_title)
+            if self.solution.webserver.mw_client_new:
+                mw_image_new=self.solution.webserver.mw_client_new.fetch_image(title=self.page_title)
 
-            if not djvu_path.exists():
-                raise FileNotFoundError(f"DjVu file not found: {djvu_path}")
-
-            # Get file-level metadata
-            stat_info = djvu_path.stat()
-            filesize = stat_info.st_size
-            iso_date = datetime.fromtimestamp(stat_info.st_mtime).isoformat()
-
-            # Create processor and load document
-            dproc = DjVuProcessor(
-                verbose=self.solution.debug, debug=self.solution.debug
-            )
-            url = djvu.decode.FileURI(str(djvu_path))
-            document = dproc.context.new_document(url)
-            document.decoding_job.wait()
-
-            # Get document-level info
-            page_count = len(document.files)
-            bundled = document.type == 2
-
-            # Process pages to get detailed metadata
-            pages = []
-            for image_job in dproc.process(
-                str(djvu_path), str(path), save_png=False, output_path=None
-            ):
-                image = image_job.image
-                pages.append(image)
-
-            # Create DjVuFile object
-            self.djvu_file = DjVuFile(
-                path=str(path),
-                page_count=page_count,
-                bundled=bundled,
-                iso_date=iso_date,
-                filesize=filesize,
-                pages=pages,
-            )
+            pass
 
             return True
 

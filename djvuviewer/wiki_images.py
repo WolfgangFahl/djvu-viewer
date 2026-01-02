@@ -113,6 +113,8 @@ class MediaWikiImages:
         Returns:
             MediaWikiImage object if found, None otherwise.
         """
+        if not ":" in title:
+            title="File:"+title
         params = {
             "action": "query",
             "prop": "imageinfo",

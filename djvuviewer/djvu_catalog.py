@@ -227,10 +227,11 @@ class DjVuCatalog:
                 self.load_task.cancel()
 
         # Show loading spinner
-        self.grid_row.clear()
-        with self.grid_row:
-            ui.spinner()
-        self.grid_row.update()
+        if self.grid_row:
+            self.grid_row.clear()
+            with self.grid_row:
+                ui.spinner()
+            self.grid_row.update()
 
         # Cancel any running task
         cancel_running()

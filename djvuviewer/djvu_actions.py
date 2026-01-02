@@ -168,8 +168,8 @@ class DjVuActions:
         page_lod = []
 
         for index, r in enumerate(lod, start=1):
-            path = r.get("path").replace("./", "/")
-            djvu_path = self.images_path + path
+            path = r.get("path")
+            djvu_path = self.config.djvu_abspath(path)
 
             if not djvu_path or not os.path.exists(djvu_path):
                 self.errors.append(Exception(f"missing {djvu_path}"))
@@ -234,7 +234,7 @@ class DjVuActions:
             page_count = 0
             for path in djvu_files:
                 try:
-                    djvu_path = self.images_path + path
+                    djvu_path = self.config.djvu_abspath(path)
                     djvu_file = None
                     prefix = ImageJob.get_prefix(path)
                     tar_file = os.path.join(self.output_path, prefix + ".tar")

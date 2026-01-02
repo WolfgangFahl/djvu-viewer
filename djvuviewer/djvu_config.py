@@ -42,6 +42,15 @@ class DjVuConfig:
         if self.db_path is None:
             self.db_path = os.path.join(examples_path, "djvu_data.db")
 
+    def djvu_abspath(self,path:str)->str:
+        """
+        get the absolute djvu path for the given relative path
+        """
+        djvu_path=path.replace("./", "/")
+        djvu_path=djvu_path.replace("/images/","/")
+        djvu_path=self.images_path+djvu_path
+        return djvu_path
+
     @classmethod
     def get_config_file_path(cls) -> str:
         """

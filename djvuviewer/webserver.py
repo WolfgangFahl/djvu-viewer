@@ -55,10 +55,10 @@ class DjVuViewerWebServer(InputWebserver):
         async def djvu_browse(client: Client):
             return await self.page(client, DjVuSolution.djvu_browse)
 
-        @ui.page("/djvu/debug/{path:path}")
-        async def djvu_debug_route(client: Client, path: str) -> HTMLResponse:
+        @ui.page("/djvu/debug/{page_title:str}")
+        async def djvu_debug_route(client: Client, page_title: str) -> HTMLResponse:
             """Route for DjVu debug page"""
-            return await self.page(client, DjVuSolution.djvu_debug, path)
+            return await self.page(client, DjVuSolution.djvu_debug, page_title)
 
         @app.get("/djvu/content/{file:path}")
         def get_content(file: str) -> FileResponse:
@@ -202,14 +202,14 @@ class DjVuSolution(InputWebSolution):
             self.link_button("DjVu Tarballs", "/djvu/catalog", "library_books")
             self.link_button("DjVu Wiki Images", "/djvu/browse", "image")
 
-    async def djvu_debug(self, path: str):
+    async def djvu_debug(self, page_title: str):
         """Show the DjVu Debug page"""
 
         def show():
             debug_view = DjVuDebug(
                 self,
                 config=self.webserver.djvu_config,
-                path=path,
+                page_title=page_title,
             )
             debug_view.setup_ui()
 
