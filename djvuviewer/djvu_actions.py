@@ -15,6 +15,7 @@ from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.tarball import Tarball
 from lodstorage.lod import LOD
 from tqdm import tqdm
+import traceback
 
 
 class DjVuActions:
@@ -53,7 +54,7 @@ class DjVuActions:
         self.dvm = dvm
         self.dproc = dproc
         self.images_path = images_path
-        self.output_path = output_path or config.output_path
+        self.output_path = output_path
         self.debug = debug
         self.verbose = verbose
         self.force = force
@@ -224,6 +225,8 @@ class DjVuActions:
             djvu_files: List of DjVu file paths to process
             serial: If True, use serial processing; otherwise use parallel
         """
+        if not self.output_path:
+            raise ValueError("output_path is not set")
         # Select processing function based on serial flag
         process_func = (
             self.dproc.process if serial else self.dproc.process_parallel
@@ -447,11 +450,9 @@ class DjVuActions:
         if self.debug:
             for i, error in enumerate(self.errors, 1):
                 print(f"📝 {i}. {error}")
-
-            if self.verbose:
-                import traceback
-                for error in self.errors:
-                    print("📜", traceback.format_exc())
+                if self.verbose:
+                    tb = ''.join(traceback.format_exception(type(error), error, error.__traceback__))
+                    print("📜", tb)
 
     def catalog_and_store(self, limit: int, sample_record_count: int = 1) -> None:
         """

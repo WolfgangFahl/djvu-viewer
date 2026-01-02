@@ -3,9 +3,9 @@ Created on 2025-02-25
 
 @author: wf
 """
+from argparse import ArgumentParser, Namespace
 import argparse
 import logging
-from argparse import ArgumentParser
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
@@ -74,7 +74,7 @@ class DjVuCmd(BaseCmd):
         )
         parser.add_argument(
             "--db-path",
-            default="/tmp/genwiki_djvu.db",
+            default=self.config.db_path,
             help="Path to the database (default: %(default)s)",
         )
         parser.add_argument(
@@ -123,12 +123,19 @@ class DjVuCmd(BaseCmd):
 
         return parser
 
-    def handle_args(self) -> None:
+    def handle_args(self, args: Namespace) -> bool:
         """
         Handle the command-line arguments and execute the requested command.
 
         Sets up the configuration and dispatches to the appropriate command handler.
+
+        Args:
+            args: Parsed command-line arguments
+
+        Returns:
+            True if handled (no further processing needed)
         """
+        handled = super().handle_args(args)
         # Configure paths
         self.config.db_path = self.args.db_path
         self.config.images_path = self.args.images_path
@@ -168,8 +175,10 @@ class DjVuCmd(BaseCmd):
         handler = command_handlers.get(self.args.command)
         if handler:
             handler()
+            handled=True
         else:
             print(f"unknown command {self.args.command}")
+        return handled
 
     def catalog(self) -> None:
         """

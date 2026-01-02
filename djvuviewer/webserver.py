@@ -152,6 +152,7 @@ class DjVuSolution(InputWebSolution):
             client (Client): The client instance this context is associated with.
         """
         super().__init__(webserver, client)
+        self.djvu_config=webserver.djvu_config
 
     def add_links(self, view_record: Dict[str, any], filename: str):
         """

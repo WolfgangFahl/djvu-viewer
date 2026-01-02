@@ -53,14 +53,14 @@ class TestDjVu(Basetest):
             ("a/a1/Treuen-Vogtland-AB-1905.djvu",38,False)
         ]
 
-    def get_args(self,command:str,db_path:str)->argparse.Namespace:
+    def get_args(self,command:str)->argparse.Namespace:
         """
         get CLI arguments for testing
         """
         args = argparse.Namespace(
             command=command,
             db_path=self.db_path,
-            images_path=db_path,
+            images_path=self.config.images_path,
             limit=self.limit,
             url=None,
             sort="asc",
@@ -69,6 +69,7 @@ class TestDjVu(Basetest):
             parallel=False,
             batch_size=100,
             limit_gb=16,
+            max_errors=1,
             max_workers=None,
             debug=self.debug,
             verbose=False,
@@ -82,11 +83,13 @@ class TestDjVu(Basetest):
         """
         args =self.get_args(
             command=command,
-            db_path=self.db_path,
         )
         djvu_cmd = DjVuCmd(args=args)
         djvu_cmd.handle_args()
-        self.assertTrue(len(djvu_cmd.errors) <= expected_errors)
+        error_count=len(djvu_cmd.actions.errors)
+        if self.debug and error_count>expected_errors:
+            print(djvu_cmd.actions.errors)
+        self.assertTrue(error_count <= expected_errors)
 
     def test_config(self):
         """
@@ -95,6 +98,12 @@ class TestDjVu(Basetest):
         if self.debug:
             print(self.config)
         self.assertEqual(self.local, not self.inPublicCI())
+
+    def test_001_init_db(self):
+        """
+        check init database command first
+        """
+        self.check_command("initdb")
 
 
     def get_djvu(self, relurl, with_download:bool=False):
@@ -186,13 +195,6 @@ class TestDjVu(Basetest):
             lod = djvm.query(query_name, param_dict=param_dict)
             if self.debug:
                 print(f"{len(lod)} records")
-
-
-    def test_init_db(self):
-        """
-        check init database command
-        """
-        self.check_command("initdb")
 
     def test_update_database(self):
         """
