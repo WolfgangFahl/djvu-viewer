@@ -65,7 +65,7 @@ class DjVuCatalog:
         self.load_task = None
         self.timeout = 10.0
         self.limit_options = [15, 30, 50, 100, 500, 1500, 5000]
-        self.limit = 100 # Default
+        self.limit = 100 if self.browse_wiki else 10000
 
     def get_view_lod(self, lod: list) -> list:
         """Convert records to view format with row numbers and links."""
@@ -269,13 +269,14 @@ class DjVuCatalog:
         with ui.row() as self.header_row:
             mode = "MediaWiki API" if self.browse_wiki else "Local Database"
             ui.label(f"DjVu Catalog ({mode})").classes("text-h6")
-            # Limit Selector
-            ui.select(
-                options=self.limit_options,
-                value=self.limit,
-                label="Limit",
-                on_change=lambda e: self.update_limit(e.value)
-            ).classes("w-24")
+            if self.browse_wiki:
+                # Limit Selector
+                ui.select(
+                    options=self.limit_options,
+                    value=self.limit,
+                    label="Limit",
+                    on_change=lambda e: self.update_limit(e.value)
+                ).classes("w-24")
 
             self.refresh_button = ui.button(
                 icon="refresh",
