@@ -24,8 +24,6 @@ class DjVuConfig:
     new_url:  Optional[str]= None
     url_prefix: Optional[str]= "" # URL prefix for proxied deployments (e.g., "/djvu-viewer")
 
-    """
-
     def __post_init__(self):
         """
         make sure we set defaults
