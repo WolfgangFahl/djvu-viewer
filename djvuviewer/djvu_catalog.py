@@ -124,7 +124,7 @@ class DjVuCatalog:
         view_record["filesize"] = record.get("filesize")
         view_record["pages"] = record.get("page_count")
         view_record["date"] = record.get("iso_date")
-        view_record["bundled"] = "✓" if record.get("bundled") else "❌"
+        view_record["bundled"] = "✓" if record.get("bundled") else "X"
 
         if record.get("tar_filesize"):
             view_record["tar_size"] = record.get("tar_filesize")
