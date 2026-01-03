@@ -8,16 +8,17 @@ import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import tarfile
 import tempfile
 from typing import List, Optional
+import zipfile
 
 from PIL import Image
 from basemkit.shell import Shell
+from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.tarball import Tarball
-import zipfile
-from djvuviewer.djvu_config import DjVuConfig
 
 
 class DjVuBundle:
@@ -265,7 +266,7 @@ class DjVuBundle:
                     print(f"Removed original: {djvu_path}")
 
             # Move bundled file to original location
-            os.rename(bundled_path, djvu_path)
+            shutil.move(bundled_path, djvu_path)
             if self.debug:
                 print(f"Moved {bundled_path} to {djvu_path}")
 

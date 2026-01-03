@@ -285,11 +285,11 @@ class DjVuActions:
                 print(f"❌ Bundling failed with {len(djvu_bundle.errors)} errors")
             else:
                 print(f"✅ Successfully bundled {self.args.url}")
-                # MediaWiki maintenance call if container is configured
-                if hasattr(self.config, 'container_name') and self.config.container_name:
-                    filename = os.path.basename(djvu_path)
-                    docker_cmd=(f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}")
-                    print(f"to update the wiki run \n{docker_cmd}")
+            # MediaWiki maintenance call if container is configured
+            if hasattr(self.config, 'container_name') and self.config.container_name:
+                filename = os.path.basename(djvu_path)
+                docker_cmd=(f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}")
+                print(f"to update the wiki run \n{docker_cmd}")
 
         except Exception as e:
             self.errors.append(e)
