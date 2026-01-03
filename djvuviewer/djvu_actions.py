@@ -278,7 +278,7 @@ class DjVuActions:
             bundled_size = self.show_fileinfo(bundled_path)
 
             print(f"Finalizing bundling...")
-            djvu_bundle.finalize_bundling(zip_path, bundled_path)
+            djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=self.args.sleep)
 
             if not djvu_bundle.is_valid():
                 self.errors.extend(djvu_bundle.errors)

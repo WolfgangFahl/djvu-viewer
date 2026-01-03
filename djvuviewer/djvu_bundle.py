@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shlex
+import time
 import shutil
 import subprocess
 import tarfile
@@ -222,7 +223,7 @@ class DjVuBundle:
             self.djvu_dump_log=result.stdout
         return self.djvu_dump_log
 
-    def finalize_bundling(self, zip_path: str, bundled_path: str):
+    def finalize_bundling(self, zip_path: str, bundled_path: str, sleep:float=1.0):
         """
         Finalize bundling by removing the original main file and
         all zipped component files then move the bundled_path file to the original.
@@ -269,14 +270,16 @@ class DjVuBundle:
                 self._add_error(f"Bundled file missing: {bundled_path}")
                 return
 
-            if self.debug:
-                print(f"trying to\nmv {bundled_path} {djvu_path}")
             if not os.access(djvu_dir, os.W_OK):
                 self._add_error(
                     f"No write permission in directory: {djvu_dir}\n"
                     f"Try: sudo chmod g+w {djvu_dir}"
                 )
                 return
+            if self.debug:
+                print(f"trying to\nmv {bundled_path} {djvu_path}")
+                print(f"sleeping {sleep} secs ...")
+            time.sleep(sleep)
             # Move bundled file to original location
             self.move_file(bundled_path, djvu_path)
             if self.debug:

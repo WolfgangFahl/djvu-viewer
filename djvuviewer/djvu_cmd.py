@@ -98,6 +98,12 @@ class DjVuCmd(BaseCmd):
             help="Maximum allowed error percentage before skipping database update (default: %(default)s)",
         )
         parser.add_argument(
+            "--sleep",
+            type=float,
+            default=1.0,
+            help="number of seconds to sleep before trying to move (default: %(default)s)",
+        )
+        parser.add_argument(
             "--max-workers",
             type=int,
             default=None,
