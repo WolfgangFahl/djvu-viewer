@@ -247,7 +247,15 @@ class DjVuActions:
             raise ValueError("bundle is currently only implemented for single files")
 
         try:
+            if not "image/" in url:
+                mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(
+                    self.config.new_url
+                )
+                image=mw_client.fetch_image(f"File:{url}")
+                url=image.url
+                url=self.config.djvu_relpath(url)
             djvu_path = self.config.djvu_abspath(url)
+            relpath=self.config.djvu_relpath(djvu_path)
 
             if not os.path.exists(djvu_path):
                 raise FileNotFoundError(f"File not found: {djvu_path}")
@@ -259,18 +267,15 @@ class DjVuActions:
             djvu_bundle = DjVuBundle(djvu_file, config=self.config, debug=self.debug)
 
             if self.args.verbose:
-                print(f"Creating backup for {url}...")
+                print(f"Creating backup for {self.args.url}... {djvu_file.page_count} pages {djvu_file.iso_date}")
             zip_path = djvu_bundle.create_backup_zip()
-            if self.args.verbose:
-                print(f"Backup created: {zip_path}")
+            zip_size = self.show_fileinfo(zip_path)
 
             print(f"Converting to bundled format...")
             bundled_path = djvu_bundle.convert_to_bundled(remove_thumbnails=cleanup)
 
-            # Show bundled file info and ratio
+            # Show bundled file info
             bundled_size = self.show_fileinfo(bundled_path)
-            ratio = (bundled_size / original_size * 100) if original_size > 0 else 0
-            print(f"Compression ratio: {ratio:.1f}% ({original_size} → {bundled_size} bytes)")
 
             print(f"Finalizing bundling...")
             djvu_bundle.finalize_bundling(zip_path, bundled_path)
@@ -279,7 +284,7 @@ class DjVuActions:
                 self.errors.extend(djvu_bundle.errors)
                 print(f"❌ Bundling failed with {len(djvu_bundle.errors)} errors")
             else:
-                print(f"✅ Successfully bundled {url}")
+                print(f"✅ Successfully bundled {self.args.url}")
                 # MediaWiki maintenance call if container is configured
                 if hasattr(self.config, 'container_name') and self.config.container_name:
                     filename = os.path.basename(djvu_path)
