@@ -265,8 +265,21 @@ class DjVuBundle:
                 if self.debug:
                     print(f"Removed original: {djvu_path}")
 
+            # Before attempting finalization
+            if not os.path.exists(bundled_path):
+                self._add_error(f"Bundled file missing: {bundled_path}")
+                return
+
+            if self.debug:
+                print(f"using os.replace to\nmv {bundled_path} {djvu_path}")
+            if not os.access(djvu_dir, os.W_OK):
+                self._add_error(
+                    f"No write permission in directory: {djvu_dir}\n"
+                    f"Try: sudo chmod g+w {djvu_dir}"
+                )
+                return
             # Move bundled file to original location
-            shutil.move(bundled_path, djvu_path)
+            os.replace(bundled_path, djvu_path)
             if self.debug:
                 print(f"Moved {bundled_path} to {djvu_path}")
 
