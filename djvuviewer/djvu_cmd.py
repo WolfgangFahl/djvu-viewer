@@ -100,8 +100,8 @@ class DjVuCmd(BaseCmd):
         parser.add_argument(
             "--sleep",
             type=float,
-            default=1.0,
-            help="number of seconds to sleep before trying to move (default: %(default)s)",
+            default=2.0,
+            help="number of seconds to sleep before trying to move to avoid actimeo issues on CIFS mounts (default: %(default)s)"
         )
         parser.add_argument(
             "--max-workers",
