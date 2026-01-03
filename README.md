@@ -9,7 +9,8 @@ DjVu Viewer and tarball converter
 | **Docs** | [![API Docs](https://img.shields.io/badge/API-Documentation-blue)](https://WolfgangFahl.github.io/djvu-viewer/) [![formatter-docformatter](https://img.shields.io/badge/%20formatter-docformatter-fedcba.svg)](https://github.com/PyCQA/docformatter) [![style-google](https://img.shields.io/badge/%20style-google-3666d6.svg)](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings) |
 
 # Demo
-- [genwik39-demo](https://genwiki39.genealogy.net/djvu-viewer/)
+- [genwiki39-demo](https://genwiki39.genealogy.net/djvu-viewer/)
+- [RWTH Aachen demo](https://djvu-viewer.wikidata.dbis.rwth-aachen.de/)
 
 # Documentation
 - [DjVu catalog and Viewer](https://wiki.bitplan.com/index.php/djvu-viewer)
