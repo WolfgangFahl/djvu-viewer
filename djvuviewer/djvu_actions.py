@@ -272,7 +272,7 @@ class DjVuActions:
             zip_size = self.show_fileinfo(zip_path)
 
             print(f"Converting to bundled format...")
-            bundled_path = djvu_bundle.convert_to_bundled(remove_thumbnails=cleanup)
+            bundled_path = djvu_bundle.convert_to_bundled()
 
             # Show bundled file info
             bundled_size = self.show_fileinfo(bundled_path)
