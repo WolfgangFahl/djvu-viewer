@@ -4,13 +4,14 @@ Created on 2024-08-15
 @author: wf
 Refactored to Focus on DjVu functionality
 """
-
+from wikibot3rd.sso_users import Sso_Users
 from typing import Dict
-
+from ngwidgets.login import Login
 from ngwidgets.input_webserver import InputWebserver, InputWebSolution
 from ngwidgets.webserver import WebserverConfig
 from ngwidgets.widgets import Link
 from nicegui import Client, app, ui
+from ngwidgets.sso_users_solution import SsoSolution
 from starlette.responses import FileResponse, HTMLResponse
 
 from djvuviewer.djvu_catalog import DjVuCatalog
@@ -41,6 +42,9 @@ class DjVuViewerWebServer(InputWebserver):
     def __init__(self):
         """Constructs all the necessary attributes for the WebServer object."""
         InputWebserver.__init__(self, config=DjVuViewerWebServer.get_config())
+        self.users = Sso_Users(self.config.short_name)
+        self.login = Login(self, self.users)
+
 
         @ui.page("/")
         async def home(client: Client):
@@ -59,6 +63,11 @@ class DjVuViewerWebServer(InputWebserver):
         async def djvu_debug_route(client: Client, page_title: str) -> HTMLResponse:
             """Route for DjVu debug page"""
             return await self.page(client, DjVuSolution.djvu_debug, page_title)
+
+        @ui.page("/login")
+        async def login(client: Client) -> None:
+            return await self.page(client, DjVuSolution.show_login)
+
 
         @app.get("/djvu/content/{file:path}")
         def get_content(file: str) -> FileResponse:
@@ -148,6 +157,14 @@ class DjVuViewerWebServer(InputWebserver):
             )
             return html_response
 
+    def authenticated(self) -> bool:
+        """
+        check authentication
+        """
+        allow = self.login.authenticated()
+        return allow
+
+
     def configure_run(self):
         """
         configure me
@@ -203,14 +220,25 @@ class DjVuSolution(InputWebSolution):
             debug_url = f"{config.url_prefix}/djvu/debug/{filename}"
             view_record["debug"] = Link.create(url=debug_url, text="🔍")
 
-    def setup_menu(self, detailed: bool = True):
+    def configure_menu(self):
         """
         setup the menu
         """
-        super().setup_menu(detailed=detailed)
+        InputWebSolution.configure_menu(self)
+        self.login = self.webserver.login
+        self.sso_solution = SsoSolution(webserver=self.webserver)
+        self.sso_solution.configure_menu()
+        # icons from https://fonts.google.com/icons
+        #if self.webserver.authenticated():
+        #    self.link_button(name="wikis", icon_name="menu_book", target="/wikis")
+
         with self.header:
             self.link_button("DjVu Tarballs", "/djvu/catalog", "library_books")
             self.link_button("DjVu Wiki Images", "/djvu/browse", "image")
+
+    async def show_login(self):
+        """Show login page"""
+        await self.login.login(self)
 
     async def djvu_debug(self, page_title: str):
         """Show the DjVu Debug page"""
