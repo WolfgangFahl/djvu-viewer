@@ -3,11 +3,12 @@ Created on 2025-02-24
 
 @author: wf
 """
-import tarfile
+
 import argparse
 import glob
 import json
 import os
+import tarfile
 from argparse import Namespace
 
 from basemkit.basetest import Basetest
@@ -42,14 +43,15 @@ class TestDjVu(Basetest):
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self.local = os.path.exists(DjVuConfig.get_config_file_path())
         # set to True to emulate CI mode
-        force_test=False
-        if force_test: self.local=False
+        force_test = False
+        if force_test:
+            self.local = False
         self.config = DjVuConfig.get_instance(test=force_test)
-        self.limit = 50 if not self.local else 50 #10000000
+        self.limit = 50 if not self.local else 50  # 10000000
         self.test_tuples = [
             ("/images/c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu", 3, False),
             ("/images/c/ce/Plauen-AB-1938.djvu", 2, True),
-            ("/images/f/ff/AB1932-Ramrath.djvu", 2, True)
+            ("/images/f/ff/AB1932-Ramrath.djvu", 2, True),
         ]
         self.test_tuples_2024 = [
             ("/images/2/2f/Sorau-AB-1913.djvu", 255, False),
@@ -116,33 +118,40 @@ class TestDjVu(Basetest):
         # Test cases: (input, expected_output, description)
         test_cases = [
             # Relative paths that should be transformed
-            ("./images/c/ce/Plauen-AB-1938.djvu",
-             "/c/ce/Plauen-AB-1938.djvu",
-             "Relative path with ./images/"),
-
-            ("./c/ce/Plauen-AB-1938.djvu",
-             "/c/ce/Plauen-AB-1938.djvu",
-             "Relative path with ./"),
-
+            (
+                "./images/c/ce/Plauen-AB-1938.djvu",
+                "/c/ce/Plauen-AB-1938.djvu",
+                "Relative path with ./images/",
+            ),
+            (
+                "./c/ce/Plauen-AB-1938.djvu",
+                "/c/ce/Plauen-AB-1938.djvu",
+                "Relative path with ./",
+            ),
             # Absolute paths get everything before and including /images/ removed
-            ("/Users/wf/hd/genwiki_gruff/images/c/ce/Plauen-AB-1938.djvu",
-             "/c/ce/Plauen-AB-1938.djvu",
-             "Absolute path with /images/ in middle"),
-
+            (
+                "/Users/wf/hd/genwiki_gruff/images/c/ce/Plauen-AB-1938.djvu",
+                "/c/ce/Plauen-AB-1938.djvu",
+                "Absolute path with /images/ in middle",
+            ),
             # Path starting with /images/ should have it removed
-            ("/images/c/ce/Plauen-AB-1938.djvu",
-             "/c/ce/Plauen-AB-1938.djvu",
-             "Path starting with /images/"),
-
+            (
+                "/images/c/ce/Plauen-AB-1938.djvu",
+                "/c/ce/Plauen-AB-1938.djvu",
+                "Path starting with /images/",
+            ),
             # corner case images/ prefix needs to be handled
-            ("images/c/ce/Plauen-AB-1938.djvu",
-             "/c/ce/Plauen-AB-1938.djvu",
-             "Path starting with images/ (no dot or slash)"),
+            (
+                "images/c/ce/Plauen-AB-1938.djvu",
+                "/c/ce/Plauen-AB-1938.djvu",
+                "Path starting with images/ (no dot or slash)",
+            ),
             # duplicate slashes
-            ("/images//f/ff/AB1932-Ramrath.djvu",
-             "/f/ff/AB1932-Ramrath.djvu",
-             "duplicate slashes"
-            )
+            (
+                "/images//f/ff/AB1932-Ramrath.djvu",
+                "/f/ff/AB1932-Ramrath.djvu",
+                "duplicate slashes",
+            ),
         ]
 
         for input_path, expected, description in test_cases:
@@ -154,8 +163,9 @@ class TestDjVu(Basetest):
                 print(f"  Got:      {result}")
                 print(f"  Match:    {'✓' if result == expected else '✗'}")
 
-            self.assertEqual(expected, result,
-                            f"Failed for {description}: input='{input_path}'")
+            self.assertEqual(
+                expected, result, f"Failed for {description}: input='{input_path}'"
+            )
 
     def test_001_init_db(self):
         """
@@ -185,15 +195,15 @@ class TestDjVu(Basetest):
         dproc = DjVuProcessor()
         for relurl, elen, expected_bundled in self.test_tuples:
             djvu_path = self.get_djvu(relurl)
-            rel_path=self.config.djvu_relpath(djvu_path)
+            rel_path = self.config.djvu_relpath(djvu_path)
             if self.debug:
                 print(f"getting DjVuFile for {rel_path}")
-            djvu_file=dproc.get_djvu_file(djvu_path,config=self.config)
+            djvu_file = dproc.get_djvu_file(djvu_path, config=self.config)
             if self.debug:
                 print(djvu_file)
                 print(djvu_file.to_yaml())
-            self.assertEqual(expected_bundled,djvu_file.bundled)
-            self.assertEqual(elen,djvu_file.page_count)
+            self.assertEqual(expected_bundled, djvu_file.bundled)
+            self.assertEqual(elen, djvu_file.page_count)
 
     def test_djvu_images(self):
         """
@@ -209,9 +219,7 @@ class TestDjVu(Basetest):
             count = 0
             # iterate over the generator
             for image_job in dproc.process(
-                djvu_path, relurl,
-                save_png=False,
-                output_path=self.output_dir
+                djvu_path, relurl, save_png=False, output_path=self.output_dir
             ):
                 count += 1
                 self.assertIsNone(image_job.error)
@@ -260,7 +268,7 @@ class TestDjVu(Basetest):
         for relurl, _elen, _expected_bundled in self.test_tuples:
             args = self.get_args("dbupdate")
             args.url = relurl
-            self.check_command("dbupdate",args=args)
+            self.check_command("dbupdate", args=args)
 
     def test_all_djvu(self):
         """
@@ -285,28 +293,24 @@ class TestDjVu(Basetest):
 
             self.assertTrue(
                 os.path.isfile(tar_file),
-                f"Expected tar file '{tar_file}' was not created"
+                f"Expected tar file '{tar_file}' was not created",
             )
-
 
             # Verify tar contains PNG files
             with tarfile.open(tar_file) as tar:
                 members = tar.getmembers()
-                self.assertGreater(
-                    len(members),
-                    0,
-                    f"Tar file '{tar_file}' is empty"
-                )
-                png_files = [m.name for m in tar.getmembers() if m.name.endswith('.png')]
+                self.assertGreater(len(members), 0, f"Tar file '{tar_file}' is empty")
+                png_files = [
+                    m.name for m in tar.getmembers() if m.name.endswith(".png")
+                ]
                 self.assertGreater(len(png_files), 0, "No PNG files found in tar")
 
-
                 # Check for YAML file
-                yaml_files = [m for m in members if m.name.endswith('.yaml')]
+                yaml_files = [m for m in members if m.name.endswith(".yaml")]
                 self.assertEqual(
                     len(yaml_files),
                     1,
-                    f"Expected 1 YAML file in tar, found {len(yaml_files)}"
+                    f"Expected 1 YAML file in tar, found {len(yaml_files)}",
                 )
 
     def test_issue49(self):
@@ -324,7 +328,7 @@ class TestDjVu(Basetest):
                     return
                 relurl = url
                 djvu_path = self.get_djvu(relurl)
-                dproc = DjVuProcessor(tar=False,debug=self.debug,verbose=self.debug)
+                dproc = DjVuProcessor(tar=False, debug=self.debug, verbose=self.debug)
                 if self.debug:
                     print(f"processing {relurl}")
                 # for document, page in dproc.yield_pages(djvu_path):

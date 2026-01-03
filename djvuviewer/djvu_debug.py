@@ -5,19 +5,17 @@ Created on 2026-01-02
 
 @author: wf
 """
-from datetime import datetime
-import os
+
+import urllib.parse
 from pathlib import Path
 
-import djvu.decode
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuFile, DjVuPage
-from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
 
-from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVuFile, DjVuPage
+from djvuviewer.djvu_processor import DjVuProcessor
 
 
 class DjVuDebug:
@@ -42,10 +40,10 @@ class DjVuDebug:
         self.solution = solution
         self.config = config
         self.webserver = self.solution.webserver
-        self.page_title=page_title
-        self.mw_image=None
-        self.mw_image_new=None
-        self.total_pages=0
+        self.page_title = page_title
+        self.mw_image = None
+        self.mw_image_new = None
+        self.total_pages = 0
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
@@ -63,12 +61,18 @@ class DjVuDebug:
             bool: True if successful, False otherwise
         """
         try:
-            self.mw_image=self.solution.webserver.mw_client_base.fetch_image(title=self.page_title)
+            self.mw_image = self.solution.webserver.mw_client_base.fetch_image(
+                title=self.page_title
+            )
             if self.solution.webserver.mw_client_new:
-                self.mw_image_new=self.solution.webserver.mw_client_new.fetch_image(title=self.page_title)
-            relpath=self.config.extract_and_clean_path(self.mw_image.url)
-            abspath=self.config.djvu_abspath(f"/images/{relpath}")
-            self.mw_image.djvu_file=self.dproc.get_djvu_file(abspath,config=self.config)
+                self.mw_image_new = self.solution.webserver.mw_client_new.fetch_image(
+                    title=self.page_title
+                )
+            relpath = self.config.extract_and_clean_path(self.mw_image.url)
+            abspath = self.config.djvu_abspath(f"/images/{relpath}")
+            self.mw_image.djvu_file = self.dproc.get_djvu_file(
+                abspath, config=self.config
+            )
             return True
 
         except Exception as ex:
@@ -80,13 +84,10 @@ class DjVuDebug:
         Yields tuples of (Source Label, WikiImage Instance) for generic iteration.
         This makes adding a 3rd or 4th source trivial in the future.
         """
-        sources = [
-            ("Current Wiki", self.mw_image),
-            ("New Wiki", self.mw_image_new)
-        ]
+        sources = [("Current Wiki", self.mw_image), ("New Wiki", self.mw_image_new)]
 
         for label, image_obj in sources:
-            if image_obj and hasattr(image_obj, 'djvu_file') and image_obj.djvu_file:
+            if image_obj and hasattr(image_obj, "djvu_file") and image_obj.djvu_file:
                 yield label, image_obj.djvu_file
 
     def _get_single_header_html(self, title: str, djvu_file: DjVuFile) -> str:
@@ -99,7 +100,11 @@ class DjVuDebug:
         # Safe first page access
         first_page = djvu_file.pages[0] if djvu_file.pages else None
 
-        dims = f"{first_page.width}×{first_page.height}" if (first_page and first_page.width) else "—"
+        dims = (
+            f"{first_page.width}×{first_page.height}"
+            if (first_page and first_page.width)
+            else "—"
+        )
         dpi = first_page.dpi if (first_page and first_page.dpi) else "—"
 
         tar_info = ""
@@ -118,10 +123,14 @@ class DjVuDebug:
             f"<strong>Dimensions:</strong><span>{dims}</span>",
             f"<strong>DPI:</strong><span>{dpi}</span>",
             f"<strong>File Date:</strong><span>{djvu_file.iso_date or '—'}</span>",
-            f"<strong>Main Size:</strong><span>{djvu_file.filesize:,} bytes</span>" if djvu_file.filesize else "",
+            (
+                f"<strong>Main Size:</strong><span>{djvu_file.filesize:,} bytes</span>"
+                if djvu_file.filesize
+                else ""
+            ),
             f"<strong>Pages Size:</strong><span>{total_page_size:,} bytes</span>",
             tar_info,
-            "</div></div>"
+            "</div></div>",
         ]
         return "".join(html_parts)
 
@@ -137,7 +146,9 @@ class DjVuDebug:
 
         return f"<div style='display: flex; flex-wrap: wrap; gap: 16px;'>{''.join(html_blocks)}</div>"
 
-    def _create_page_record(self, source_name: str, djvu_path: str, page: DjVuPage) -> dict:
+    def _create_page_record(
+        self, source_name: str, djvu_path: str, page: DjVuPage
+    ) -> dict:
         """Helper to create a single dictionary record for the LOD."""
         filename_stem = Path(djvu_path).name
 
@@ -147,18 +158,24 @@ class DjVuDebug:
             "Page": page.page_index,
             "Filename": page.path or "—",
             "Valid": "✅" if page.valid else "❌",
-            "Dimensions": f"{page.width}×{page.height}" if (page.width and page.height) else "—",
+            "Dimensions": (
+                f"{page.width}×{page.height}" if (page.width and page.height) else "—"
+            ),
             "DPI": page.dpi or "—",
             "Size": f"{page.filesize:,}" if page.filesize else "—",
-            "Error": page.error_msg or ""
+            "Error": page.error_msg or "",
         }
 
         # Add Links if config exists
-        if hasattr(self, 'config') and hasattr(self.config, 'url_prefix'):
+        if hasattr(self, "config") and hasattr(self.config, "url_prefix"):
             base_url = f"{self.config.url_prefix}/djvu"
 
             # View Link
-            view_url = f"{base_url}/{filename_stem}?page={page.page_index}"
+            if self.mw_image_new.description_url:
+                backlink = (
+                    f"&backlink={urllib.parse.quote(self.mw_image_new.description_url)}"
+                )
+            view_url = f"{base_url}/{filename_stem}?page={page.page_index}{backlink}"
             record["view"] = Link.create(url=view_url, text="view")
 
             # PNG Download Link
@@ -182,7 +199,7 @@ class DjVuDebug:
             for page in djvu_file.pages:
                 record = self._create_page_record(source_name, djvu_file.path, page)
                 view_lod.append(record)
-                self.total_pages+=1
+                self.total_pages += 1
 
         return view_lod
 
@@ -205,9 +222,7 @@ class DjVuDebug:
                 ui.html(header_html)
 
                 # Pages section
-                ui.label(f"Pages ({self.total_pages} total)").classes(
-                    "text-h6 mt-4"
-                )
+                ui.label(f"Pages ({self.total_pages} total)").classes("text-h6 mt-4")
 
                 # Grid
                 self.lod_grid = ListOfDictsGrid()

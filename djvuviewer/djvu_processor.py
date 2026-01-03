@@ -4,29 +4,31 @@ Created on 2025-02-25
 @author: wf
 """
 
-from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
 import datetime
 import gc
 import logging
 import os
-from pathlib import Path
 import shutil
 import sys
 import tarfile
 import tempfile
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Generator, List, Optional, Tuple
-from PIL import Image
+
 import cairo
 import djvu.decode
-from djvuviewer.djvu_core import DjVuImage, DjVuFile, DjVuPage
-from djvuviewer.djvu_config import DjVuConfig
-from ngwidgets.profiler import Profiler
 import numpy
+from ngwidgets.profiler import Profiler
+from PIL import Image
 
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
 
 if sys.platform != "win32":
     import resource
+
 
 @dataclass
 class ImageJob:
@@ -172,7 +174,7 @@ class DjVuProcessor:
         batch_size: int = 100,
         limit_gb: int = 16,
         max_workers: int = None,
-        clean_temp: bool=True,
+        clean_temp: bool = True,
     ):
         """
         Initializes the DjVuProcessor.
@@ -197,7 +199,7 @@ class DjVuProcessor:
             self.max_workers = os.cpu_count() * 4
         else:
             self.max_workers = max_workers
-        self.clean_temp=clean_temp
+        self.clean_temp = clean_temp
         self.context = DjVuContext()  # delegate context instance
         self.context.message_handler = self.handle_message
         self.cairo_pixel_format = cairo.FORMAT_ARGB32
@@ -279,8 +281,9 @@ class DjVuProcessor:
         if free_buffer:
             image_job.image._buffer = None
 
-
-    def save_image_to_png(self, image_job: ImageJob, output_path: str, free_buffer: bool = True) -> None:
+    def save_image_to_png(
+        self, image_job: ImageJob, output_path: str, free_buffer: bool = True
+    ) -> None:
         """
         Save a decoded DjVu image to PNG using PIL.
 
@@ -335,10 +338,10 @@ class DjVuProcessor:
             rgb_array[:, :, 2] = buffer_data[:, :width] & 0xFF
 
             # Create PIL Image from RGB array
-            img = Image.fromarray(rgb_array, mode='RGB')
+            img = Image.fromarray(rgb_array, mode="RGB")
 
             # Save as PNG
-            img.save(output_path, 'PNG')
+            img.save(output_path, "PNG")
 
         finally:
             # Free buffer if requested
@@ -426,7 +429,7 @@ class DjVuProcessor:
             msg = f"file {path} not found"
             raise ValueError(msg)
 
-    def get_djvu_file(self, djvu_path: str,config:DjVuConfig) -> DjVuFile:
+    def get_djvu_file(self, djvu_path: str, config: DjVuConfig) -> DjVuFile:
         """
         Efficiently retrieves DjVu file metadata and page structure.
 
@@ -457,7 +460,7 @@ class DjVuProcessor:
             # Capture document-level flags on first pass
             if not doc_info_captured:
                 # document.type: 0=Single, 1=Indirect, 2=Bundled
-                is_bundled = (document.type == 2)
+                is_bundled = document.type == 2
                 # document.files contains the directory of included files
                 dir_pages = len(document.files)
                 doc_info_captured = True
@@ -480,7 +483,9 @@ class DjVuProcessor:
                 dpi = 0
                 error_msg = str(e)
                 if self.debug:
-                    logging.warning(f"Failed to get info for page {page_index} in {djvu_path}: {e}")
+                    logging.warning(
+                        f"Failed to get info for page {page_index} in {djvu_path}: {e}"
+                    )
 
             # 4. Determine Filename and File-specific stats
             try:
@@ -503,7 +508,7 @@ class DjVuProcessor:
                 if os.path.exists(component_path):
                     page_iso, page_size = ImageJob.get_fileinfo(component_path)
 
-            relpath=config.djvu_relpath(djvu_path)
+            relpath = config.djvu_relpath(djvu_path)
             # 5. Construct Page Object
             djvu_page = DjVuPage(
                 path=page_filename,
@@ -515,7 +520,7 @@ class DjVuProcessor:
                 height=height,
                 dpi=dpi,
                 djvu_path=relpath,
-                error_msg=error_msg
+                error_msg=error_msg,
             )
             pages.append(djvu_page)
 
@@ -529,7 +534,7 @@ class DjVuProcessor:
             # tar_filesize/date are not calculated by the processor, typically 0 or None initially
             tar_filesize=0,
             dir_pages=dir_pages,
-            pages=pages
+            pages=pages,
         )
 
         return djvu_file
@@ -768,7 +773,7 @@ class DjVuProcessor:
 
                 # Optionally save to PNG in parallel
                 if save_png:
-                    save_future=executor.submit(
+                    save_future = executor.submit(
                         self.save_as_png, rendered_job, self.output_path, free_buffer
                     )
                     save_futures.append(save_future)

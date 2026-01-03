@@ -3,12 +3,15 @@ Created on 2026-01-02
 
 @author: wf
 """
+
 from djvuviewer.wiki_images import MediaWikiImages
+
 
 class DjVuMediaWikiImages:
     """
     MediaWiki images handler
     """
+
     @classmethod
     def get_mediawiki_images_client(self, url: str) -> MediaWikiImages:
         """

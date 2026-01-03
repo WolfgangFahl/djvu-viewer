@@ -17,8 +17,9 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
-from djvuviewer.tarball import Tarball
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
+from djvuviewer.tarball import Tarball
+
 
 class DjVuActions:
     """
@@ -146,7 +147,6 @@ class DjVuActions:
         djvu_files = [r.get("path").replace("./", "/") for r in djvu_lod]
         return djvu_files
 
-
     def catalog_djvu(self, limit: int = 10000000) -> Tuple[List[Dict], List[Dict]]:
         """
         Catalog DjVu files by scanning and extracting metadata.
@@ -162,8 +162,8 @@ class DjVuActions:
             and page records respectively
         """
         # @FIXME bootstrap differently e.g. directly from wiki images
-        #bootstrap_dvm = DjVuManager(config=self.config)
-        #lod = bootstrap_dvm.query("all_djvu")
+        # bootstrap_dvm = DjVuManager(config=self.config)
+        # lod = bootstrap_dvm.query("all_djvu")
         mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(
             self.config.base_url
         )
@@ -171,11 +171,11 @@ class DjVuActions:
         start_time = time.time()
         djvu_lod = []
         page_lod = []
-        images=mw_client.fetch_allimages(limit)
+        images = mw_client.fetch_allimages(limit)
 
         for index, r in enumerate(images, start=1):
             url = r.get("url")
-            path=self.config.extract_and_clean_path(url)
+            path = self.config.extract_and_clean_path(url)
             djvu_path = self.config.djvu_abspath(path)
 
             if not djvu_path or not os.path.exists(djvu_path):

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from djvuviewer.djvu_config import DjVuConfig
@@ -74,7 +74,6 @@ class DjVuViewer:
 
         Args:
             file (str): The full path in the format <DjVu name>/<file name>.
-
         """
         djvu_name, filename = file.split("/", 1)
         tarball_path = Path(self.config.tarball_path) / f"{djvu_name}.tar"
@@ -90,6 +89,21 @@ class DjVuViewer:
         content_response = Response(content=file_content, media_type=media_type)
 
         return content_response
+
+    def get_tarball_response(self, path: str) -> FileResponse:
+        """Serves the complete tarball for download."""
+        path = self.sanitize_path(path)
+        tarball_file = Path(self.config.tarball_path) / f"{Path(path).stem}.tar"
+
+        if not tarball_file.exists():
+            raise HTTPException(status_code=404, detail="Tarball not found")
+
+        response = FileResponse(
+            path=tarball_file,
+            media_type="application/x-tar",
+            filename=f"{Path(path).stem}.tar",  # Sets Content-Disposition automatically
+        )
+        return response
 
     def get_content(self, file: str) -> Response:
         """
@@ -213,18 +227,6 @@ class DjVuViewer:
                 status_code=500, detail=f"Error retrieving page content: {str(e)}"
             )
 
-    def get_page(self, path: str, page_index: int) -> HTMLResponse:
-        """
-        Fetches and renders an HTML page displaying the PNG image of the given DjVu file page from a tarball.
-        """
-        djvu_view_page = self.get_djvu_view_page(path, page_index)
-        djvu_file = djvu_view_page.file
-        image_url = djvu_view_page.image_url
-        html_response = HTMLResponse(
-            content=self.get_markup(path, page_index, len(djvu_file.pages), image_url)
-        )
-        return html_response
-
     def create_page_dropdown(self, path, current_page, total_pages):
         """
         Create an HTML select dropdown for page navigation
@@ -250,8 +252,27 @@ class DjVuViewer:
 
         return select_html
 
+    def get_page(
+        self, path: str, page_index: int, backlink: str = None
+    ) -> HTMLResponse:
+        """
+        Fetches and renders an HTML page displaying the PNG image of the given DjVu file page from a tarball.
+        """
+        djvu_view_page = self.get_djvu_view_page(path, page_index)
+        djvu_file = djvu_view_page.file
+        image_url = djvu_view_page.image_url
+        html_response = HTMLResponse(
+            content=self.get_markup(path, page_index, len(djvu_file.pages), image_url,backlink)
+        )
+        return html_response
+
     def get_markup(
-        self, path: str, page_index: int, total_pages: int, image_url: str
+        self,
+        path: str,
+        page_index: int,
+        total_pages: int,
+        image_url: str,
+        backlink: str = None,
     ) -> str:
         """
         Returns the HTML markup for displaying the DjVu page with navigation.
@@ -261,6 +282,7 @@ class DjVuViewer:
             page_index (int): Current page index.
             total_pages (int): Total number of pages in the DjVu document.
             image_url (str): URL to the PNG file.
+            backlink (str, optional): URL to navigate back to. Defaults to None.
 
         Returns:
             str: HTML markup.
@@ -272,6 +294,13 @@ class DjVuViewer:
         fast_backward = max(first_page, page_index - 10)
         fast_forward = min(last_page, page_index + 10)
         select_markup = self.create_page_dropdown(path, page_index, total_pages)
+        download_page_url = f"{self.url_prefix}{image_url}"
+        download_tar_url = f"{self.url_prefix}/djvu/download/{path}"
+        help_url = "https://github.com/WolfgangFahl/djvu-viewer/wiki/Help"
+        # Add back button if backlink is provided
+        back_button = ""
+        if backlink:
+            back_button = f'<a href="{backlink}" title="Back">⬅️</a> | '
 
         markup = f"""
         <!DOCTYPE html>
@@ -289,6 +318,7 @@ class DjVuViewer:
         </head>
         <body>
             <div class="nav">
+                {back_button}
                 <a href="{self.url_prefix}/djvu/{path}?page={first_page}" title="First Page (1/{total_pages})">⏮</a>
                 <a href="{self.url_prefix}/djvu/{path}?page={fast_backward}" title="Fast Backward (Jump -10 Pages)">⏪</a>
                 <a href="{self.url_prefix}/djvu/{path}?page={prev_page}" title="Previous Page">⏴</a>
@@ -296,6 +326,9 @@ class DjVuViewer:
                 <a href="{self.url_prefix}/djvu/{path}?page={next_page}" title="Next Page">⏵</a>
                 <a href="{self.url_prefix}/djvu/{path}?page={fast_forward}" title="Fast Forward (Jump +10 Pages)">⏩</a>
                 <a href="{self.url_prefix}/djvu/{path}?page={last_page}" title="Last Page ({total_pages}/{total_pages})">⏭</a>
+                | <a href="{download_page_url}" title="Page" download>⬇️</a>
+                <a href="{download_tar_url}"  title="Tarball" download>📦</a>
+                <a href="{help_url}" title="Help" target="_blank">❓</a>
             </div>
             <img src="{self.url_prefix}{image_url}" alt="DjVu Page {page_index}">
         </body>

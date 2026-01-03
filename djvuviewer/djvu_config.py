@@ -3,10 +3,11 @@ Created on 2026-01-01
 
 @author: wf
 """
-import urllib.parse
-import re
+
 import os
 import pathlib
+import re
+import urllib.parse
 from typing import Optional
 
 from basemkit.yamlable import lod_storable
@@ -41,7 +42,7 @@ class DjVuConfig:
         if self.tarball_path is None:
             self.tarball_path = os.path.join(examples_path, "djvu_images")
         if self.images_path is None:
-            self.images_path = os.path.join(examples_path,"images")
+            self.images_path = os.path.join(examples_path, "images")
         if self.db_path is None:
             self.db_path = os.path.join(examples_path, "djvu_data.db")
 
@@ -49,30 +50,38 @@ class DjVuConfig:
         """Convert path to wiki image-relative format by removing './' and '/images/'."""
 
         # Look for 'images/' anywhere in the path and extract everything after it
-        match = re.search(r'images/(.*)', path)
+        match = re.search(r"images/(.*)", path)
 
         if match:
             # Extract the part after 'images/' and prepend '/'
-            cleaned_path = '/' + match.group(1)
+            cleaned_path = "/" + match.group(1)
         else:
             # No 'images/' found - just handle './' prefix
-            if path.startswith('./'):
-                cleaned_path = '/' + path[2:]
+            if path.startswith("./"):
+                cleaned_path = "/" + path[2:]
             else:
                 cleaned_path = path
 
         # Remove duplicate slashes
-        cleaned_path = re.sub(r'/+', '/', cleaned_path)
+        cleaned_path = re.sub(r"/+", "/", cleaned_path)
 
         return cleaned_path
 
+    def wiki_fileurl(self, filename: str, new: bool = False, quoted: bool=False) -> str:
+        """get the wiki file url for the given filename"""
+        url = self.new_url if new else self.base_url
+        # wiki_url = f"{self.base_url}/File:{filename}"
+        wiki_url = urllib.parse.urljoin(url, f"index.php?title=File:{filename}")
+        if quoted:
+            wiki_url=urllib.parse.quote(wiki_url)
+        return wiki_url
 
     def djvu_abspath(self, path: str) -> str:
         """Get absolute DjVu path by prepending images_path to relative path."""
         djvu_path = self.images_path + self.djvu_relpath(path)
         return djvu_path
 
-    def extract_and_clean_path(self,url:str)->str:
+    def extract_and_clean_path(self, url: str) -> str:
         """
         URL decode, extract path from /images, and remove duplicate slashes.
 
@@ -84,7 +93,7 @@ class DjVuConfig:
         """
         # URL decode
         decoded_url = urllib.parse.unquote(url)
-        relpath=self.djvu_relpath(decoded_url)
+        relpath = self.djvu_relpath(decoded_url)
         return relpath
 
     @classmethod
@@ -98,7 +107,7 @@ class DjVuConfig:
         return str(config_dir / "config.yaml")
 
     @classmethod
-    def get_instance(cls,test:bool=False) -> "DjVuConfig":
+    def get_instance(cls, test: bool = False) -> "DjVuConfig":
         """
         get my instance
         """

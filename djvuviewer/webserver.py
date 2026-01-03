@@ -17,8 +17,9 @@ from djvuviewer.djvu_catalog import DjVuCatalog
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_debug import DjVuDebug
 from djvuviewer.djvu_viewer import DjVuViewer
-from djvuviewer.version import Version
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
+from djvuviewer.version import Version
+
 
 class DjVuViewerWebServer(InputWebserver):
     """WebServer class that manages the server and handles DjVu operations."""
@@ -73,6 +74,17 @@ class DjVuViewerWebServer(InputWebserver):
             file_response = self.djvu_viewer.get_content(file)
             return file_response
 
+        @app.get("/djvu/download/{path:path}")
+        def download_tarball(path: str) -> FileResponse:
+            """
+            Serves the complete tarball for download.
+
+            Args:
+                path (str): The path to the DjVu document.
+            """
+            response = self.djvu_viewer.get_tarball_response(path)
+            return response
+
         @app.get("/djvu/{path:path}/page/{scale:float}/{pageno:int}.{ext:str}")
         def get_djvu_page_with_scale(
             path: str,
@@ -120,11 +132,20 @@ class DjVuViewerWebServer(InputWebserver):
             return file_response
 
         @app.get("/djvu/{path:path}")
-        def display_djvu(path: str, page: int = 1) -> HTMLResponse:
+        def display_djvu(
+            path: str, page: int = 1, backlink: str = None
+        ) -> HTMLResponse:
             """
             Fetches and displays a specific PNG page of a DjVu file.
+
+            Args:
+                path: Path to the DjVu file
+                page: Page number to display (default: 1)
+                backlink: Optional URL to return to (default: None)
             """
-            html_response = self.djvu_viewer.get_page(path, page)
+            html_response = self.djvu_viewer.get_page(
+                path=path, page_index=page, backlink=backlink
+            )
             return html_response
 
     def configure_run(self):
@@ -139,7 +160,9 @@ class DjVuViewerWebServer(InputWebserver):
         self.mw_client_base = DjVuMediaWikiImages.get_mediawiki_images_client(
             self.djvu_config.base_url
         )
-        self.mw_client_new = DjVuMediaWikiImages.get_mediawiki_images_client(self.djvu_config.new_url)
+        self.mw_client_new = DjVuMediaWikiImages.get_mediawiki_images_client(
+            self.djvu_config.new_url
+        )
 
 
 class DjVuSolution(InputWebSolution):
@@ -164,14 +187,15 @@ class DjVuSolution(InputWebSolution):
         """
         config = self.djvu_config
         if filename:
-            wiki_url = f"{config.base_url}/Datei:{filename}"
+            wiki_url = self.djvu_config.wiki_fileurl(filename)
             view_record["wiki"] = Link.create(url=wiki_url, text=filename)
 
             if config.new_url:
-                new_url = f"{config.new_url}/index.php?title=Datei:{filename}"
+                new_url = self.djvu_config.wiki_fileurl(filename, new=True)
                 view_record["new"] = Link.create(url=new_url, text=filename)
-
-            local_url = f"{config.url_prefix}/djvu/{filename}"
+                backlink=self.djvu_config.wiki_fileurl(filename,new=True,quoted=True)
+            backparam=f"&backlink={backlink}" if backlink else ""
+            local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
             view_record["tarball"] = Link.create(url=local_url, text=filename)
 
             debug_url = f"{config.url_prefix}/djvu/debug/{filename}"

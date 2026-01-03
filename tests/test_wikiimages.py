@@ -57,9 +57,9 @@ class TestMediaWikiImages(Basetest):
         """
         test fetching all images
         """
-        limit=3
+        limit = 3
         images = self.mwi.fetch_allimages(limit=limit)
         for img in images:
             if self.debug:
                 print(img)
-        self.assertEqual(len(images),limit)
+        self.assertEqual(len(images), limit)
