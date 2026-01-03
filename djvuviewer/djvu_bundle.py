@@ -25,7 +25,7 @@ class DjVuBundle:
     DjVu bundle handling with validation and error collection.
     """
 
-    def __init__(self, djvu_file: DjVuFile,config:DjVuConfig,debug:bool=False):
+    def __init__(self, djvu_file: DjVuFile,config:DjVuConfig=None,debug:bool=False):
         """
         Initialize DjVuBundle with a DjVuFile instance.
 
@@ -35,6 +35,8 @@ class DjVuBundle:
             debug: if True
         """
         self.djvu_file = djvu_file
+        if config is None:
+            config=DjVuConfig.get_instance()
         self.config=config
         self.debug=debug
         self.errors: List[str] = []
