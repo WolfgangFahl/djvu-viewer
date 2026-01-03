@@ -259,12 +259,6 @@ class DjVuBundle:
                     if self.debug:
                         print(f"Removed component: {part_path}")
 
-            # Remove original main file
-            if os.path.exists(djvu_path):
-                os.remove(djvu_path)
-                if self.debug:
-                    print(f"Removed original: {djvu_path}")
-
             # Before attempting finalization
             if not os.path.exists(bundled_path):
                 self._add_error(f"Bundled file missing: {bundled_path}")
@@ -276,12 +270,10 @@ class DjVuBundle:
                     f"Try: sudo chmod g+w {djvu_dir}"
                 )
                 return
+
             if self.debug:
                 print(f"trying to\nmv {bundled_path} {djvu_path}")
-                print(f"sleeping {sleep} secs ...")
-            time.sleep(sleep)
-            # Move bundled file to original location
-            self.move_file(bundled_path, djvu_path)
+            shutil.move(bundled_path, djvu_path)
             if self.debug:
                 print(f"Moved {bundled_path} to {djvu_path}")
 
