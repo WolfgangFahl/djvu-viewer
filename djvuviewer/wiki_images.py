@@ -3,12 +3,13 @@ Created on 2026-01-02
 
 @author: wf
 """
-from ngwidgets.progress import Progressbar
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Union
 
 import requests
+from ngwidgets.progress import Progressbar
 
 
 @dataclass
@@ -208,7 +209,6 @@ class MediaWikiImages:
             # Update progress bar
             if progressbar:
                 progressbar.update(len(batch))
-
 
             remaining -= take
 

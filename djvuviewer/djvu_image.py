@@ -3,14 +3,16 @@ Created on 2026-01-03
 
 @author: wf
 """
-from dataclasses import dataclass, field
+
 import datetime
 import logging
 import os
+from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
-from basemkit.profiler import Profiler
 import djvu
+from basemkit.profiler import Profiler
+
 from djvuviewer.djvu_core import DjVuImage
 
 
@@ -20,6 +22,7 @@ class ImageJob:
     Represents a processed DjVu page,
     optionally including document, page, page job, and image data.
     """
+
     djvu_path: str  # fully qualifying path of the container DjVu document
     document: djvu.decode.Document
     page: djvu.decode.Page

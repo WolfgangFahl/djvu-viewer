@@ -3,7 +3,7 @@ Created on 2025-02-25
 
 @author: wf
 """
-from basemkit.shell import Shell
+
 import datetime
 import gc
 import logging
@@ -18,12 +18,15 @@ from typing import Generator, List, Optional
 
 import djvu.decode
 import numpy
+from basemkit.shell import Shell
 from ngwidgets.profiler import Profiler
 from PIL import Image
-from djvuviewer.djvu_image import ImageJob
+
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig, PngMode
 from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
+from djvuviewer.djvu_image import ImageJob
+
 if sys.platform != "win32":
     import resource
 
@@ -97,7 +100,7 @@ class DjVuProcessor:
         )
         self.djvu_pixel_format.rows_top_to_bottom = 1
         self.djvu_pixel_format.y_top_to_bottom = 0
-        self.shell=Shell()
+        self.shell = Shell()
 
     def create_tarball(
         self, source_dir: str, output_tar: str, include_ext: Optional[List[str]] = None
@@ -249,7 +252,6 @@ class DjVuProcessor:
             # Calculate size string in format "widthxheight"
             size = f"{width}x{height}"
 
-
             DjVuBundle.render_djvu_page_cli(
                 image_job.djvu_path,
                 image_job.page_index - 1,  # Convert to 0-based for ddjvu
@@ -324,7 +326,12 @@ class DjVuProcessor:
             msg = f"file {path} not found"
             raise ValueError(msg)
 
-    def get_djvu_file(self, djvu_path: str, config: DjVuConfig, progressbar: Optional['Progressbar'] = None) -> DjVuFile:
+    def get_djvu_file(
+        self,
+        djvu_path: str,
+        config: DjVuConfig,
+        progressbar: Optional["Progressbar"] = None,
+    ) -> DjVuFile:
         """
         Efficiently retrieves DjVu file metadata and page structure.
 
@@ -359,7 +366,6 @@ class DjVuProcessor:
             progressbar.total = total_pages
             progressbar.reset()
             progressbar.set_description(f"Loading {os.path.basename(djvu_path)}")
-
 
         # 2. Iterate pages using existing generator
         # document is the same reference in every iteration
@@ -434,7 +440,6 @@ class DjVuProcessor:
             # Update progress bar
             if progressbar:
                 progressbar.update(1)
-
 
         # 6. Construct and return File Object
         djvu_file = DjVuFile(

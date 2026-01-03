@@ -58,7 +58,7 @@ class DjVuConfig:
         if self.backup_path is None:
             self.backup_path = os.path.join(examples_path, "backup")
         if self.container_name is None:
-            self.container_name="genwiki39-mw"
+            self.container_name = "genwiki39-mw"
 
     def djvu_relpath(self, path: str) -> str:
         """Convert path to wiki image-relative format by removing './' and '/images/'."""

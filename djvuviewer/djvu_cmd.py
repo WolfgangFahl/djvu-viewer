@@ -70,7 +70,7 @@ class DjVuCmd(BaseCmd):
         )
         parser.add_argument(
             "--command",
-            choices=["bundle","catalog", "convert", "dbupdate", "initdb"],
+            choices=["bundle", "catalog", "convert", "dbupdate", "initdb"],
             required=True,
             help="Command to execute",
         )
@@ -101,7 +101,7 @@ class DjVuCmd(BaseCmd):
             "--sleep",
             type=float,
             default=2.0,
-            help="number of seconds to sleep before trying to move to avoid actimeo issues on CIFS mounts (default: %(default)s)"
+            help="number of seconds to sleep before trying to move to avoid actimeo issues on CIFS mounts (default: %(default)s)",
         )
         parser.add_argument(
             "--max-workers",
@@ -190,7 +190,7 @@ class DjVuCmd(BaseCmd):
             batch_size=self.args.batch_size,
             limit_gb=self.args.limit_gb,
             max_workers=self.args.max_workers,
-            pngmode=self.args.pngmode
+            pngmode=self.args.pngmode,
         )
 
         # Initialize actions handler

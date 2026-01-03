@@ -4,15 +4,17 @@ Created on 2024-08-15
 @author: wf
 Refactored to Focus on DjVu functionality
 """
-from wikibot3rd.sso_users import Sso_Users
+
 from typing import Dict
-from ngwidgets.login import Login
+
 from ngwidgets.input_webserver import InputWebserver, InputWebSolution
+from ngwidgets.login import Login
+from ngwidgets.sso_users_solution import SsoSolution
 from ngwidgets.webserver import WebserverConfig
 from ngwidgets.widgets import Link
 from nicegui import Client, app, ui
-from ngwidgets.sso_users_solution import SsoSolution
 from starlette.responses import FileResponse, HTMLResponse
+from wikibot3rd.sso_users import Sso_Users
 
 from djvuviewer.djvu_catalog import DjVuCatalog
 from djvuviewer.djvu_config import DjVuConfig
@@ -45,7 +47,6 @@ class DjVuViewerWebServer(InputWebserver):
         self.users = Sso_Users(self.config.short_name)
         self.login = Login(self, self.users)
 
-
         @ui.page("/")
         async def home(client: Client):
             # Default to catalog as it is the primary remaining feature
@@ -67,7 +68,6 @@ class DjVuViewerWebServer(InputWebserver):
         @ui.page("/login")
         async def login(client: Client) -> None:
             return await self.page(client, DjVuSolution.show_login)
-
 
         @app.get("/djvu/content/{file:path}")
         def get_content(file: str) -> FileResponse:
@@ -164,7 +164,6 @@ class DjVuViewerWebServer(InputWebserver):
         allow = self.login.authenticated()
         return allow
 
-
     def configure_run(self):
         """
         configure me
@@ -229,7 +228,7 @@ class DjVuSolution(InputWebSolution):
         self.sso_solution = SsoSolution(webserver=self.webserver)
         self.sso_solution.configure_menu()
         # icons from https://fonts.google.com/icons
-        #if self.webserver.authenticated():
+        # if self.webserver.authenticated():
         #    self.link_button(name="wikis", icon_name="menu_book", target="/wikis")
 
         with self.header:

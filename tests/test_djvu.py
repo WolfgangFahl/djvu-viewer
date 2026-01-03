@@ -9,18 +9,18 @@ import glob
 import json
 import os
 from argparse import Namespace
-from typing import Optional, List
+from typing import List, Optional
 
 from basemkit.basetest import Basetest
 
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_cmd import DjVuCmd
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuImage, DjVuFile
+from djvuviewer.djvu_core import DjVuFile, DjVuImage
+from djvuviewer.djvu_image import ImageJob
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.download import Download
-from djvuviewer.djvu_image import ImageJob
 
 
 class TestDjVu(Basetest):
@@ -39,25 +39,25 @@ class TestDjVu(Basetest):
         # Set up subdirectories
         self.output_dir = os.path.join(base_dir, "test_pngs")
         self.db_path = os.path.join(base_dir, "test_db", "genwiki_images.db")
-        self.backup_path = os.path.join(base_dir,"backup")
+        self.backup_path = os.path.join(base_dir, "backup")
         # Create all necessary directories
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        os.makedirs(self.backup_path,exist_ok=True)
+        os.makedirs(self.backup_path, exist_ok=True)
         self.local = os.path.exists(DjVuConfig.get_config_file_path())
         # set to True to emulate CI mode
         force_test = False
         if force_test:
             self.local = False
         self.config = DjVuConfig.get_instance(test=force_test)
-        self.config.backup_path=self.backup_path
+        self.config.backup_path = self.backup_path
         self.limit = 50 if not self.local else 50  # 10000000
         self.test_tuples = [
             ("/images/c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu", 3, False),
             ("/images/c/ce/Plauen-AB-1938.djvu", 2, True),
             ("/images/f/ff/AB1932-Ramrath.djvu", 2, True),
         ]
-        self.test_bundles=None
+        self.test_bundles = None
         self.test_tuples_2024 = [
             ("/images/2/2f/Sorau-AB-1913.djvu", 255, False),
             ("/images/9/96/vz1890-neuenhausen-zb04.djvu", 3, True),
@@ -66,12 +66,12 @@ class TestDjVu(Basetest):
         ]
         self.dproc = DjVuProcessor()
 
-    def get_djvu_test_bundles(self)->List[DjVuFile]:
+    def get_djvu_test_bundles(self) -> List[DjVuFile]:
         """
         get the djvu test bundles by derived from unbundled/indexed DjVu test tuples
         """
         if self.test_bundles is None:
-            self.test_bundles=[]
+            self.test_bundles = []
 
             for relurl, _elen, expected_bundled in self.test_tuples:
                 if not expected_bundled:
@@ -80,7 +80,7 @@ class TestDjVu(Basetest):
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
                     djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
-                    djvu_bundle=DjVuBundle(djvu_file,config=self.config)
+                    djvu_bundle = DjVuBundle(djvu_file, config=self.config)
                     self.test_bundles.append(djvu_bundle)
         return self.test_bundles
 
@@ -137,19 +137,19 @@ class TestDjVu(Basetest):
         for djvu_bundle in self.get_djvu_test_bundles():
             if self.debug:
                 print(djvu_bundle.djvu_file.to_yaml())
-            log=djvu_bundle.djvu_dump()
+            log = djvu_bundle.djvu_dump()
             if self.debug:
                 print(log)
-            part_filenames=djvu_bundle.get_part_filenames()
+            part_filenames = djvu_bundle.get_part_filenames()
             if self.debug:
-                for i,filename in enumerate(part_filenames):
+                for i, filename in enumerate(part_filenames):
                     print(f"{i}:{filename}")
 
-    def show_fileinfo(self,path:str)->int:
+    def show_fileinfo(self, path: str) -> int:
         """
         show info for a file
         """
-        iso_date, filesize=ImageJob.get_fileinfo(path)
+        iso_date, filesize = ImageJob.get_fileinfo(path)
         if self.debug:
             print(f"{path} ({filesize}) {iso_date}")
         return filesize
@@ -172,7 +172,7 @@ class TestDjVu(Basetest):
                 size_ratio = zip_filesize / bundle_filesize
 
                 # Assert bundled file is slightly smaller than zip
-                assert  1.0 < size_ratio < 1.2, (
+                assert 1.0 < size_ratio < 1.2, (
                     f"Unexpected size ratio: {size_ratio:.2f}. "
                     f"Bundle: {bundle_filesize} bytes, "
                     f"Zip: {zip_filesize} bytes. "

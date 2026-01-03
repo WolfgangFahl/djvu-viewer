@@ -3,21 +3,23 @@ Created on 2026-01-03
 
 @author: wf
 """
+
 import io
 import os
-from pathlib import Path
 import re
 import shlex
-import time
 import shutil
 import subprocess
 import tarfile
 import tempfile
-from typing import List, Optional
+import time
 import zipfile
+from pathlib import Path
+from typing import List, Optional
 
-from PIL import Image
 from basemkit.shell import Shell
+from PIL import Image
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.tarball import Tarball
@@ -28,7 +30,9 @@ class DjVuBundle:
     DjVu bundle handling with validation and error collection.
     """
 
-    def __init__(self, djvu_file: DjVuFile,config:DjVuConfig=None,debug:bool=False):
+    def __init__(
+        self, djvu_file: DjVuFile, config: DjVuConfig = None, debug: bool = False
+    ):
         """
         Initialize DjVuBundle with a DjVuFile instance.
 
@@ -39,12 +43,12 @@ class DjVuBundle:
         """
         self.djvu_file = djvu_file
         if config is None:
-            config=DjVuConfig.get_instance()
-        self.config=config
-        self.debug=debug
+            config = DjVuConfig.get_instance()
+        self.config = config
+        self.debug = debug
         self.errors: List[str] = []
-        self.shell=Shell()
-        self.djvu_dump_log=None
+        self.shell = Shell()
+        self.djvu_dump_log = None
 
     @classmethod
     def from_tarball(cls, tar_file: str, with_check: bool = True) -> "DjVuBundle":
@@ -188,19 +192,18 @@ class DjVuBundle:
                 f"Unexpected error checking tar file '{tar_file}': {e}{context}"
             )
 
-    def get_part_filenames(self)->List[str]:
+    def get_part_filenames(self) -> List[str]:
         """
         get a list of my part file names
         """
         if not self.djvu_dump_log:
             self.djvu_dump()
         part_files = []
-        for line in self.djvu_dump_log.split('\n'):
-            match = re.search(r'^\s+(.+\.(?:djvu|djbz))\s+->', line)
+        for line in self.djvu_dump_log.split("\n"):
+            match = re.search(r"^\s+(.+\.(?:djvu|djbz))\s+->", line)
             if match:
                 part_files.append(match.group(1))
         return part_files
-
 
     def djvu_dump(self) -> str:
         """
@@ -220,10 +223,10 @@ class DjVuBundle:
         result = self.run_cmd(cmd, "djvudump failed")
 
         if result.returncode == 0:
-            self.djvu_dump_log=result.stdout
+            self.djvu_dump_log = result.stdout
         return self.djvu_dump_log
 
-    def finalize_bundling(self, zip_path: str, bundled_path: str, sleep:float=1.0):
+    def finalize_bundling(self, zip_path: str, bundled_path: str, sleep: float = 1.0):
         """
         Finalize bundling by removing the original main file and
         all zipped component files then move the bundled_path file to the original.
@@ -310,7 +313,7 @@ class DjVuBundle:
         djvu_dir = os.path.dirname(djvu_path)
 
         # Create ZIP archive
-        with zipfile.ZipFile(backup_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        with zipfile.ZipFile(backup_file, "w", zipfile.ZIP_DEFLATED) as zipf:
             # Add main index file
             zipf.write(djvu_path, basename)
 
@@ -346,7 +349,112 @@ class DjVuBundle:
 
         return result.returncode == 0
 
+    def generate_bundling_script(self) -> str:
+        """
+        Generate a complete bash script for the bundling process.
 
+        Returns:
+            The bash script as a string
+        """
+        if self.djvu_file.bundled:
+            raise ValueError(f"File {self.djvu_file.path} is already bundled")
+
+        djvu_path = self.djvu_file.path
+        djvu_dir = os.path.dirname(djvu_path)
+        basename = os.path.basename(djvu_path)
+        stem = os.path.splitext(basename)[0]
+
+        # Get part files
+        part_files = self.get_part_filenames()
+
+        # Define paths
+        backup_file = os.path.join(self.config.backup_path, f"{stem}.zip")
+        bundled_file = os.path.join(djvu_dir, f"{stem}_bundled.djvu")
+
+        # Build script content
+        script_lines = [
+            "#!/bin/bash",
+            "# DjVu bundling script",
+            f"# Generated for: {djvu_path}",
+            "# Date: $(date)",
+            "",
+            "set -e  # Exit on error",
+            "",
+            "# Define variables",
+            f"DJVU_PATH={shlex.quote(djvu_path)}",
+            f"DJVU_DIR={shlex.quote(djvu_dir)}",
+            f"BASENAME={shlex.quote(basename)}",
+            f"BACKUP_FILE={shlex.quote(backup_file)}",
+            f"BUNDLED_FILE={shlex.quote(bundled_file)}",
+            "",
+            "# Step 1: Create backup ZIP",
+            f'cd "$DJVU_DIR"',
+            f"echo 'Creating backup ZIP...'",
+            f'zip -j "$BACKUP_FILE" "$BASENAME" \\',
+        ]
+
+        # Add part files to zip command
+        for i, part_file in enumerate(part_files):
+            is_last = i == len(part_files) - 1
+            line = f"  {shlex.quote(part_file)}"
+            if not is_last:
+                line += " \\"
+            script_lines.append(line)
+
+        script_lines.extend(
+            [
+                "",
+                "# Step 2: Verify backup was created",
+                'if [ ! -f "$BACKUP_FILE" ]; then',
+                "  echo 'Error: Backup ZIP not created'",
+                "  exit 1",
+                "fi",
+                "echo 'Backup created: '$BACKUP_FILE",
+                "",
+                "# Step 3: Convert to bundled format",
+                "echo 'Converting to bundled format...'",
+                'djvmcvt -b "$DJVU_PATH" "$BUNDLED_FILE"',
+                "",
+                "# Step 4: Verify bundled file was created",
+                'if [ ! -f "$BUNDLED_FILE" ]; then',
+                "  echo 'Error: Bundled file not created'",
+                "  exit 1",
+                "fi",
+                "echo 'Bundled file created: '$BUNDLED_FILE",
+                "",
+                "# Step 5: Sleep for CIFS sync (if needed)",
+                "sleep 1",
+                "",
+                "# Step 6: Remove original files",
+                "echo 'Removing original files...'",
+                f'rm -f "$DJVU_PATH"',
+            ]
+        )
+
+        # Add removal of part files
+        for part_file in part_files:
+            script_lines.append(
+                f"rm -f {shlex.quote(os.path.join(djvu_dir, part_file))}"
+            )
+
+        script_lines.extend(
+            [
+                "",
+                "# Step 7: Move bundled file to original location",
+                "echo 'Moving bundled file to original location...'",
+                'mv "$BUNDLED_FILE" "$DJVU_PATH"',
+                "",
+                "echo 'Bundling complete!'",
+                f"echo 'Backup saved at: '$BACKUP_FILE",
+            ]
+        )
+        # MediaWiki maintenance call if container is configured
+        if hasattr(self.config, "container_name") and self.config.container_name:
+            filename = os.path.basename(djvu_path)
+            docker_cmd = f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}"
+            script_lines.extend([docker_cmd])
+
+        return "\n".join(script_lines) + "\n"
 
     def convert_to_bundled(self, output_path: str = None) -> str:
         """
@@ -364,16 +472,12 @@ class DjVuBundle:
             output_path = os.path.join(dirname, f"{stem}_bundled.djvu")
 
         cmd = f"djvmcvt -b {shlex.quote(djvu_path)} {shlex.quote(output_path)}"
-        self.run_cmd(
-            cmd,
-            "Failed to bundle DjVu file"
-        )
+        self.run_cmd(cmd, "Failed to bundle DjVu file")
 
         if not os.path.exists(output_path):
             raise RuntimeError(f"Bundled file not created: {output_path}")
 
         return output_path
-
 
     @classmethod
     def convert_djvu_to_ppm(
@@ -382,7 +486,7 @@ class DjVuBundle:
         page_num: int,
         output_path: str,
         size: str = None,  # e.g., "2480x3508" for A4 @ 300dpi
-        shell: Shell=None,
+        shell: Shell = None,
         debug: bool = False,
     ) -> None:
         """Convert DJVU page to PPM using ddjvu CLI."""
@@ -396,10 +500,12 @@ class DjVuBundle:
         if size:
             cmd_parts.append(f"-size={size}")
 
-        cmd_parts.extend([
-            shlex.quote(djvu_path),
-            shlex.quote(output_path),
-        ])
+        cmd_parts.extend(
+            [
+                shlex.quote(djvu_path),
+                shlex.quote(output_path),
+            ]
+        )
 
         cmd = " ".join(cmd_parts)
         result = shell.run(cmd, text=True, debug=debug)
@@ -412,7 +518,7 @@ class DjVuBundle:
             )
 
     @classmethod
-    def convert_ppm_to_png(cls,ppm_path: str, png_path: str) -> None:
+    def convert_ppm_to_png(cls, ppm_path: str, png_path: str) -> None:
         """Convert PPM to PNG using PIL."""
         img = Image.open(ppm_path)
         img.save(png_path, "PNG")
@@ -423,7 +529,7 @@ class DjVuBundle:
         djvu_path: str,
         page_num: int,
         output_path: str,
-        size: str, # e.g., "2480x3508" for A4 @ 300dpi
+        size: str,  # e.g., "2480x3508" for A4 @ 300dpi
         debug: bool = False,
         shell: Shell = None,
     ) -> str:

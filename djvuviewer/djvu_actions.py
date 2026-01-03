@@ -4,12 +4,16 @@ Created on 2026-01-02
 @author: wf
 """
 
-from argparse import Namespace
-from dataclasses import asdict
 import os
+import shlex
 import time
 import traceback
+from argparse import Namespace
+from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
+
+from lodstorage.lod import LOD
+from tqdm import tqdm
 
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
@@ -18,8 +22,6 @@ from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.tarball import Tarball
-from lodstorage.lod import LOD
-from tqdm import tqdm
 
 
 class DjVuActions:
@@ -33,7 +35,7 @@ class DjVuActions:
     def __init__(
         self,
         config: DjVuConfig,
-        args:Namespace,
+        args: Namespace,
         dvm: DjVuManager,
         dproc: DjVuProcessor,
         images_path: str,
@@ -57,7 +59,7 @@ class DjVuActions:
             force: Force reprocessing of existing files
         """
         self.config = config
-        self.args=args
+        self.args = args
         self.dvm = dvm
         self.dproc = dproc
         self.images_path = images_path
@@ -221,11 +223,11 @@ class DjVuActions:
 
         return djvu_lod, page_lod
 
-    def show_fileinfo(self,path:str)->int:
+    def show_fileinfo(self, path: str) -> int:
         """
         show info for a file
         """
-        iso_date, filesize=ImageJob.get_fileinfo(path)
+        iso_date, filesize = ImageJob.get_fileinfo(path)
         if self.debug:
             print(f"{path} ({filesize}) {iso_date}")
         return filesize
@@ -251,11 +253,11 @@ class DjVuActions:
                 mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(
                     self.config.new_url
                 )
-                image=mw_client.fetch_image(f"File:{url}")
-                url=image.url
-                url=self.config.djvu_relpath(url)
+                image = mw_client.fetch_image(f"File:{url}")
+                url = image.url
+                url = self.config.djvu_relpath(url)
             djvu_path = self.config.djvu_abspath(url)
-            relpath=self.config.djvu_relpath(djvu_path)
+            relpath = self.config.djvu_relpath(djvu_path)
 
             if not os.path.exists(djvu_path):
                 raise FileNotFoundError(f"File not found: {djvu_path}")
@@ -265,9 +267,15 @@ class DjVuActions:
 
             djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
             djvu_bundle = DjVuBundle(djvu_file, config=self.config, debug=self.debug)
+            if self.args.script:
+                script_cmd=djvu_bundle.generate_bundling_script()
+                print(script_cmd)
+                return
 
             if self.args.verbose:
-                print(f"Creating backup for {self.args.url}... {djvu_file.page_count} pages {djvu_file.iso_date}")
+                print(
+                    f"Creating backup for {self.args.url}... {djvu_file.page_count} pages {djvu_file.iso_date}"
+                )
             zip_path = djvu_bundle.create_backup_zip()
             zip_size = self.show_fileinfo(zip_path)
 
@@ -286,9 +294,9 @@ class DjVuActions:
             else:
                 print(f"✅ Successfully bundled {self.args.url}")
             # MediaWiki maintenance call if container is configured
-            if hasattr(self.config, 'container_name') and self.config.container_name:
+            if hasattr(self.config, "container_name") and self.config.container_name:
                 filename = os.path.basename(djvu_path)
-                docker_cmd=(f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}")
+                docker_cmd = f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}"
                 print(f"to update the wiki run \n{docker_cmd}")
 
         except Exception as e:

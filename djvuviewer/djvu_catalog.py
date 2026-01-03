@@ -5,8 +5,9 @@ Created on 2024-08-26
 2026-02-02: Added paging and page size selection.
 @author: wf
 """
-from ngwidgets.progress import NiceguiProgressbar
+
 from ngwidgets.lod_grid import ListOfDictsGrid
+from ngwidgets.progress import NiceguiProgressbar
 from nicegui import background_tasks, run, ui
 
 from djvuviewer.djvu_config import DjVuConfig
@@ -34,7 +35,7 @@ class DjVuCatalog:
             browse_wiki: If True, browse MediaWiki API; if False, use local DB
         """
         self.solution = solution
-        self.progressbar=None
+        self.progressbar = None
         self.config = config
         self.browse_wiki = browse_wiki
         self.webserver = self.solution.webserver
@@ -157,7 +158,9 @@ class DjVuCatalog:
                     if self.images_url == self.config.base_url
                     else self.solution.webserver.mw_client_new
                 )
-                lod = images_client.fetch_allimages(limit=self.limit,progressbar=self.progressbar)
+                lod = images_client.fetch_allimages(
+                    limit=self.limit, progressbar=self.progressbar
+                )
             else:
                 # Fetch from SQLite Database
                 if self.dvm:
@@ -279,7 +282,7 @@ class DjVuCatalog:
             self.progressbar = NiceguiProgressbar(
                 total=1,  # Will be updated by get_djvu_file
                 desc="Loading DjVu Images",
-                unit="pages"
+                unit="pages",
             )
 
         # Grid row for displaying results

@@ -5,11 +5,12 @@ Created on 2026-01-02
 
 @author: wf
 """
-from ngwidgets.progress import NiceguiProgressbar
+
 import urllib.parse
 from pathlib import Path
 
 from ngwidgets.lod_grid import ListOfDictsGrid
+from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
 
@@ -40,7 +41,7 @@ class DjVuDebug:
         self.solution = solution
         self.config = config
         self.webserver = self.solution.webserver
-        self.progressbar=None
+        self.progressbar = None
         self.page_title = page_title
         self.mw_image = None
         self.mw_image_new = None
@@ -61,7 +62,7 @@ class DjVuDebug:
         Returns:
             bool: True if successful, False otherwise
         """
-        success=False
+        success = False
         try:
             self.mw_image = self.solution.webserver.mw_client_base.fetch_image(
                 title=self.page_title
@@ -74,9 +75,9 @@ class DjVuDebug:
                 relpath = self.config.extract_and_clean_path(self.mw_image.url)
                 abspath = self.config.djvu_abspath(f"/images/{relpath}")
                 self.mw_image.djvu_file = self.dproc.get_djvu_file(
-                    abspath, config=self.config,progressbar=self.progressbar
+                    abspath, config=self.config, progressbar=self.progressbar
                 )
-                success=True
+                success = True
 
         except Exception as ex:
             self.solution.handle_exception(ex)
@@ -285,9 +286,8 @@ class DjVuDebug:
             self.progressbar = NiceguiProgressbar(
                 total=1,  # Will be updated by get_djvu_file
                 desc="Loading DjVu",
-                unit="pages"
+                unit="pages",
             )
-
 
         # Content row for all content
         self.content_row = ui.row()
