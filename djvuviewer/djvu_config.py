@@ -3,7 +3,8 @@ Created on 2026-01-01
 
 @author: wf
 """
-
+import urllib.parse
+import re
 import os
 import pathlib
 from typing import Optional
@@ -44,14 +45,47 @@ class DjVuConfig:
         if self.db_path is None:
             self.db_path = os.path.join(examples_path, "djvu_data.db")
 
-    def djvu_abspath(self,path:str)->str:
-        """
-        get the absolute djvu path for the given relative path
-        """
-        djvu_path=path.replace("./", "/")
-        djvu_path=djvu_path.replace("/images/","/")
-        djvu_path=self.images_path+djvu_path
+    def djvu_relpath(self, path: str) -> str:
+        """Convert path to wiki image-relative format by removing './' and '/images/'."""
+
+        # Look for 'images/' anywhere in the path and extract everything after it
+        match = re.search(r'images/(.*)', path)
+
+        if match:
+            # Extract the part after 'images/' and prepend '/'
+            cleaned_path = '/' + match.group(1)
+        else:
+            # No 'images/' found - just handle './' prefix
+            if path.startswith('./'):
+                cleaned_path = '/' + path[2:]
+            else:
+                cleaned_path = path
+
+        # Remove duplicate slashes
+        cleaned_path = re.sub(r'/+', '/', cleaned_path)
+
+        return cleaned_path
+
+
+    def djvu_abspath(self, path: str) -> str:
+        """Get absolute DjVu path by prepending images_path to relative path."""
+        djvu_path = self.images_path + self.djvu_relpath(path)
         return djvu_path
+
+    def extract_and_clean_path(self,url:str)->str:
+        """
+        URL decode, extract path from /images, and remove duplicate slashes.
+
+        Args:
+            url (str): The URL to process
+
+        Returns:
+            str: The cleaned path starting from /images
+        """
+        # URL decode
+        decoded_url = urllib.parse.unquote(url)
+        relpath=self.djvu_relpath(decoded_url)
+        return relpath
 
     @classmethod
     def get_config_file_path(cls) -> str:

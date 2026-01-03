@@ -3,31 +3,30 @@ Created on 2025-02-25
 
 @author: wf
 """
-
+import subprocess
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass, field
 import datetime
 import gc
 import logging
 import os
+from pathlib import Path
+import shutil
 import sys
+import tarfile
+import tempfile
+from typing import Generator, List, Optional, Tuple
+from PIL import Image
+import cairo
+import djvu.decode
+from djvuviewer.djvu_core import DjVuImage, DjVuFile, DjVuPage
+from djvuviewer.djvu_config import DjVuConfig
+from ngwidgets.profiler import Profiler
+import numpy
+
 
 if sys.platform != "win32":
     import resource
-
-import shutil
-import tarfile
-import tempfile
-from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Generator, List, Optional, Tuple
-
-import cairo
-import djvu.decode
-import numpy
-from ngwidgets.profiler import Profiler
-
-from djvuviewer.djvu_core import DjVuImage
-
 
 @dataclass
 class ImageJob:
@@ -173,6 +172,7 @@ class DjVuProcessor:
         batch_size: int = 100,
         limit_gb: int = 16,
         max_workers: int = None,
+        clean_temp: bool=True,
     ):
         """
         Initializes the DjVuProcessor.
@@ -184,6 +184,7 @@ class DjVuProcessor:
             batch_size (int, optional): Number of pages to process in each batch (default: 100).
             limit_gb(int): maximum amount of memory to be used in GB
             max_workers (int, optional): Maximum number of worker threads (default: min(CPU count, 8)).
+            clean_temp(bool): if True remove files from temp directories when tar done
         """
         self.tar = tar
         self.verbose = verbose
@@ -196,6 +197,7 @@ class DjVuProcessor:
             self.max_workers = os.cpu_count() * 4
         else:
             self.max_workers = max_workers
+        self.clean_temp=clean_temp
         self.context = DjVuContext()  # delegate context instance
         self.context.message_handler = self.handle_message
         self.cairo_pixel_format = cairo.FORMAT_ARGB32
@@ -252,7 +254,7 @@ class DjVuProcessor:
 
             return usage_gb >= self.limit_gb, usage_gb
 
-    def save_image_to_png(
+    def save_image_to_png_via_cairo(
         self, image_job: ImageJob, output_path: str, free_buffer: bool = False
     ):
         """
@@ -268,7 +270,7 @@ class DjVuProcessor:
 
         width, height = image_job.get_size()
         surface = cairo.ImageSurface.create_for_data(
-            image_job.image._buffer, cairo.FORMAT_ARGB32, width, height
+            image_job.image._buffer, cairo.Format.ARGB32, width, height
         )
         surface.write_to_png(output_path)
         surface.flush()
@@ -276,6 +278,75 @@ class DjVuProcessor:
         surface = None  # Explicitly free Cairo surface
         if free_buffer:
             image_job.image._buffer = None
+
+
+    def save_image_to_png(self, image_job: ImageJob, output_path: str, free_buffer: bool = True) -> None:
+        """
+        Save a decoded DjVu image to PNG using PIL.
+
+        This method converts the ARGB32 buffer stored in the ImageJob to RGB format
+        and saves it as a PNG file. The buffer is expected to be in Cairo's ARGB32 format
+        (0xAARRGGBB as uint32), which is produced by the render_page method.
+
+        Args:
+            image_job (ImageJob): The image job containing the decoded image buffer.
+                The buffer should be stored in image_job.image._buffer as a tuple
+                containing a numpy array with dtype uint32 in ARGB32 format.
+            output_path (str): The file path where the PNG image should be saved.
+            free_buffer (bool, optional): If True, frees the image buffer after saving
+                to reduce memory usage. Defaults to True.
+
+        Raises:
+            ValueError: If the image or buffer is not available in the ImageJob.
+
+        Note:
+            The buffer format is Cairo ARGB32, where each pixel is a 32-bit integer
+            with the layout 0xAARRGGBB (alpha, red, green, blue from MSB to LSB).
+            This is converted to RGB24 for PNG output. The buffer may have stride
+            padding for alignment, which is handled automatically.
+
+        See Also:
+            https://github.com/Piolie/DjvuRleImagePlugin
+        """
+        if not image_job.image or image_job.image._buffer is None:
+            raise ValueError("Image buffer not available in ImageJob")
+
+        try:
+            image = image_job.image
+            width = image.width
+            height = image.height
+
+            # Extract buffer from tuple
+            buffer_data = image_job.image._buffer
+            if isinstance(buffer_data, tuple):
+                buffer_data = buffer_data[0]
+
+            # Convert from uint32 ARGB to RGB bytes
+            # The buffer is in ARGB32 format (0xAARRGGBB as uint32)
+            # Buffer shape is (height, stride_width) where stride_width >= width due to alignment
+            rgb_array = numpy.zeros((height, width, 3), dtype=numpy.uint8)
+
+            # Extract RGB channels from ARGB32, handling possible stride padding
+            # Red channel: bits 16-23
+            rgb_array[:, :, 0] = (buffer_data[:, :width] >> 16) & 0xFF
+            # Green channel: bits 8-15
+            rgb_array[:, :, 1] = (buffer_data[:, :width] >> 8) & 0xFF
+            # Blue channel: bits 0-7
+            rgb_array[:, :, 2] = buffer_data[:, :width] & 0xFF
+
+            # Create PIL Image from RGB array
+            img = Image.fromarray(rgb_array, mode='RGB')
+
+            # Save as PNG
+            img.save(output_path, 'PNG')
+
+        finally:
+            # Free buffer if requested
+            if free_buffer and image_job.image:
+                image_job.image._buffer = None
+                # Also explicitly delete the image object to help with memory cleanup
+                del image_job.image
+                image_job.image = None
 
     def save_as_png(
         self, image_job: ImageJob, output_dir: str, free_buffer: bool
@@ -354,6 +425,114 @@ class DjVuProcessor:
         if not os.path.isfile(path):
             msg = f"file {path} not found"
             raise ValueError(msg)
+
+    def get_djvu_file(self, djvu_path: str,config:DjVuConfig) -> DjVuFile:
+        """
+        Efficiently retrieves DjVu file metadata and page structure.
+
+        This method parses the document structure and page headers to construct
+        a DjVuFile object with DjVuPage children without fully decoding
+        the pixel data of the images.
+
+        Args:
+            djvu_path (str): The file system path to the .djvu file.
+            config(DjVuConfig): the config to use for path handling
+
+        Returns:
+            DjVuFile: The structured representation of the DjVu file.
+        """
+        # 1. Get container file metadata
+        self.ensure_file_exists(djvu_path)
+        iso_date, filesize = ImageJob.get_fileinfo(djvu_path)
+
+        pages: List[DjVuPage] = []
+        is_bundled = False
+        dir_pages = 0
+        doc_info_captured = False
+
+        # 2. Iterate pages using existing generator
+        # document is the same reference in every iteration
+        for document, page in self.yield_pages(djvu_path):
+
+            # Capture document-level flags on first pass
+            if not doc_info_captured:
+                # document.type: 0=Single, 1=Indirect, 2=Bundled
+                is_bundled = (document.type == 2)
+                # document.files contains the directory of included files
+                dir_pages = len(document.files)
+                doc_info_captured = True
+
+            page_index = len(pages) + 1
+
+            # 3. Retrieve Page Metadata (Lightweight)
+            # get_info waits for IFF headers (dimensions, dpi) but not pixel decoding
+            try:
+                page.get_info(wait=True)
+                valid_page = True
+                width = page.width
+                height = page.height
+                dpi = page.dpi
+                error_msg = None
+            except Exception as e:
+                valid_page = False
+                width = 0
+                height = 0
+                dpi = 0
+                error_msg = str(e)
+                if self.debug:
+                    logging.warning(f"Failed to get info for page {page_index} in {djvu_path}: {e}")
+
+            # 4. Determine Filename and File-specific stats
+            try:
+                # Handle bytes vs str filename encoding issues typical in djvulibre bindings
+                page_filename = page.file.name
+                if isinstance(page_filename, bytes):
+                    page_filename = page_filename.decode("utf-8", errors="replace")
+            except Exception:
+                page_filename = f"page_{page_index:04d}.djvu"
+
+            # Default to container stats
+            page_iso = iso_date
+            page_size = filesize
+
+            # If not bundled (Indirect), the page is likely a separate file on disk
+            if not is_bundled:
+                dirname = os.path.dirname(djvu_path)
+                component_path = os.path.join(dirname, page_filename)
+                # Only override if the component file physically exists
+                if os.path.exists(component_path):
+                    page_iso, page_size = ImageJob.get_fileinfo(component_path)
+
+            relpath=config.djvu_relpath(djvu_path)
+            # 5. Construct Page Object
+            djvu_page = DjVuPage(
+                path=page_filename,
+                page_index=page_index,
+                valid=valid_page,
+                iso_date=page_iso,
+                filesize=page_size,
+                width=width,
+                height=height,
+                dpi=dpi,
+                djvu_path=relpath,
+                error_msg=error_msg
+            )
+            pages.append(djvu_page)
+
+        # 6. Construct and return File Object
+        djvu_file = DjVuFile(
+            path=djvu_path,
+            page_count=len(pages),
+            bundled=is_bundled,
+            iso_date=iso_date,
+            filesize=filesize,
+            # tar_filesize/date are not calculated by the processor, typically 0 or None initially
+            tar_filesize=0,
+            dir_pages=dir_pages,
+            pages=pages
+        )
+
+        return djvu_file
 
     def yield_pages(self, djvu_path: str):
         """
@@ -512,7 +691,8 @@ class DjVuProcessor:
             self.final_output_path, f"{Path(djvu_path).stem}.tar"
         )
         self.create_tarball(self.output_path, tarball_path)
-        shutil.rmtree(self.temp_dir)
+        if self.clean_temp:
+            shutil.rmtree(self.temp_dir)
 
     def process(
         self,
@@ -567,6 +747,7 @@ class DjVuProcessor:
 
             # Step 3 & 4: Render and save all pages in parallel
             render_futures: List[Future] = []
+            save_futures: List[Future] = []
 
             # Submit rendering jobs as decoding completes
             for future in decode_futures:
@@ -587,11 +768,15 @@ class DjVuProcessor:
 
                 # Optionally save to PNG in parallel
                 if save_png:
-                    executor.submit(
+                    save_future=executor.submit(
                         self.save_as_png, rendered_job, self.output_path, free_buffer
                     )
+                    save_futures.append(save_future)
 
                 yield rendered_job
+            # Wait for all PNG saves
+            for future in save_futures:
+                future.result()
 
         # Clean up memory after processing the batch
         gc.collect()

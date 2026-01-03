@@ -51,51 +51,9 @@ class DjVuDebug:
         self.load_task = None
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
-
-    def get_djvu_file(self,path:str):
-        """
-        get the djvu file for the given path
-        """
-        djvu_path = self.config.djvu_abspath(path)
-        if not os.path.exists(djvu_path):
-            raise FileNotFoundError(f"DjVu file not found: {djvu_path}")
-
-        # Get file-level metadata
-        djvu_image_file=Path(djvu_path)
-        stat_info = djvu_image_file.stat()
-        filesize = stat_info.st_size
-        iso_date = datetime.fromtimestamp(stat_info.st_mtime).isoformat()
-
-        # Create processor and load document
-        dproc = DjVuProcessor(
+        self.dproc = DjVuProcessor(
             verbose=self.solution.debug, debug=self.solution.debug
         )
-        url = djvu.decode.FileURI(djvu_path)
-        document = dproc.context.new_document(url)
-        document.decoding_job.wait()
-
-        # Get document-level info
-        page_count = len(document.files)
-        bundled = document.type == 2
-
-        # Process pages to get detailed metadata
-        pages = []
-        for image_job in dproc.process(
-            djvu_path, path, save_png=False, output_path=None
-        ):
-            image = image_job.image
-            pages.append(image)
-
-        # Create DjVuFile object
-        djvu_file = DjVuFile(
-            path=str(path),
-            page_count=page_count,
-            bundled=bundled,
-            iso_date=iso_date,
-            filesize=filesize,
-            pages=pages,
-        )
-        return djvu_file
 
     def load_djvu_file(self) -> bool:
         """
@@ -108,10 +66,9 @@ class DjVuDebug:
             self.mw_image=self.solution.webserver.mw_client_base.fetch_image(title=self.page_title)
             if self.solution.webserver.mw_client_new:
                 self.mw_image_new=self.solution.webserver.mw_client_new.fetch_image(title=self.page_title)
-                self.mw_image_new.djvu_path=DjVuMediaWikiImages.extract_and_clean_path(self.mw_image_new.url)
-                self.mw_image_new.djvu_file=self.get_djvu_file(self.mw_image_new.djvu_path)
-            self.mw_image.djvu_path=DjVuMediaWikiImages.extract_and_clean_path(self.mw_image.url)
-            self.mw_image.djvu_file=self.get_djvu_file(self.mw_image.djvu_path)
+            relpath=self.config.extract_and_clean_path(self.mw_image.url)
+            abspath=self.config.djvu_abspath(f"/images/{relpath}")
+            self.mw_image.djvu_file=self.dproc.get_djvu_file(abspath,config=self.config)
             return True
 
         except Exception as ex:
@@ -125,7 +82,7 @@ class DjVuDebug:
         """
         sources = [
             ("Current Wiki", self.mw_image),
-            ("New Wiki", getattr(self, "mw_image_new", None))
+            ("New Wiki", self.mw_image_new)
         ]
 
         for label, image_obj in sources:
@@ -219,7 +176,7 @@ class DjVuDebug:
         view_lod = []
 
         for source_name, djvu_file in self._get_sources():
-            if not djvu_file.pages:
+            if not djvu_file:
                 continue
 
             for page in djvu_file.pages:

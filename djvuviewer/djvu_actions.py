@@ -175,7 +175,7 @@ class DjVuActions:
 
         for index, r in enumerate(images, start=1):
             url = r.get("url")
-            path=DjVuMediaWikiImages.extract_and_clean_path(url)
+            path=self.config.extract_and_clean_path(url)
             djvu_path = self.config.djvu_abspath(path)
 
             if not djvu_path or not os.path.exists(djvu_path):

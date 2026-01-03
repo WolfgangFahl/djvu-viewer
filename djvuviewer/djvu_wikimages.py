@@ -3,8 +3,6 @@ Created on 2026-01-02
 
 @author: wf
 """
-import urllib.parse
-import re
 from djvuviewer.wiki_images import MediaWikiImages
 
 class DjVuMediaWikiImages:
@@ -26,29 +24,3 @@ class DjVuMediaWikiImages:
                 timeout=10,
             )
         return mw_client
-
-    @classmethod
-    def extract_and_clean_path(cls,url:str)->str:
-        """
-        URL decode, extract path from /images, and remove duplicate slashes.
-
-        Args:
-            url (str): The URL to process
-
-        Returns:
-            str: The cleaned path starting from /images
-        """
-        cleaned_path=None
-        # URL decode
-        decoded_url = urllib.parse.unquote(url)
-
-        # Extract path from /images using regex
-        match = re.search(r'/images/.*', decoded_url)
-
-        if match:
-            path = match.group(0)
-
-            # Remove duplicate slashes
-            cleaned_path = re.sub(r'/+', '/', path)
-
-        return cleaned_path
