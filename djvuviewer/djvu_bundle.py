@@ -273,7 +273,10 @@ class DjVuBundle:
 
             if self.debug:
                 print(f"trying to\nmv {bundled_path} {djvu_path}")
-            shutil.move(bundled_path, djvu_path)
+            os.sync()
+            print(f"Sleeping {sleep} secs")
+            time.sleep(sleep)
+            self.move(bundled_path, djvu_path)
             if self.debug:
                 print(f"Moved {bundled_path} to {djvu_path}")
 
