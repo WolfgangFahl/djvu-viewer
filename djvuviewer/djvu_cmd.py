@@ -190,6 +190,7 @@ class DjVuCmd(BaseCmd):
         # Initialize actions handler
         self.actions = DjVuActions(
             config=self.config,
+            args=self.args,
             dvm=dvm,
             dproc=dproc,
             images_path=self.args.images_path,
@@ -220,8 +221,12 @@ class DjVuCmd(BaseCmd):
 
     def bundle(self):
         """
-        execute the bundle command
+        Execute the bundle command.
+
+        Converts indirect/multi-file DjVu files to bundled format.
         """
+        self.actions.bundle_djvu_files()
+        self.actions.report_errors(profiler_time_func=self.profiler.time)
 
     def catalog(self) -> None:
         """

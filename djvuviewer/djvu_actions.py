@@ -4,21 +4,22 @@ Created on 2026-01-02
 @author: wf
 """
 
+from argparse import Namespace
+from dataclasses import asdict
 import os
 import time
 import traceback
-from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
 
-from lodstorage.lod import LOD
-from tqdm import tqdm
-
+from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.tarball import Tarball
+from lodstorage.lod import LOD
+from tqdm import tqdm
 
 
 class DjVuActions:
@@ -32,6 +33,7 @@ class DjVuActions:
     def __init__(
         self,
         config: DjVuConfig,
+        args:Namespace,
         dvm: DjVuManager,
         dproc: DjVuProcessor,
         images_path: str,
@@ -45,6 +47,7 @@ class DjVuActions:
 
         Args:
             config: DjVu configuration object
+            args: command line arguments
             dvm: DjVu manager for database operations
             dproc: DjVu processor for file operations
             images_path: Base path for DjVu files
@@ -54,6 +57,7 @@ class DjVuActions:
             force: Force reprocessing of existing files
         """
         self.config = config
+        self.args=args
         self.dvm = dvm
         self.dproc = dproc
         self.images_path = images_path
@@ -216,6 +220,75 @@ class DjVuActions:
             )
 
         return djvu_lod, page_lod
+
+    def show_fileinfo(self,path:str)->int:
+        """
+        show info for a file
+        """
+        iso_date, filesize=ImageJob.get_fileinfo(path)
+        if self.debug:
+            print(f"{path} ({filesize}) {iso_date}")
+        return filesize
+
+    def bundle_djvu_files(self) -> None:
+        """
+        Convert indirect/multi-file DjVu files to bundled format.
+
+        Note:
+            - Creates backup ZIPs before bundling
+            - Only processes indirect (multi-file) DjVu files
+            - Uses args.url, args.cleanup from self.args
+            - Displays file sizes and compression ratio
+        """
+        url = self.args.url
+        cleanup = self.args.cleanup
+
+        if not url:
+            raise ValueError("bundle is currently only implemented for single files")
+
+        try:
+            djvu_path = self.config.djvu_abspath(url)
+
+            if not os.path.exists(djvu_path):
+                raise FileNotFoundError(f"File not found: {djvu_path}")
+
+            # Show original file info
+            original_size = self.show_fileinfo(djvu_path)
+
+            djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
+            djvu_bundle = DjVuBundle(djvu_file, config=self.config, debug=self.debug)
+
+            if self.args.verbose:
+                print(f"Creating backup for {url}...")
+            zip_path = djvu_bundle.create_backup_zip()
+            if self.args.verbose:
+                print(f"Backup created: {zip_path}")
+
+            print(f"Converting to bundled format...")
+            bundled_path = djvu_bundle.convert_to_bundled(remove_thumbnails=cleanup)
+
+            # Show bundled file info and ratio
+            bundled_size = self.show_fileinfo(bundled_path)
+            ratio = (bundled_size / original_size * 100) if original_size > 0 else 0
+            print(f"Compression ratio: {ratio:.1f}% ({original_size} → {bundled_size} bytes)")
+
+            print(f"Finalizing bundling...")
+            djvu_bundle.finalize_bundling(zip_path, bundled_path)
+
+            if not djvu_bundle.is_valid():
+                self.errors.extend(djvu_bundle.errors)
+                print(f"❌ Bundling failed with {len(djvu_bundle.errors)} errors")
+            else:
+                print(f"✅ Successfully bundled {url}")
+                # MediaWiki maintenance call if container is configured
+                if hasattr(self.config, 'container_name') and self.config.container_name:
+                    filename = os.path.basename(djvu_path)
+                    docker_cmd=(f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}")
+                    print(f"to update the wiki run \n{docker_cmd}")
+
+        except Exception as e:
+            self.errors.append(e)
+            print(f"❌ Error bundling {url}: {e}")
 
     def convert_djvu(
         self,

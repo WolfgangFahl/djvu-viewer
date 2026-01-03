@@ -20,6 +20,7 @@ from djvuviewer.djvu_core import DjVuImage, DjVuFile
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.download import Download
+from djvuviewer.djvu_image import ImageJob
 
 
 class TestDjVu(Basetest):
@@ -49,6 +50,7 @@ class TestDjVu(Basetest):
         if force_test:
             self.local = False
         self.config = DjVuConfig.get_instance(test=force_test)
+        self.config.backup_path=self.backup_path
         self.limit = 50 if not self.local else 50  # 10000000
         self.test_tuples = [
             ("/images/c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu", 3, False),
@@ -78,7 +80,7 @@ class TestDjVu(Basetest):
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
                     djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
-                    djvu_bundle=DjVuBundle(djvu_file)
+                    djvu_bundle=DjVuBundle(djvu_file,config=self.config)
                     self.test_bundles.append(djvu_bundle)
         return self.test_bundles
 
@@ -143,15 +145,41 @@ class TestDjVu(Basetest):
                 for i,filename in enumerate(part_filenames):
                     print(f"{i}:{filename}")
 
+    def show_fileinfo(self,path:str)->int:
+        """
+        show info for a file
+        """
+        iso_date, filesize=ImageJob.get_fileinfo(path)
+        if self.debug:
+            print(f"{path} ({filesize}) {iso_date}")
+        return filesize
+
     def test_bundle(self):
         """
-        test bundle command
+        Test zipping and bundling with size ratio validation.
         """
         for djvu_bundle in self.get_djvu_test_bundles():
-            bundled_path=djvu_bundle.convert_to_bundled()
-            if self.debug:
-                print(bundled_path)
-            pass
+            # Create backup zip
+            zip_path = djvu_bundle.create_backup_zip()
+            zip_filesize = self.show_fileinfo(zip_path)
+
+            # Convert to bundled format
+            bundled_path = djvu_bundle.convert_to_bundled()
+            bundle_filesize = self.show_fileinfo(bundled_path)
+
+            # Calculate and validate size ratio
+            if zip_filesize > 0:
+                size_ratio = zip_filesize / bundle_filesize
+
+                # Assert bundled file is slightly smaller than zip
+                assert  1.0 < size_ratio < 1.2, (
+                    f"Unexpected size ratio: {size_ratio:.2f}. "
+                    f"Bundle: {bundle_filesize} bytes, "
+                    f"Zip: {zip_filesize} bytes. "
+                    f"Files: {zip_path}, {bundled_path}"
+                )
+            else:
+                self.fail(f"Zero-size zip file: {zip_path}")
 
     def test_config(self):
         """

@@ -3,19 +3,21 @@ Created on 2026-01-03
 
 @author: wf
 """
-import tempfile
 import io
-import shlex
 import os
-import re
-import tarfile
 from pathlib import Path
+import re
+import shlex
+import tarfile
+import tempfile
 from typing import List, Optional
-from basemkit.shell import Shell
-from PIL import Image
 
+from PIL import Image
+from basemkit.shell import Shell
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.tarball import Tarball
+import zipfile
+from djvuviewer.djvu_config import DjVuConfig
 
 
 class DjVuBundle:
@@ -23,14 +25,17 @@ class DjVuBundle:
     DjVu bundle handling with validation and error collection.
     """
 
-    def __init__(self, djvu_file: DjVuFile,debug:bool=False):
+    def __init__(self, djvu_file: DjVuFile,config:DjVuConfig,debug:bool=False):
         """
         Initialize DjVuBundle with a DjVuFile instance.
 
         Args:
             djvu_file: The DjVuFile metadata
+            config: configuration
+            debug: if True
         """
         self.djvu_file = djvu_file
+        self.config=config
         self.debug=debug
         self.errors: List[str] = []
         self.shell=Shell()
@@ -214,6 +219,97 @@ class DjVuBundle:
         else:
             self._add_error(f"djvudump failed: {result.stderr}")
         return self.djvu_dump_log
+
+    def finalize_bundling(self, zip_path: str, bundled_path: str):
+        """
+        Finalize bundling by removing the original main file and
+        all zipped component files then move the bundled_path file to the original.
+
+        Args:
+            zip_path: Path to the backup ZIP file (for verification)
+            bundled_path: Path to the new bundled DjVu file
+        """
+        djvu_path = self.djvu_file.path
+
+        # Verify backup ZIP exists before proceeding
+        if not os.path.exists(zip_path):
+            self._add_error(f"Backup ZIP not found: {zip_path}")
+            return
+
+        # Verify bundled file exists
+        if not os.path.exists(bundled_path):
+            self._add_error(f"Bundled file not found: {bundled_path}")
+            return
+
+        # Get directory of original file
+        djvu_dir = os.path.dirname(djvu_path)
+
+        # Get list of component files to remove
+        part_files = self.get_part_filenames()
+
+        try:
+            # Remove component parts
+            for part_file in part_files:
+                part_path = os.path.join(djvu_dir, part_file)
+                if os.path.exists(part_path):
+                    os.remove(part_path)
+                    if self.debug:
+                        print(f"Removed component: {part_path}")
+
+            # Remove original main file
+            if os.path.exists(djvu_path):
+                os.remove(djvu_path)
+                if self.debug:
+                    print(f"Removed original: {djvu_path}")
+
+            # Move bundled file to original location
+            os.rename(bundled_path, djvu_path)
+            if self.debug:
+                print(f"Moved {bundled_path} to {djvu_path}")
+
+            # Update the DjVuFile object to reflect it's now bundled
+            self.djvu_file.bundled = True
+
+        except Exception as e:
+            self._add_error(f"Error during finalization: {e}")
+
+    def create_backup_zip(self) -> str:
+        """
+        Create a ZIP backup of all unbundled DjVu files.
+
+        Returns:
+            Path to created backup ZIP file
+        """
+        if self.djvu_file.bundled:
+            raise ValueError(f"File {self.djvu_file.path} is already bundled")
+
+        djvu_path = self.djvu_file.path
+
+        # Get base filename without extension
+        basename = os.path.basename(djvu_path)
+        stem = os.path.splitext(basename)[0]
+
+        # Create backup ZIP path
+        backup_file = os.path.join(self.config.backup_path, f"{stem}.zip")
+
+        # Get list of page files
+        part_files = self.get_part_filenames()
+        djvu_dir = os.path.dirname(djvu_path)
+
+        # Create ZIP archive
+        with zipfile.ZipFile(backup_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add main index file
+            zipf.write(djvu_path, basename)
+
+            # Add each page file
+            for part_file in part_files:
+                part_path = os.path.join(djvu_dir, part_file)
+                if os.path.exists(part_path):
+                    zipf.write(part_path, part_file)
+                else:
+                    self.errors.append(Exception(f"missing {part_path}"))
+
+        return backup_file
 
     def convert_to_bundled(self, output_path: str = None) -> str:
         """
