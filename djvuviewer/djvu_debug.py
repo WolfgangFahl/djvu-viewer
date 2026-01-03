@@ -60,6 +60,7 @@ class DjVuDebug:
         Returns:
             bool: True if successful, False otherwise
         """
+        success=False
         try:
             self.mw_image = self.solution.webserver.mw_client_base.fetch_image(
                 title=self.page_title
@@ -68,16 +69,18 @@ class DjVuDebug:
                 self.mw_image_new = self.solution.webserver.mw_client_new.fetch_image(
                     title=self.page_title
                 )
-            relpath = self.config.extract_and_clean_path(self.mw_image.url)
-            abspath = self.config.djvu_abspath(f"/images/{relpath}")
-            self.mw_image.djvu_file = self.dproc.get_djvu_file(
-                abspath, config=self.config
-            )
-            return True
+            if self.mw_image:
+                relpath = self.config.extract_and_clean_path(self.mw_image.url)
+                abspath = self.config.djvu_abspath(f"/images/{relpath}")
+                self.mw_image.djvu_file = self.dproc.get_djvu_file(
+                    abspath, config=self.config
+                )
+                success=True
 
         except Exception as ex:
             self.solution.handle_exception(ex)
             raise
+        return success
 
     def _get_sources(self):
         """
