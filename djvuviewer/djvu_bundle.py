@@ -279,7 +279,7 @@ class DjVuBundle:
             os.sync()
             print(f"Sleeping {sleep} secs")
             time.sleep(sleep)
-            self.move_file(bundled_path, djvu_path)
+            self.move_file(bundled_path, djvu_path,sudo=True)
             if self.debug:
                 print(f"Moved {bundled_path} to {djvu_path}")
 
@@ -339,9 +339,10 @@ class DjVuBundle:
 
         return result
 
-    def move_file(self, src: str, dst: str) -> bool:
+    def move_file(self, src: str, dst: str, sudo:bool=False) -> bool:
         """Move file using shell."""
-        cmd = f"mv {shlex.quote(src)} {shlex.quote(dst)}"
+        prefix="sudo " if sudo else ""
+        cmd = f"{prefix}mv {shlex.quote(src)} {shlex.quote(dst)}"
         result = self.run_cmd(cmd, f"Failed to move {src} → {dst}")
 
         if result.returncode == 0 and self.debug:
