@@ -3,7 +3,7 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+from ngwidgets.progress import Progressbar
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Union
@@ -146,6 +146,7 @@ class MediaWikiImages:
         per_request: int = 50,
         extra_params: Optional[Dict[str, str]] = None,
         as_objects: bool = False,
+        progressbar: Optional[Progressbar] = None,
     ) -> Union[List[MediaWikiImage], List[Dict]]:
         """
         Retrieve up to 'limit' images.
@@ -159,6 +160,9 @@ class MediaWikiImages:
         Returns:
             List of MediaWikiImage objects or dictionaries.
         """
+        if progressbar:
+            progressbar.total = limit or 0  # Set total if known
+
         results = []
         remaining = max(0, int(limit))
         if remaining == 0:
@@ -201,6 +205,10 @@ class MediaWikiImages:
                 results.extend([MediaWikiImage.from_dict(img) for img in batch])
             else:
                 results.extend(batch)
+            # Update progress bar
+            if progressbar:
+                progressbar.update(len(batch))
+
 
             remaining -= take
 

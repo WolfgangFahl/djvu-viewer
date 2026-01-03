@@ -5,7 +5,7 @@ Created on 2024-08-26
 2026-02-02: Added paging and page size selection.
 @author: wf
 """
-
+from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.lod_grid import ListOfDictsGrid
 from nicegui import background_tasks, run, ui
 
@@ -34,6 +34,7 @@ class DjVuCatalog:
             browse_wiki: If True, browse MediaWiki API; if False, use local DB
         """
         self.solution = solution
+        self.progressbar=None
         self.config = config
         self.browse_wiki = browse_wiki
         self.webserver = self.solution.webserver
@@ -144,13 +145,19 @@ class DjVuCatalog:
         lod = []
         try:
             if self.browse_wiki:
+                # Setup and show progress bar for API fetch
+                if self.progressbar:
+                    self.progressbar.total = self.limit
+                    self.progressbar.reset()
+                    self.progressbar.set_description("Fetching from MediaWiki")
+
                 # Assuming max_images limits the fetch, might need adjustment for full catalog
                 images_client = (
                     self.solution.webserver.mw_client_base
                     if self.images_url == self.config.base_url
                     else self.solution.webserver.mw_client_new
                 )
-                lod = images_client.fetch_allimages(limit=self.limit)
+                lod = images_client.fetch_allimages(limit=self.limit,progressbar=self.progressbar)
             else:
                 # Fetch from SQLite Database
                 if self.dvm:
@@ -269,6 +276,11 @@ class DjVuCatalog:
                 icon="refresh",
                 on_click=self.on_refresh,
             ).tooltip("Refresh catalog")
+            self.progressbar = NiceguiProgressbar(
+                total=1,  # Will be updated by get_djvu_file
+                desc="Loading DjVu Images",
+                unit="pages"
+            )
 
         # Grid row for displaying results
         self.grid_row = ui.row()

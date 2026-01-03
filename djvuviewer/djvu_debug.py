@@ -5,7 +5,7 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+from ngwidgets.progress import NiceguiProgressbar
 import urllib.parse
 from pathlib import Path
 
@@ -40,6 +40,7 @@ class DjVuDebug:
         self.solution = solution
         self.config = config
         self.webserver = self.solution.webserver
+        self.progressbar=None
         self.page_title = page_title
         self.mw_image = None
         self.mw_image_new = None
@@ -73,7 +74,7 @@ class DjVuDebug:
                 relpath = self.config.extract_and_clean_path(self.mw_image.url)
                 abspath = self.config.djvu_abspath(f"/images/{relpath}")
                 self.mw_image.djvu_file = self.dproc.get_djvu_file(
-                    abspath, config=self.config
+                    abspath, config=self.config,progressbar=self.progressbar
                 )
                 success=True
 
@@ -281,6 +282,12 @@ class DjVuDebug:
                 icon="refresh",
                 on_click=self.on_refresh,
             ).tooltip("Refresh debug info")
+            self.progressbar = NiceguiProgressbar(
+                total=1,  # Will be updated by get_djvu_file
+                desc="Loading DjVu",
+                unit="pages"
+            )
+
 
         # Content row for all content
         self.content_row = ui.row()

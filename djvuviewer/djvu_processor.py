@@ -25,7 +25,7 @@ from PIL import Image
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig, PngMode
 from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
-
+from ngwidgets.progress import Progressbar
 if sys.platform != "win32":
     import resource
 
@@ -437,7 +437,7 @@ class DjVuProcessor:
             msg = f"file {path} not found"
             raise ValueError(msg)
 
-    def get_djvu_file(self, djvu_path: str, config: DjVuConfig) -> DjVuFile:
+    def get_djvu_file(self, djvu_path: str, config: DjVuConfig, progressbar: Optional['Progressbar'] = None) -> DjVuFile:
         """
         Efficiently retrieves DjVu file metadata and page structure.
 
@@ -448,6 +448,7 @@ class DjVuProcessor:
         Args:
             djvu_path (str): The file system path to the .djvu file.
             config(DjVuConfig): the config to use for path handling
+            progressbar (Optional[Progressbar]): Optional progress bar to track processing
 
         Returns:
             DjVuFile: The structured representation of the DjVu file.
@@ -460,6 +461,18 @@ class DjVuProcessor:
         is_bundled = False
         dir_pages = 0
         doc_info_captured = False
+
+        # Get document to determine total pages for progress bar
+        document = self.context.new_document(djvu.decode.FileURI(djvu_path))
+        document.decoding_job.wait()
+
+        # Set up progress bar if provided
+        if progressbar:
+            total_pages = len(document.pages)
+            progressbar.total = total_pages
+            progressbar.reset()
+            progressbar.set_description(f"Loading {os.path.basename(djvu_path)}")
+
 
         # 2. Iterate pages using existing generator
         # document is the same reference in every iteration
@@ -531,6 +544,10 @@ class DjVuProcessor:
                 error_msg=error_msg,
             )
             pages.append(djvu_page)
+            # Update progress bar
+            if progressbar:
+                progressbar.update(1)
+
 
         # 6. Construct and return File Object
         djvu_file = DjVuFile(
