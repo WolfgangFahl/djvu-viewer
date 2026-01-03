@@ -9,14 +9,14 @@ import glob
 import json
 import os
 from argparse import Namespace
-from typing import Optional
+from typing import Optional, List
 
 from basemkit.basetest import Basetest
 
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_cmd import DjVuCmd
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuImage
+from djvuviewer.djvu_core import DjVuImage, DjVuFile
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.download import Download
@@ -54,12 +54,32 @@ class TestDjVu(Basetest):
             ("/images/c/ce/Plauen-AB-1938.djvu", 2, True),
             ("/images/f/ff/AB1932-Ramrath.djvu", 2, True),
         ]
+        self.test_bundles=None
         self.test_tuples_2024 = [
             ("/images/2/2f/Sorau-AB-1913.djvu", 255, False),
             ("/images/9/96/vz1890-neuenhausen-zb04.djvu", 3, True),
             ("/images/0/08/Deutsches-Kirchliches-AB-1927.djvu", 1188, False),
             ("/images/a/a1/Treuen-Vogtland-AB-1905.djvu", 38, False),
         ]
+        self.dproc = DjVuProcessor()
+
+    def get_djvu_test_bundles(self)->List[DjVuFile]:
+        """
+        get the djvu test bundles by derived from unbundled/indexed DjVu test tuples
+        """
+        if self.test_bundles is None:
+            self.test_bundles=[]
+
+            for relurl, _elen, expected_bundled in self.test_tuples:
+                if not expected_bundled:
+                    djvu_path = self.get_djvu(relurl)
+                    rel_path = self.config.djvu_relpath(djvu_path)
+                    if self.debug:
+                        print(f"getting DjVuFile for {rel_path}")
+                    djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
+                    djvu_bundle=DjVuBundle(djvu_file)
+                    self.test_bundles.append(djvu_bundle)
+        return self.test_bundles
 
     def get_args(self, command: str) -> argparse.Namespace:
         """
@@ -104,6 +124,27 @@ class TestDjVu(Basetest):
         if self.debug and error_count > expected_errors:
             print(djvu_cmd.actions.errors)
         self.assertTrue(error_count <= expected_errors)
+
+    def test_djvu_dump(self):
+        """
+        test djvu_dump
+        """
+        for djvu_bundle in self.get_djvu_test_bundles():
+            if self.debug:
+                print(djvu_bundle.djvu_file.to_yaml())
+            log=djvu_bundle.djvu_dump()
+            if self.debug:
+                print(log)
+
+    def test_bundle(self):
+        """
+        test bundle command
+        """
+        for djvu_bundle in self.get_djvu_test_bundles():
+            bundled_path=djvu_bundle.convert_to_bundled()
+            if self.debug:
+                print(bundled_path)
+            pass
 
     def test_config(self):
         """
@@ -194,13 +235,13 @@ class TestDjVu(Basetest):
         """
         test the djvu file operations
         """
-        dproc = DjVuProcessor()
+
         for relurl, elen, expected_bundled in self.test_tuples:
             djvu_path = self.get_djvu(relurl)
             rel_path = self.config.djvu_relpath(djvu_path)
             if self.debug:
                 print(f"getting DjVuFile for {rel_path}")
-            djvu_file = dproc.get_djvu_file(djvu_path, config=self.config)
+            djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
             if self.debug:
                 print(djvu_file)
                 print(djvu_file.to_yaml())

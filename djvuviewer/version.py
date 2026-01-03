@@ -19,7 +19,7 @@ class Version(object):
     name = "djvuviewer"
     version = djvuviewer.__version__
     date = "2024-08-15"
-    updated = "2026-01-01"
+    updated = "2026-01-03"
     description = "DjVu Viewer and tarball converter"
 
     authors = "Wolfgang Fahl"

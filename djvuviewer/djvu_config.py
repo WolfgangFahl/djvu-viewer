@@ -34,6 +34,8 @@ class DjVuConfig:
     images_path: Optional[str] = None
     db_path: Optional[str] = None
     queries_path: Optional[str] = None
+    backup_path: Optional[str] = None  # Path for bundle backups
+    container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
     new_url: Optional[str] = None
     url_prefix: Optional[str] = (
@@ -53,6 +55,10 @@ class DjVuConfig:
             self.images_path = os.path.join(examples_path, "images")
         if self.db_path is None:
             self.db_path = os.path.join(examples_path, "djvu_data.db")
+        if self.backup_path is None:
+            self.backup_path = os.path.join(examples_path, "backup")
+        if self.container_name is None:
+            self.container_name="genwiki39-mw"
 
     def djvu_relpath(self, path: str) -> str:
         """Convert path to wiki image-relative format by removing './' and '/images/'."""

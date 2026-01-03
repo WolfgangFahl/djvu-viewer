@@ -23,7 +23,7 @@ class DjVuBundle:
     DjVu bundle handling with validation and error collection.
     """
 
-    def __init__(self, djvu_file: DjVuFile):
+    def __init__(self, djvu_file: DjVuFile,debug:bool=False):
         """
         Initialize DjVuBundle with a DjVuFile instance.
 
@@ -31,7 +31,10 @@ class DjVuBundle:
             djvu_file: The DjVuFile metadata
         """
         self.djvu_file = djvu_file
+        self.debug=debug
         self.errors: List[str] = []
+        self.shell=Shell()
+        self.djvu_dump_log=None
 
     @classmethod
     def from_tarball(cls, tar_file: str, with_check: bool = True) -> "DjVuBundle":
@@ -174,6 +177,56 @@ class DjVuBundle:
             self._add_error(
                 f"Unexpected error checking tar file '{tar_file}': {e}{context}"
             )
+
+    def djvu_dump(self) -> str:
+        """
+        Run djvudump on self.djvu_file.djvu_path and return output.
+        Adds error to self.errors on failure.
+
+        Returns:
+            djvudump output string (empty on error)
+        """
+        djvu_path = self.djvu_file.path
+
+        if not os.path.exists(djvu_path):
+            self._add_error(f"File not found: {djvu_path}")
+            return ""
+
+        cmd = f"djvudump {shlex.quote(djvu_path)}"
+        result = self.shell.run(cmd, text=True, debug=self.debug)
+
+        if result.returncode == 0:
+            self.djvu_dump_log=result.stdout
+        else:
+            self._add_error(f"djvudump failed: {result.stderr}")
+        return self.djvu_dump_log
+
+    def convert_to_bundled(self, output_path: str = None) -> str:
+        """
+        Convert self.djvu_file to bundled format using djvmcvt.
+
+        Returns:
+            Path to bundled file
+        """
+        djvu_path = self.djvu_file.path
+
+        if output_path is None:
+            dirname = os.path.dirname(djvu_path)
+            basename = os.path.basename(djvu_path)
+            stem = os.path.splitext(basename)[0]
+            output_path = os.path.join(dirname, f"{stem}_bundled.djvu")
+
+        cmd = f"djvmcvt -b {shlex.quote(djvu_path)} {shlex.quote(output_path)}"
+        result = self.shell.run(cmd, text=True, debug=self.debug)
+
+        if result.returncode != 0:
+            raise RuntimeError(f"djvmcvt failed: {result.stderr}")
+
+        if not os.path.exists(output_path):
+            raise RuntimeError(f"Bundled file not created: {output_path}")
+
+        return output_path
+
 
     @classmethod
     def convert_djvu_to_ppm(

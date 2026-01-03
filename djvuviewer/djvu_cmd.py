@@ -70,7 +70,7 @@ class DjVuCmd(BaseCmd):
         )
         parser.add_argument(
             "--command",
-            choices=["catalog", "convert", "dbupdate", "initdb"],
+            choices=["bundle","catalog", "convert", "dbupdate", "initdb"],
             required=True,
             help="Command to execute",
         )
@@ -128,6 +128,32 @@ class DjVuCmd(BaseCmd):
             "--url",
             help="Process a single DjVu file (only valid in convert mode)",
         )
+        # Bundle-specific arguments
+        parser.add_argument(
+            "--backup-path",
+            default=self.config.backup_path,
+            help="Path for backup ZIP files default: %(default)s)",
+        )
+        parser.add_argument(
+            "--cleanup",
+            action="store_true",
+            help="Remove thumbnails during bundling",
+        )
+        parser.add_argument(
+            "--script",
+            action="store_true",
+            help="Generate bash script instead of executing",
+        )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Show operations without executing (implies --script)",
+        )
+        parser.add_argument(
+            "--container-name",
+            default=self.config.container_name,
+            help="MediaWiki container for maintenance call default: %(default)s)",
+        )
 
         return parser
 
@@ -147,6 +173,8 @@ class DjVuCmd(BaseCmd):
         # Configure paths
         self.config.db_path = self.args.db_path
         self.config.images_path = self.args.images_path
+        self.config.backup_path = self.args.backup_path
+        self.config.container_name = self.args.container_name
 
         # Initialize manager and processor
         dvm = DjVuManager(config=self.config)
@@ -175,6 +203,7 @@ class DjVuCmd(BaseCmd):
 
         # Dispatch to command handler
         command_handlers = {
+            "bundle": self.bundle,
             "catalog": self.catalog,
             "convert": self.convert,
             "dbupdate": self.dbupdate,
@@ -188,6 +217,11 @@ class DjVuCmd(BaseCmd):
         else:
             print(f"unknown command {self.args.command}")
         return handled
+
+    def bundle(self):
+        """
+        execute the bundle command
+        """
 
     def catalog(self) -> None:
         """
