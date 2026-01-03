@@ -262,7 +262,9 @@ class DjVuViewer:
         djvu_file = djvu_view_page.file
         image_url = djvu_view_page.image_url
         html_response = HTMLResponse(
-            content=self.get_markup(path, page_index, len(djvu_file.pages), image_url,backlink)
+            content=self.get_markup(
+                path, page_index, len(djvu_file.pages), image_url, backlink
+            )
         )
         return html_response
 

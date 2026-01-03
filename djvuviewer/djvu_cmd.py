@@ -108,6 +108,12 @@ class DjVuCmd(BaseCmd):
             help="Path for PNG files",
         )
         parser.add_argument(
+            "--pngmode",
+            choices=["cli", "pil"],
+            default="pil",
+            help="PNG generation mode: cli (ddjvu command) or pil (Python Imaging Library) (default: %(default)s)",
+        )
+        parser.add_argument(
             "--serial",
             action="store_true",
             help="Use serial processing instead of parallel",
@@ -150,6 +156,7 @@ class DjVuCmd(BaseCmd):
             batch_size=self.args.batch_size,
             limit_gb=self.args.limit_gb,
             max_workers=self.args.max_workers,
+            pngmode=self.args.pngmode
         )
 
         # Initialize actions handler

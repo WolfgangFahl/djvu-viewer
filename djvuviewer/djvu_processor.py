@@ -3,7 +3,7 @@ Created on 2025-02-25
 
 @author: wf
 """
-
+from basemkit.shell import Shell
 import datetime
 import gc
 import logging
@@ -17,13 +17,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator, List, Optional, Tuple
 
-import cairo
 import djvu.decode
 import numpy
 from ngwidgets.profiler import Profiler
 from PIL import Image
 
-from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_bundle import DjVuBundle
+from djvuviewer.djvu_config import DjVuConfig, PngMode
 from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
 
 if sys.platform != "win32":
@@ -174,6 +174,7 @@ class DjVuProcessor:
         batch_size: int = 100,
         limit_gb: int = 16,
         max_workers: int = None,
+        pngmode: str = "pil",
         clean_temp: bool = True,
     ):
         """
@@ -186,6 +187,7 @@ class DjVuProcessor:
             batch_size (int, optional): Number of pages to process in each batch (default: 100).
             limit_gb(int): maximum amount of memory to be used in GB
             max_workers (int, optional): Maximum number of worker threads (default: min(CPU count, 8)).
+            pngmode(str): PNG generation mode - "cli" or "pil" (default: "pil")
             clean_temp(bool): if True remove files from temp directories when tar done
         """
         self.tar = tar
@@ -193,6 +195,7 @@ class DjVuProcessor:
         self.debug = debug
         self.batch_size = batch_size
         self.limit_gb = limit_gb
+        self.pngmode = PngMode.CLI if pngmode == "cli" else PngMode.PIL
 
         # Set a reasonable default for max_workers if not specified
         if max_workers is None:
@@ -202,12 +205,12 @@ class DjVuProcessor:
         self.clean_temp = clean_temp
         self.context = DjVuContext()  # delegate context instance
         self.context.message_handler = self.handle_message
-        self.cairo_pixel_format = cairo.FORMAT_ARGB32
         self.djvu_pixel_format = djvu.decode.PixelFormatRgbMask(
             0xFF0000, 0xFF00, 0xFF, bpp=32
         )
         self.djvu_pixel_format.rows_top_to_bottom = 1
         self.djvu_pixel_format.y_top_to_bottom = 0
+        self.shell=Shell()
 
     def create_tarball(
         self, source_dir: str, output_tar: str, include_ext: Optional[List[str]] = None
@@ -255,31 +258,6 @@ class DjVuProcessor:
                 usage_gb = usage / (1024 * 1024)
 
             return usage_gb >= self.limit_gb, usage_gb
-
-    def save_image_to_png_via_cairo(
-        self, image_job: ImageJob, output_path: str, free_buffer: bool = False
-    ):
-        """
-        Saves the rendered DjVu page as a PNG file.
-
-        Args:
-            image_job (ImageJob): The processed image job containing buffer data
-            output_path (str): The path where the PNG file should be saved.
-            free_buffer(bool): if True free the image buffer
-        """
-        if not image_job.image or image_job.image._buffer is None:
-            raise ValueError("Image buffer not available in ImageJob")
-
-        width, height = image_job.get_size()
-        surface = cairo.ImageSurface.create_for_data(
-            image_job.image._buffer, cairo.Format.ARGB32, width, height
-        )
-        surface.write_to_png(output_path)
-        surface.flush()
-        surface.finish()
-        surface = None  # Explicitly free Cairo surface
-        if free_buffer:
-            image_job.image._buffer = None
 
     def save_image_to_png(
         self, image_job: ImageJob, output_path: str, free_buffer: bool = True
@@ -355,7 +333,7 @@ class DjVuProcessor:
         self, image_job: ImageJob, output_dir: str, free_buffer: bool
     ) -> str:
         """
-        Save an image job as PNG in the specified directory
+        Save an image job as PNG in the specified directory using the configured PNG mode
 
         Args:
             image_job: The image job to save
@@ -368,10 +346,39 @@ class DjVuProcessor:
         output_path = os.path.join(
             output_dir, f"{image_job.prefix}_page_{image_job.page_index:04d}.png"
         )
-        image_job.log("save png start")
-        # Save PNG
-        self.save_image_to_png(image_job, output_path, free_buffer)
-        image_job.log("save png done")
+        image_job.log(f"save png ({self.pngmode}) start")
+        if self.pngmode == PngMode.CLI:
+            # Use ddjvu command-line tool with DPI from the DjVu page
+            dpi = image_job.image.dpi if image_job.image else 300
+
+            # get CLI size arg from the image dimensions
+            if image_job.image:
+                width = image_job.image.width
+                height = image_job.image.height
+            else:
+                # Fallback to pagejob size if image not available
+                width, height = image_job.get_size()
+
+            # Calculate size string in format "widthxheight"
+            size = f"{width}x{height}"
+
+
+            DjVuBundle.render_djvu_page_cli(
+                image_job.djvu_path,
+                image_job.page_index - 1,  # Convert to 0-based for ddjvu
+                output_path,
+                size=size,
+                shell=self.shell,
+                debug=self.debug,
+            )
+            # Update job's image path to point to the PNG
+            if image_job.image:
+                image_job.image.path = output_path
+        else:
+            # Save PNG
+            # Use PIL with rendered buffer
+            self.save_image_to_png(image_job, output_path, free_buffer)
+        image_job.log(f"save png ({self.pngmode}) done")
         return output_path
 
     def render_pagejob_to_buffer(self, image_job: ImageJob, mode: int) -> numpy.ndarray:
@@ -391,9 +398,10 @@ class DjVuProcessor:
         width, height = image_job.get_size()
         rect = (0, 0, width, height)
 
-        bytes_per_line = cairo.ImageSurface.format_stride_for_width(
-            self.cairo_pixel_format, width
-        )
+        # Calculate stride for ARGB32 format (4 bytes per pixel)
+        # Ensure 4-byte alignment (though width * 4 is already aligned for uint32)
+        bytes_per_line = width * 4
+
         assert bytes_per_line % 4 == 0
 
         color_buffer = numpy.zeros((height, bytes_per_line // 4), dtype=numpy.uint32)
@@ -632,7 +640,6 @@ class DjVuProcessor:
                 image_job.log(" render start")
 
                 width, height = image_job.get_size()
-                color_buffer = self.render_pagejob_to_buffer(image_job, mode)
 
                 image = DjVuImage(
                     width=width,
@@ -644,7 +651,10 @@ class DjVuProcessor:
                     djvu_path=image_job.relurl,
                     path=image_job.filename,
                 )
-                image._buffer = (color_buffer,)
+                # Determine if we need to render to a buffer
+                if not self.pngmode == PngMode.CLI:
+                    color_buffer = self.render_pagejob_to_buffer(image_job, mode)
+                    image._buffer = (color_buffer,)
 
                 # Update the image job with the rendered image
                 image_job.image = image
@@ -724,6 +734,7 @@ class DjVuProcessor:
 
             # Step 3: Render the page
             rendered_job = self.render_page(decoded_job, mode)
+
             self.profiler.time(f" process page {rendered_job.page_index:4d}")
 
             # Step 4: Optionally save to PNG

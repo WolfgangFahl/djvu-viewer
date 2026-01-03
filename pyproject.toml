@@ -41,9 +41,6 @@ dependencies = [
 	"djvulibre-python>=0.9.3",
 
 	# PNG generation
-	# https://pypi.org/project/pycairo/
-	"pycairo>=1.29.0",
-
 	# https://pypi.org/project/pillow/
 	"pillow>=12.1.0"
 ]

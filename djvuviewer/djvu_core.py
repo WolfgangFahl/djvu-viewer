@@ -12,6 +12,8 @@ from typing import List, Optional
 import numpy
 from basemkit.yamlable import lod_storable
 
+from djvuviewer.tarball import Tarball
+
 
 @lod_storable
 class DjVuPage:
@@ -113,6 +115,15 @@ class DjVuFile(DjVu):
             if page.page_index == page_index:
                 return page
         return None
+
+    @classmethod
+    def from_tarball(cls, tarball_path: Path, yaml_filename: str) -> "DjVuFile":
+        """
+        (re)-instantiate me from a YAML serialization in a tarball
+        """
+        yaml_data = Tarball.read_from_tar(tarball_path, yaml_filename).decode("utf-8")
+        djvu_file = cls.from_yaml(yaml_data)
+        return djvu_file
 
 
 @dataclass

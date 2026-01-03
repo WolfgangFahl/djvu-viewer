@@ -8,9 +8,17 @@ import os
 import pathlib
 import re
 import urllib.parse
+from enum import Enum
 from typing import Optional
 
 from basemkit.yamlable import lod_storable
+
+
+class PngMode(Enum):
+    """PNG generation mode"""
+
+    CLI = "cli"  # Use ddjvu command-line tool
+    PIL = "pil"  # Use PIL with rendered buffer
 
 
 @lod_storable
@@ -67,13 +75,15 @@ class DjVuConfig:
 
         return cleaned_path
 
-    def wiki_fileurl(self, filename: str, new: bool = False, quoted: bool=False) -> str:
+    def wiki_fileurl(
+        self, filename: str, new: bool = False, quoted: bool = False
+    ) -> str:
         """get the wiki file url for the given filename"""
         url = self.new_url if new else self.base_url
         # wiki_url = f"{self.base_url}/File:{filename}"
         wiki_url = urllib.parse.urljoin(url, f"index.php?title=File:{filename}")
         if quoted:
-            wiki_url=urllib.parse.quote(wiki_url)
+            wiki_url = urllib.parse.quote(wiki_url)
         return wiki_url
 
     def djvu_abspath(self, path: str) -> str:

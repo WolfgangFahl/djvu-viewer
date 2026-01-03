@@ -193,8 +193,10 @@ class DjVuSolution(InputWebSolution):
             if config.new_url:
                 new_url = self.djvu_config.wiki_fileurl(filename, new=True)
                 view_record["new"] = Link.create(url=new_url, text=filename)
-                backlink=self.djvu_config.wiki_fileurl(filename,new=True,quoted=True)
-            backparam=f"&backlink={backlink}" if backlink else ""
+                backlink = self.djvu_config.wiki_fileurl(
+                    filename, new=True, quoted=True
+                )
+            backparam = f"&backlink={backlink}" if backlink else ""
             local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
             view_record["tarball"] = Link.create(url=local_url, text=filename)
 

@@ -267,6 +267,8 @@ class DjVuActions:
                             djvu_file = DjVuFile(path=path, page_count=page_count)
 
                         image = image_job.image
+                        if image is None:
+                            raise ValueError(f"image creation failed for {path}")
                         djvu_page = DjVuPage(
                             path=image.path,
                             page_index=image.page_index,

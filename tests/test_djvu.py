@@ -8,11 +8,12 @@ import argparse
 import glob
 import json
 import os
-import tarfile
 from argparse import Namespace
+from typing import Optional
 
 from basemkit.basetest import Basetest
 
+from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_cmd import DjVuCmd
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuImage
@@ -79,7 +80,8 @@ class TestDjVu(Basetest):
             max_errors=1,
             max_workers=None,
             debug=self.debug,
-            verbose=False,
+            pngmode="pil",
+            verbose=self.debug,
             quiet=False,
             about=False,
             serial=False,
@@ -277,41 +279,45 @@ class TestDjVu(Basetest):
         expected_errors = 0 if self.local else 49
         self.check_command("catalog", expected_errors)
 
+    def check_tarball(self, tar_file: str, relurl: Optional[str] = None):
+        """
+        Test helper: Verify tarball and assert validity.
+
+        Args:
+            tar_file: Path to the tar file to validate
+            relurl: Optional relative URL for error context
+        """
+        bundle = DjVuBundle.from_tarball(tar_file, with_check=False)
+
+        # If relurl provided, re-check with context (bundle.check_tarball is idempotent)
+        if relurl:
+            bundle.check_tarball(tar_file, relurl)
+
+        self.assertTrue(
+            bundle.is_valid(),
+            f"Tarball validation failed for {relurl or tar_file}:\n{bundle.get_error_summary()}",
+        )
+
     def test_convert(self):
         """
-        test the conversion
+        Test the conversion with different PNG modes.
         """
+        png_modes = ["pil", "cli"]
+
         for relurl, _elen, _expected_bundled in self.test_tuples:
-            args = self.get_args("convert")
-            args.url = relurl
-            args.force = True
-            self.check_command("convert", args=args)
-
-            # Verify tar file was created
             base_name = os.path.splitext(os.path.basename(relurl))[0]
-            tar_file = os.path.join(self.output_dir, f"{base_name}.tar")
 
-            self.assertTrue(
-                os.path.isfile(tar_file),
-                f"Expected tar file '{tar_file}' was not created",
-            )
+            for pngmode in png_modes:
+                with self.subTest(relurl=relurl, pngmode=pngmode):
+                    args = self.get_args("convert")
+                    args.url = relurl
+                    args.force = True
+                    args.pngmode = pngmode
+                    self.check_command("convert", args=args)
 
-            # Verify tar contains PNG files
-            with tarfile.open(tar_file) as tar:
-                members = tar.getmembers()
-                self.assertGreater(len(members), 0, f"Tar file '{tar_file}' is empty")
-                png_files = [
-                    m.name for m in tar.getmembers() if m.name.endswith(".png")
-                ]
-                self.assertGreater(len(png_files), 0, "No PNG files found in tar")
-
-                # Check for YAML file
-                yaml_files = [m for m in members if m.name.endswith(".yaml")]
-                self.assertEqual(
-                    len(yaml_files),
-                    1,
-                    f"Expected 1 YAML file in tar, found {len(yaml_files)}",
-                )
+                    # Verify tar file was created and contains expected content
+                    tar_file = os.path.join(self.output_dir, f"{base_name}.tar")
+                    self.check_tarball(tar_file, relurl)
 
     def test_issue49(self):
         """
