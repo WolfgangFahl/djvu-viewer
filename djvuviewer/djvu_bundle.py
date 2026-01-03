@@ -276,7 +276,7 @@ class DjVuBundle:
             os.sync()
             print(f"Sleeping {sleep} secs")
             time.sleep(sleep)
-            self.move(bundled_path, djvu_path)
+            self.move_file(bundled_path, djvu_path)
             if self.debug:
                 print(f"Moved {bundled_path} to {djvu_path}")
 
