@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import subprocess
 import tarfile
 import tempfile
 from typing import List, Optional
@@ -215,12 +216,10 @@ class DjVuBundle:
             return ""
 
         cmd = f"djvudump {shlex.quote(djvu_path)}"
-        result = self.shell.run(cmd, text=True, debug=self.debug)
+        result = self.run_cmd(cmd, "djvudump failed")
 
         if result.returncode == 0:
             self.djvu_dump_log=result.stdout
-        else:
-            self._add_error(f"djvudump failed: {result.stderr}")
         return self.djvu_dump_log
 
     def finalize_bundling(self, zip_path: str, bundled_path: str):
@@ -271,7 +270,7 @@ class DjVuBundle:
                 return
 
             if self.debug:
-                print(f"using os.replace to\nmv {bundled_path} {djvu_path}")
+                print(f"trying to\nmv {bundled_path} {djvu_path}")
             if not os.access(djvu_dir, os.W_OK):
                 self._add_error(
                     f"No write permission in directory: {djvu_dir}\n"
@@ -279,7 +278,7 @@ class DjVuBundle:
                 )
                 return
             # Move bundled file to original location
-            os.replace(bundled_path, djvu_path)
+            self.move_file(bundled_path, djvu_path)
             if self.debug:
                 print(f"Moved {bundled_path} to {djvu_path}")
 
@@ -327,6 +326,30 @@ class DjVuBundle:
 
         return backup_file
 
+    def run_cmd(self, cmd: str, error_msg: str = None) -> subprocess.CompletedProcess:
+        """Run shell command with error handling."""
+        result = self.shell.run(cmd, text=True, debug=self.debug)
+
+        if result.returncode != 0:
+            msg = error_msg or f"Command failed: {cmd}"
+            if self.debug:
+                print(f"{result.stdout}")
+            self._add_error(f"{msg}\n{result.stderr}")
+
+        return result
+
+    def move_file(self, src: str, dst: str) -> bool:
+        """Move file using shell."""
+        cmd = f"mv {shlex.quote(src)} {shlex.quote(dst)}"
+        result = self.run_cmd(cmd, f"Failed to move {src} → {dst}")
+
+        if result.returncode == 0 and self.debug:
+            print(f"Moved: {src} → {dst}")
+
+        return result.returncode == 0
+
+
+
     def convert_to_bundled(self, output_path: str = None) -> str:
         """
         Convert self.djvu_file to bundled format using djvmcvt.
@@ -343,10 +366,10 @@ class DjVuBundle:
             output_path = os.path.join(dirname, f"{stem}_bundled.djvu")
 
         cmd = f"djvmcvt -b {shlex.quote(djvu_path)} {shlex.quote(output_path)}"
-        result = self.shell.run(cmd, text=True, debug=self.debug)
-
-        if result.returncode != 0:
-            raise RuntimeError(f"djvmcvt failed: {result.stderr}")
+        self.run_cmd(
+            cmd,
+            "Failed to bundle DjVu file"
+        )
 
         if not os.path.exists(output_path):
             raise RuntimeError(f"Bundled file not created: {output_path}")
