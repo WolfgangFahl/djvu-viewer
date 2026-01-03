@@ -178,6 +178,20 @@ class DjVuBundle:
                 f"Unexpected error checking tar file '{tar_file}': {e}{context}"
             )
 
+    def get_part_filenames(self)->List[str]:
+        """
+        get a list of my part file names
+        """
+        if not self.djvu_dump_log:
+            self.djvu_dump()
+        part_files = []
+        for line in self.djvu_dump_log.split('\n'):
+            match = re.search(r'^\s+(.+\.(?:djvu|djbz))\s+->', line)
+            if match:
+                part_files.append(match.group(1))
+        return part_files
+
+
     def djvu_dump(self) -> str:
         """
         Run djvudump on self.djvu_file.djvu_path and return output.

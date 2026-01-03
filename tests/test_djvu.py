@@ -38,10 +38,11 @@ class TestDjVu(Basetest):
         # Set up subdirectories
         self.output_dir = os.path.join(base_dir, "test_pngs")
         self.db_path = os.path.join(base_dir, "test_db", "genwiki_images.db")
-
+        self.backup_path = os.path.join(base_dir,"backup")
         # Create all necessary directories
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        os.makedirs(self.backup_path,exist_ok=True)
         self.local = os.path.exists(DjVuConfig.get_config_file_path())
         # set to True to emulate CI mode
         force_test = False
@@ -89,6 +90,8 @@ class TestDjVu(Basetest):
             command=command,
             db_path=self.db_path,
             images_path=self.config.images_path,
+            backup_path=self.backup_path,
+            container_name="genwiki39-mw",
             limit=self.limit,
             url=None,
             sort="asc",
@@ -135,6 +138,10 @@ class TestDjVu(Basetest):
             log=djvu_bundle.djvu_dump()
             if self.debug:
                 print(log)
+            part_filenames=djvu_bundle.get_part_filenames()
+            if self.debug:
+                for i,filename in enumerate(part_filenames):
+                    print(f"{i}:{filename}")
 
     def test_bundle(self):
         """
