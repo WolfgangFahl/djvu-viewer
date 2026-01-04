@@ -5,6 +5,7 @@ Created on 2024-08-15
 Refactored to Focus on DjVu functionality
 """
 
+from argparse import Namespace
 from typing import Dict
 
 from djvuviewer.djvu_catalog import DjVuCatalog
@@ -171,7 +172,35 @@ class DjVuViewerWebServer(InputWebserver):
         """
         super().configure_run()
         self.djvu_config = DjVuConfig.get_instance()
-        self.context=DjVuContext(self.djvu_config,self.args)
+        djvu_cmd_args = Namespace(
+            # From BaseCmd
+            debug=self.args.debug,
+            verbose=self.args.verbose,
+            force=self.args.force,
+            quiet=self.args.quiet,
+            # From DjVu config
+            images_path=self.djvu_config.images_path,
+            db_path=self.djvu_config.db_path,
+            backup_path=self.djvu_config.backup_path,
+            container_name=self.djvu_config.container_name,
+            # DjVu defaults
+            batch_size=100,
+            command="bundle",
+            limit=10000000,
+            limit_gb=16,
+            max_errors=1.0,
+            sleep=2.0,
+            max_workers=None,
+            output_path=None,
+            pngmode="pil",
+            serial=False,
+            sort="asc",
+            url=None,
+            cleanup=False,
+            script=False,
+            dry_run=False,
+        )
+        self.context=DjVuContext(self.djvu_config,djvu_cmd_args)
         # make helper classes available
         self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config)
         # Initialize MediaWiki clients if using API mode
