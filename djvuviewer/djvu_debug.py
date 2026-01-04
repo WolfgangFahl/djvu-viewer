@@ -11,6 +11,7 @@ import urllib.parse
 
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_core import DjVuPage
+from djvuviewer.djvu_image import ImageJob
 from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
@@ -53,6 +54,8 @@ class DjVuDebug:
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
+        self.zip_size=0
+        self.bundle_size=0
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
         self.bundle_state_container=None
@@ -99,10 +102,20 @@ class DjVuDebug:
 
     def get_header_html(self) -> str:
         """Helper to generate HTML summary our DjVuFile instance."""
-        djvu_file=self.djvu_file
+        djvu_file = self.djvu_file
+        view_record = {}
+        filename = self.page_title
+        self.solution.add_links(view_record, filename)
+
         if not djvu_file:
-            markup="<div>No DjVu file information loaded.</div>"
-            return markup
+            return "<div>No DjVu file information loaded.</div>"
+
+        def label_value(label: str, value, span_style: str = "") -> str:
+            """Helper to create a label-value HTML row."""
+            if not value and value != 0:  # Skip if empty/None but allow 0
+                return ""
+            style_attr = f" style='{span_style}'" if span_style else ""
+            return f"<strong>{label}:</strong><span{style_attr}>{value}</span>"
 
         format_type = "Bundled" if djvu_file.bundled else "Indirect/Indexed"
 
@@ -119,30 +132,34 @@ class DjVuDebug:
         )
         dpi = first_page.dpi if (first_page and first_page.dpi) else "—"
 
-        tar_info = ""
-        if djvu_file.tar_filesize:
-            tar_info = f"<strong>Tarball:</strong><span>{djvu_file.tar_filesize:,} bytes ({djvu_file.tar_iso_date})</span>"
+        tar_info = (
+            f"{djvu_file.tar_filesize:,} bytes ({djvu_file.tar_iso_date})"
+            if djvu_file.tar_filesize
+            else None
+        )
+
+        main_size = f"{djvu_file.filesize:,} bytes" if djvu_file.filesize else None
 
         # Build HTML
         html_parts = [
-            f"<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'>",
+            "<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'>",
             "<div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>",
-            f"<strong>Path:</strong><span style='word-break: break-all;'>{djvu_file.path}</span>",
-            f"<strong>Format:</strong><span>{format_type}</span>",
-            f"<strong>Pages (Doc):</strong><span>{djvu_file.page_count}</span>",
-            f"<strong>Pages (Dir):</strong><span>{djvu_file.dir_pages or '—'}</span>",
-            f"<strong>Dimensions:</strong><span>{dims}</span>",
-            f"<strong>DPI:</strong><span>{dpi}</span>",
-            f"<strong>File Date:</strong><span>{djvu_file.iso_date or '—'}</span>",
-            (
-                f"<strong>Main Size:</strong><span>{djvu_file.filesize:,} bytes</span>"
-                if djvu_file.filesize
-                else ""
-            ),
-            f"<strong>Pages Size:</strong><span>{total_page_size:,} bytes</span>",
-            tar_info,
+            label_value(self.config.base_url,view_record.get('wiki','')),
+            label_value(self.config.new_url,view_record.get('new','')),
+            label_value("Tarball",view_record.get('tarball','')),
+            label_value("Path", djvu_file.path, "word-break: break-all;"),
+            label_value("Format", format_type),
+            label_value("Pages (Doc)", djvu_file.page_count),
+            label_value("Pages (Dir)", djvu_file.dir_pages or "—"),
+            label_value("Dimensions", dims),
+            label_value("DPI", dpi),
+            label_value("File Date", djvu_file.iso_date or "—"),
+            label_value("Main Size", main_size),
+            label_value("Pages Size", f"{total_page_size:,} bytes"),
+            label_value("Tarball", tar_info),
             "</div></div>",
         ]
+
         markup=f"<div style='display: flex; flex-wrap: wrap; gap: 16px;'>{''.join(html_parts)}</div>"
         return markup
 
@@ -154,6 +171,9 @@ class DjVuDebug:
         ui.html(header_html)
 
     def update_bundle_state(self):
+        """
+        update bundle state
+        """
         if not hasattr(self, 'djvu_bundle') or self.djvu_bundle is None:
             self.bundle_state_container.clear()
             with self.bundle_state_container:
@@ -282,6 +302,15 @@ class DjVuDebug:
         """Create background task to reload debug info."""
         self.load_task = background_tasks.create(self.load_debug_info())
 
+    def show_fileinfo(self, path: str) -> int:
+        """
+        show info for a file
+        """
+        iso_date, filesize = ImageJob.get_fileinfo(path)
+        with self.content_row:
+            ui.notify(f"{path} ({filesize}) {iso_date}")
+        return filesize
+
     async def bundle(self):
         """
         run the bundle activities in background
@@ -291,7 +320,19 @@ class DjVuDebug:
                 with self.content_row:
                     ui.notify(f"{self.djvu_bundle.backup_file} already exists")
             else:
-                self.djvu_bundle.create_backup_zip()
+                zip_path=self.djvu_bundle.create_backup_zip()
+                self.zip_size = self.show_fileinfo(zip_path)
+
+                bundled_path = self.djvu_bundle.convert_to_bundled()
+                self.bundled_size = self.show_fileinfo(bundled_path)
+
+                self.djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=True)
+                docker_cmd=self.djvu_bundle.get_docker_cmd()
+                if docker_cmd:
+                    result=self.djvu_bundle.shell.run(docker_cmd)
+                    if result.returncode != 0:
+                        with self.content_row:
+                            ui.notify("docker command failed")
             self.update_bundling_state()
 
         except Exception as ex:

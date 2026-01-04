@@ -392,6 +392,17 @@ class DjVuBundle:
             self._add_error(f"Move failed: {e}")
         return False
 
+    def get_docker_cmd(self)->str:
+        """
+        get the docker exec command to update the mediawiki
+        """
+        djvu_path = self.djvu_file.path
+        # MediaWiki maintenance call if container is configured
+        if hasattr(self.config, "container_name") and self.config.container_name:
+            filename = os.path.basename(djvu_path)
+            docker_cmd = f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}"
+        return docker_cmd
+
     def generate_bundling_script(self) -> str:
         """
         Generate a complete bash script for the bundling process.
@@ -488,10 +499,8 @@ class DjVuBundle:
                 f"echo 'Backup saved at: '$BACKUP_FILE",
             ]
         )
-        # MediaWiki maintenance call if container is configured
-        if hasattr(self.config, "container_name") and self.config.container_name:
-            filename = os.path.basename(djvu_path)
-            docker_cmd = f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}"
+        docker_cmd = self.get_docker_cmd()
+        if docker_cmd:
             script_lines.extend([docker_cmd])
 
         return "\n".join(script_lines) + "\n"

@@ -312,12 +312,13 @@ class DjVuActions:
                 print(success_msg)
 
             # Generate MediaWiki maintenance command if applicable
-            if hasattr(self.config, "container_name") and self.config.container_name:
-                filename = os.path.basename(djvu_path)
-                docker_cmd = f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}"
-                success_msg += f"\n\nTo update the wiki run:\n{docker_cmd}"
+            docker_cmd=djvu_bundle.get_docker_cmd()
+            if docker_cmd:
                 if self.verbose:
-                    print(f"To update the wiki run:\n{docker_cmd}")
+                    print(f"running ...\n{docker_cmd}")
+                result=self.djvu_bundle.shell.run(docker_cmd)
+                if result.returncode != 0:
+                    self.errors.extend(result.stderr)
 
             return True, bundled_path, success_msg
 
