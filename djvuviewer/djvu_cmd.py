@@ -4,19 +4,16 @@ Created on 2025-02-25
 @author: wf
 """
 
+from argparse import ArgumentParser, Namespace
 import argparse
 import logging
-from argparse import ArgumentParser, Namespace
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
-from basemkit.profiler import Profiler
-
-from djvuviewer.djvu_actions import DjVuActions
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_manager import DjVuManager
-from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.version import Version
+
+from djvuviewer.djvu_context import DjVuContext
 
 
 class DjVuCmd(BaseCmd):
@@ -181,32 +178,9 @@ class DjVuCmd(BaseCmd):
         self.config.images_path = self.args.images_path
         self.config.backup_path = self.args.backup_path
         self.config.container_name = self.args.container_name
-
-        # Initialize manager and processor
-        dvm = DjVuManager(config=self.config)
-        dproc = DjVuProcessor(
-            debug=self.args.debug,
-            verbose=self.args.verbose,
-            batch_size=self.args.batch_size,
-            limit_gb=self.args.limit_gb,
-            max_workers=self.args.max_workers,
-            pngmode=self.args.pngmode,
-        )
-
-        # Initialize actions handler
-        self.actions = DjVuActions(
-            config=self.config,
-            args=self.args,
-            dvm=dvm,
-            dproc=dproc,
-            images_path=self.args.images_path,
-            output_path=self.args.output_path,
-            debug=self.args.debug,
-            verbose=self.args.verbose,
-            force=self.args.force,
-        )
-
-        self.profiler = Profiler(self.args.command)
+        self.context=DjVuContext(self.config,self.args)
+        self.actions=self.context.actions
+        self.profiler=self.context.profiler
 
         # Dispatch to command handler
         command_handlers = {

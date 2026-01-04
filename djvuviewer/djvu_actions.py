@@ -232,23 +232,29 @@ class DjVuActions:
             print(f"{path} ({filesize}) {iso_date}")
         return filesize
 
-    def bundle_djvu_files(self) -> None:
+    def bundle_single_file(
+        self,
+        url: str,
+        sleep: float = 0.0,
+        generate_script: bool = False,
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Convert indirect/multi-file DjVu files to bundled format.
+        Bundle a single DjVu file from indirect to bundled format.
 
-        Note:
-            - Creates backup ZIPs before bundling
-            - Only processes indirect (multi-file) DjVu files
-            - Uses args.url, args.cleanup from self.args
-            - Displays file sizes and compression ratio
+        Args:
+            url: URL or filename of the DjVu file to bundle
+            sleep: Sleep time in seconds before finalization
+            generate_script: If True, only generate and return the bundling script
+
+        Returns:
+            Tuple of (success, bundled_path, message)
+            - success: True if bundling was successful
+            - bundled_path: Path to the bundled file (or None if failed/script mode)
+            - message: Script command if generate_script=True, error message if failed,
+                       or success message if successful
         """
-        url = self.args.url
-        cleanup = self.args.cleanup
-
-        if not url:
-            raise ValueError("bundle is currently only implemented for single files")
-
         try:
+            # Resolve URL to actual file path
             if not "image/" in url:
                 mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(
                     self.config.new_url
@@ -256,6 +262,7 @@ class DjVuActions:
                 image = mw_client.fetch_image(f"File:{url}")
                 url = image.url
                 url = self.config.djvu_relpath(url)
+
             djvu_path = self.config.djvu_abspath(url)
             relpath = self.config.djvu_relpath(djvu_path)
 
@@ -267,41 +274,88 @@ class DjVuActions:
 
             djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
             djvu_bundle = DjVuBundle(djvu_file, config=self.config, debug=self.debug)
-            if self.args.script:
-                script_cmd=djvu_bundle.generate_bundling_script()
-                print(script_cmd)
-                return
 
-            if self.args.verbose:
+            # If only generating script, return it
+            if generate_script:
+                script_cmd = djvu_bundle.generate_bundling_script()
+                return True, None, script_cmd
+
+            if self.verbose:
                 print(
-                    f"Creating backup for {self.args.url}... {djvu_file.page_count} pages {djvu_file.iso_date}"
+                    f"Creating backup for {url}... {djvu_file.page_count} pages {djvu_file.iso_date}"
                 )
+
             zip_path = djvu_bundle.create_backup_zip()
             zip_size = self.show_fileinfo(zip_path)
 
-            print(f"Converting to bundled format...")
+            if self.verbose:
+                print(f"Converting to bundled format...")
             bundled_path = djvu_bundle.convert_to_bundled()
 
             # Show bundled file info
             bundled_size = self.show_fileinfo(bundled_path)
 
-            print(f"Finalizing bundling...")
-            djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=self.args.sleep)
+            if self.verbose:
+                print(f"Finalizing bundling...")
+            djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=sleep)
 
             if not djvu_bundle.is_valid():
                 self.errors.extend(djvu_bundle.errors)
-                print(f"❌ Bundling failed with {len(djvu_bundle.errors)} errors")
-            else:
-                print(f"✅ Successfully bundled {self.args.url}")
-            # MediaWiki maintenance call if container is configured
+                error_msg = f"Bundling failed with {len(djvu_bundle.errors)} errors"
+                if self.verbose:
+                    print(f"❌ {error_msg}")
+                return False, None, error_msg
+
+            # Success message
+            success_msg = f"✅ Successfully bundled {url}"
+            if self.verbose:
+                print(success_msg)
+
+            # Generate MediaWiki maintenance command if applicable
             if hasattr(self.config, "container_name") and self.config.container_name:
                 filename = os.path.basename(djvu_path)
                 docker_cmd = f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}"
-                print(f"to update the wiki run \n{docker_cmd}")
+                success_msg += f"\n\nTo update the wiki run:\n{docker_cmd}"
+                if self.verbose:
+                    print(f"To update the wiki run:\n{docker_cmd}")
+
+            return True, bundled_path, success_msg
 
         except Exception as e:
             self.errors.append(e)
-            print(f"❌ Error bundling {url}: {e}")
+            error_msg = f"Error bundling {url}: {e}"
+            if self.verbose:
+                print(f"❌ {error_msg}")
+            return False, None, error_msg
+
+
+    def bundle_djvu_files(self) -> None:
+        """
+        Convert indirect/multi-file DjVu files to bundled format.
+
+        Note:
+            - Creates backup ZIPs before bundling
+            - Only processes indirect (multi-file) DjVu files
+            - Uses args.url, args.cleanup, args.sleep, args.script from self.args
+            - Displays file sizes and compression ratio
+
+        This is a wrapper around bundle_single_file() for CLI compatibility.
+        """
+        url = self.args.url
+        sleep = getattr(self.args, 'sleep', 2.0)
+        generate_script = getattr(self.args, 'script', False)
+
+        if not url:
+            raise ValueError("bundle is currently only implemented for single files")
+
+        success, bundled_path, message = self.bundle_single_file(
+            url=url,
+            sleep=sleep,
+            generate_script=generate_script
+        )
+
+        # Print the message (script, success message, or error)
+        print(message)
 
     def convert_djvu(
         self,

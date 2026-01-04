@@ -7,6 +7,12 @@ Refactored to Focus on DjVu functionality
 
 from typing import Dict
 
+from djvuviewer.djvu_catalog import DjVuCatalog
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_debug import DjVuDebug
+from djvuviewer.djvu_viewer import DjVuViewer
+from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
+from djvuviewer.version import Version
 from ngwidgets.input_webserver import InputWebserver, InputWebSolution
 from ngwidgets.login import Login
 from ngwidgets.sso_users_solution import SsoSolution
@@ -16,12 +22,7 @@ from nicegui import Client, app, ui
 from starlette.responses import FileResponse, HTMLResponse
 from wikibot3rd.sso_users import Sso_Users
 
-from djvuviewer.djvu_catalog import DjVuCatalog
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_debug import DjVuDebug
-from djvuviewer.djvu_viewer import DjVuViewer
-from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from djvuviewer.version import Version
+from djvuviewer.djvu_context import DjVuContext
 
 
 class DjVuViewerWebServer(InputWebserver):
@@ -170,6 +171,7 @@ class DjVuViewerWebServer(InputWebserver):
         """
         super().configure_run()
         self.djvu_config = DjVuConfig.get_instance()
+        self.context=DjVuContext(self.djvu_config,self.args)
         # make helper classes available
         self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config)
         # Initialize MediaWiki clients if using API mode
@@ -179,7 +181,6 @@ class DjVuViewerWebServer(InputWebserver):
         self.mw_client_new = DjVuMediaWikiImages.get_mediawiki_images_client(
             self.djvu_config.new_url
         )
-
 
 class DjVuSolution(InputWebSolution):
     """
@@ -245,7 +246,7 @@ class DjVuSolution(InputWebSolution):
         def show():
             debug_view = DjVuDebug(
                 self,
-                config=self.webserver.djvu_config,
+                context=self.webserver.context,
                 page_title=page_title,
             )
             debug_view.setup_ui()

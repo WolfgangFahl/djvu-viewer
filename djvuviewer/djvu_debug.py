@@ -6,17 +6,18 @@ Created on 2026-01-02
 @author: wf
 """
 
-import urllib.parse
 from pathlib import Path
+import urllib.parse
 
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVuFile, DjVuPage
+from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
 
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuFile, DjVuPage
-from djvuviewer.djvu_processor import DjVuProcessor
+from djvuviewer.djvu_context import DjVuContext
 
 
 class DjVuDebug:
@@ -27,7 +28,7 @@ class DjVuDebug:
     def __init__(
         self,
         solution,
-        config: DjVuConfig,
+        context:DjVuContext,
         page_title: str,
     ):
         """
@@ -35,11 +36,12 @@ class DjVuDebug:
 
         Args:
             solution: The solution instance
-            config: Configuration object
+            context: context with proc and actions
             page_title: pagetitle of the DjVu file
         """
         self.solution = solution
-        self.config = config
+        self.context=context
+        self.config = context.config
         self.webserver = self.solution.webserver
         self.progressbar = None
         self.page_title = page_title
@@ -54,6 +56,14 @@ class DjVuDebug:
         self.dproc = DjVuProcessor(
             verbose=self.solution.debug, debug=self.solution.debug
         )
+
+
+    def authenticated(self) -> bool:
+        """
+        check authentication
+        """
+        allow = self.solution.webserver.authenticated()
+        return allow
 
     def load_djvu_file(self) -> bool:
         """
@@ -226,9 +236,6 @@ class DjVuDebug:
                 # Header
                 ui.html(header_html)
 
-                # Pages section
-                ui.label(f"Pages ({self.total_pages} total)").classes("text-h6 mt-4")
-
                 # Grid
                 self.lod_grid = ListOfDictsGrid()
                 self.lod_grid.load_lod(self.view_lod)
@@ -249,6 +256,13 @@ class DjVuDebug:
     def reload_debug_info(self):
         """Create background task to reload debug info."""
         self.load_task = background_tasks.create(self.load_debug_info())
+
+    def on_bundle(self):
+        """
+        handle bundle click
+        """
+        with self.content_row:
+            ui.notify("bundling not implemented yet")
 
     def on_refresh(self):
         """Handle refresh button click."""
@@ -283,6 +297,11 @@ class DjVuDebug:
                 icon="refresh",
                 on_click=self.on_refresh,
             ).tooltip("Refresh debug info")
+            self.bundle_button = ui.button(
+                icon="package",
+                on_click=self.on_bundle,
+            ).tooltip("bundle the shown DjVu file")
+            self.bundle_button.enabled = self.authenticated()
             self.progressbar = NiceguiProgressbar(
                 total=1,  # Will be updated by get_djvu_file
                 desc="Loading DjVu",
