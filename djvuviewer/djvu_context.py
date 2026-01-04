@@ -3,9 +3,11 @@ Created on 04.01.2026
 
 @author: wf
 """
+
 from argparse import Namespace
 
 from basemkit.profiler import Profiler
+
 from djvuviewer.djvu_actions import DjVuActions
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
@@ -16,9 +18,10 @@ class DjVuContext:
     """
     a Context for working with DjVu files and actions
     """
-    def __init__(self,config:DjVuConfig,args:Namespace):
-        self.config=config
-        self.args=args
+
+    def __init__(self, config: DjVuConfig, args: Namespace):
+        self.config = config
+        self.args = args
         # Initialize manager and processor
         self.dvm = DjVuManager(config=self.config)
         self.dproc = DjVuProcessor(

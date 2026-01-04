@@ -5,20 +5,21 @@ Created on 2026-01-02
 
 @author: wf
 """
-import os
-from pathlib import Path
-import urllib.parse
 
-from djvuviewer.djvu_bundle import DjVuBundle
-from djvuviewer.djvu_core import DjVuPage
-from djvuviewer.djvu_image import ImageJob
-from djvuviewer.djvu_processor import DjVuProcessor
+import os
+import urllib.parse
+from pathlib import Path
+
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
 
+from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_context import DjVuContext
+from djvuviewer.djvu_core import DjVuPage
+from djvuviewer.djvu_image import ImageJob
+from djvuviewer.djvu_processor import DjVuProcessor
 
 
 class DjVuDebug:
@@ -29,7 +30,7 @@ class DjVuDebug:
     def __init__(
         self,
         solution,
-        context:DjVuContext,
+        context: DjVuContext,
         page_title: str,
     ):
         """
@@ -41,7 +42,7 @@ class DjVuDebug:
             page_title: pagetitle of the DjVu file
         """
         self.solution = solution
-        self.context=context
+        self.context = context
         self.config = context.config
         self.webserver = self.solution.webserver
         self.progressbar = None
@@ -49,16 +50,16 @@ class DjVuDebug:
         self.mw_image = None
         self.mw_image_new = None
         self.djvu_file = None
-        self.djvu_bundle=None
+        self.djvu_bundle = None
         self.total_pages = 0
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
-        self.zip_size=0
-        self.bundle_size=0
+        self.zip_size = 0
+        self.bundle_size = 0
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
-        self.bundle_state_container=None
+        self.bundle_state_container = None
         self.dproc = DjVuProcessor(
             verbose=self.solution.debug, debug=self.solution.debug
         )
@@ -92,7 +93,9 @@ class DjVuDebug:
                 self.djvu_file = self.dproc.get_djvu_file(
                     abspath, config=self.config, progressbar=self.progressbar
                 )
-                self.djvu_bundle = DjVuBundle(self.djvu_file, config=self.config, debug=self.context.args.debug)
+                self.djvu_bundle = DjVuBundle(
+                    self.djvu_file, config=self.config, debug=self.context.args.debug
+                )
                 success = True
 
         except Exception as ex:
@@ -144,9 +147,9 @@ class DjVuDebug:
         html_parts = [
             "<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'>",
             "<div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>",
-            label_value(self.config.base_url,view_record.get('wiki','')),
-            label_value(self.config.new_url,view_record.get('new','')),
-            label_value("Tarball",view_record.get('tarball','')),
+            label_value(self.config.base_url, view_record.get("wiki", "")),
+            label_value(self.config.new_url, view_record.get("new", "")),
+            label_value("Tarball", view_record.get("tarball", "")),
             label_value("Path", djvu_file.path, "word-break: break-all;"),
             label_value("Format", format_type),
             label_value("Pages (Doc)", djvu_file.page_count),
@@ -160,7 +163,7 @@ class DjVuDebug:
             "</div></div>",
         ]
 
-        markup=f"<div style='display: flex; flex-wrap: wrap; gap: 16px;'>{''.join(html_parts)}</div>"
+        markup = f"<div style='display: flex; flex-wrap: wrap; gap: 16px;'>{''.join(html_parts)}</div>"
         return markup
 
     def setup_djvu_info(self):
@@ -174,7 +177,7 @@ class DjVuDebug:
         """
         update bundle state
         """
-        if not hasattr(self, 'djvu_bundle') or self.djvu_bundle is None:
+        if not hasattr(self, "djvu_bundle") or self.djvu_bundle is None:
             self.bundle_state_container.clear()
             with self.bundle_state_container:
                 ui.label("No bundle information available")
@@ -185,30 +188,26 @@ class DjVuDebug:
             ui.label("Bundling State").classes("text-subtitle1 mb-2")
 
             # Bundled status - just a disabled checkbox
-            ui.checkbox("Bundled", value=self.djvu_file.bundled).props('disable')
+            ui.checkbox("Bundled", value=self.djvu_file.bundled).props("disable")
 
             # Backup file - just a disabled checkbox and download link
             backup_exists = os.path.exists(self.djvu_bundle.backup_file)
             with ui.row().classes("gap-4 items-center"):
-                ui.checkbox("Backup exists", value=backup_exists).props('disable')
+                ui.checkbox("Backup exists", value=backup_exists).props("disable")
 
                 if backup_exists:
                     backup_rel_path = os.path.relpath(
-                        self.djvu_bundle.backup_file,
-                        self.config.backup_path
+                        self.djvu_bundle.backup_file, self.config.backup_path
                     )
                     download_url = f"{self.config.url_prefix}/backups/{backup_rel_path}"
                     ui.link(f"⬇️{backup_rel_path}", download_url).classes("text-primary")
 
-            with ui.expansion('Bundling script', icon='code'):
+            with ui.expansion("Bundling script", icon="code"):
                 # Script
                 script = self.djvu_bundle.generate_bundling_script()
-                ui.code(script, language='bash').classes('w-full text-xs')
+                ui.code(script, language="bash").classes("w-full text-xs")
 
-
-    def create_page_record(
-        self, djvu_path: str, page: DjVuPage
-    ) -> dict:
+    def create_page_record(self, djvu_path: str, page: DjVuPage) -> dict:
         """Helper to create a single dictionary record for the LOD."""
         filename_stem = Path(djvu_path).name
 
@@ -260,7 +259,6 @@ class DjVuDebug:
 
         return view_lod
 
-
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
         try:
@@ -277,7 +275,9 @@ class DjVuDebug:
                     with splitter.before:
                         self.setup_djvu_info()
                     with splitter.after:
-                        with ui.element("div").classes("w-full") as self.bundle_state_container:
+                        with ui.element("div").classes(
+                            "w-full"
+                        ) as self.bundle_state_container:
                             self.update_bundle_state()
 
             with self.content_row:
@@ -320,16 +320,16 @@ class DjVuDebug:
                 with self.content_row:
                     ui.notify(f"{self.djvu_bundle.backup_file} already exists")
             else:
-                zip_path=self.djvu_bundle.create_backup_zip()
+                zip_path = self.djvu_bundle.create_backup_zip()
                 self.zip_size = self.show_fileinfo(zip_path)
 
                 bundled_path = self.djvu_bundle.convert_to_bundled()
                 self.bundled_size = self.show_fileinfo(bundled_path)
 
                 self.djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=True)
-                docker_cmd=self.djvu_bundle.get_docker_cmd()
+                docker_cmd = self.djvu_bundle.get_docker_cmd()
                 if docker_cmd:
-                    result=self.djvu_bundle.shell.run(docker_cmd)
+                    result = self.djvu_bundle.shell.run(docker_cmd)
                     if result.returncode != 0:
                         with self.content_row:
                             ui.notify("docker command failed")
@@ -338,13 +338,12 @@ class DjVuDebug:
         except Exception as ex:
             self.solution.handle_exception(ex)
 
-
     def on_bundle(self):
         """
         handle bundle click
         """
         with self.content_row:
-            self.bundle_task=background_tasks.create(self.bundle())
+            self.bundle_task = background_tasks.create(self.bundle())
 
     def on_refresh(self):
         """Handle refresh button click."""
@@ -390,7 +389,7 @@ class DjVuDebug:
                 unit="pages",
             )
         # side by side cards for bundle infos left: djvu right: state
-        self.card_row=ui.row().classes("w-full")
+        self.card_row = ui.row().classes("w-full")
         # Content row for all content
         self.content_row = ui.row()
 

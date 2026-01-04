@@ -312,11 +312,11 @@ class DjVuActions:
                 print(success_msg)
 
             # Generate MediaWiki maintenance command if applicable
-            docker_cmd=djvu_bundle.get_docker_cmd()
+            docker_cmd = djvu_bundle.get_docker_cmd()
             if docker_cmd:
                 if self.verbose:
                     print(f"running ...\n{docker_cmd}")
-                result=self.djvu_bundle.shell.run(docker_cmd)
+                result = self.djvu_bundle.shell.run(docker_cmd)
                 if result.returncode != 0:
                     self.errors.extend(result.stderr)
 
@@ -328,7 +328,6 @@ class DjVuActions:
             if self.verbose:
                 print(f"❌ {error_msg}")
             return False, None, error_msg
-
 
     def bundle_djvu_files(self) -> None:
         """
@@ -343,16 +342,14 @@ class DjVuActions:
         This is a wrapper around bundle_single_file() for CLI compatibility.
         """
         url = self.args.url
-        sleep = getattr(self.args, 'sleep', 2.0)
-        generate_script = getattr(self.args, 'script', False)
+        sleep = getattr(self.args, "sleep", 2.0)
+        generate_script = getattr(self.args, "script", False)
 
         if not url:
             raise ValueError("bundle is currently only implemented for single files")
 
         success, bundled_path, message = self.bundle_single_file(
-            url=url,
-            sleep=sleep,
-            generate_script=generate_script
+            url=url, sleep=sleep, generate_script=generate_script
         )
 
         # Print the message (script, success message, or error)

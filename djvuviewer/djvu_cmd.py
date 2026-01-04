@@ -4,16 +4,16 @@ Created on 2025-02-25
 @author: wf
 """
 
-from argparse import ArgumentParser, Namespace
 import argparse
 import logging
+from argparse import ArgumentParser, Namespace
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.version import Version
 
+from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_context import DjVuContext
+from djvuviewer.version import Version
 
 
 class DjVuCmd(BaseCmd):
@@ -178,9 +178,9 @@ class DjVuCmd(BaseCmd):
         self.config.images_path = self.args.images_path
         self.config.backup_path = self.args.backup_path
         self.config.container_name = self.args.container_name
-        self.context=DjVuContext(self.config,self.args)
-        self.actions=self.context.actions
-        self.profiler=self.context.profiler
+        self.context = DjVuContext(self.config, self.args)
+        self.actions = self.context.actions
+        self.profiler = self.context.profiler
 
         # Dispatch to command handler
         command_handlers = {

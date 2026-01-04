@@ -9,12 +9,12 @@ import os
 import re
 import shlex
 import shutil
-from datetime import datetime
 import subprocess
 import tarfile
 import tempfile
 import time
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -259,7 +259,9 @@ class DjVuBundle:
             original_atime = original_stat.st_atime
             original_mtime = original_stat.st_mtime
             if self.debug:
-                print(f"Preserving timestamps - atime: {original_atime}, mtime: {original_mtime}")
+                print(
+                    f"Preserving timestamps - atime: {original_atime}, mtime: {original_mtime}"
+                )
 
             # Remove component parts
             for part_file in part_files:
@@ -299,7 +301,7 @@ class DjVuBundle:
             self._add_error(f"Error during finalization: {e}")
 
     @property
-    def basename(self)->str:
+    def basename(self) -> str:
         djvu_path = self.djvu_file.path
 
         # Get base filename without extension
@@ -307,7 +309,7 @@ class DjVuBundle:
         return basename
 
     @property
-    def backup_file(self)->str:
+    def backup_file(self) -> str:
         stem = os.path.splitext(self.basename)[0]
 
         # Create backup ZIP path
@@ -326,7 +328,7 @@ class DjVuBundle:
 
         djvu_path = self.djvu_file.path
 
-        backup_file=self.backup_file
+        backup_file = self.backup_file
 
         # Get list of page files
         part_files = self.get_part_filenames()
@@ -392,7 +394,7 @@ class DjVuBundle:
             self._add_error(f"Move failed: {e}")
         return False
 
-    def get_docker_cmd(self)->str:
+    def get_docker_cmd(self) -> str:
         """
         get the docker exec command to update the mediawiki
         """
