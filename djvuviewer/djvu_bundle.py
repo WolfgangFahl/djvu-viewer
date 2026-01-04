@@ -380,9 +380,6 @@ class DjVuBundle:
         Returns:
             The bash script as a string
         """
-        if self.djvu_file.bundled:
-            raise ValueError(f"File {self.djvu_file.path} is already bundled")
-
         djvu_path = self.djvu_file.path
         djvu_dir = os.path.dirname(djvu_path)
         basename = os.path.basename(djvu_path)
