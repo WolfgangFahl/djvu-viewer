@@ -333,7 +333,7 @@ class DjVuDebug:
                     if result.returncode != 0:
                         with self.content_row:
                             ui.notify("docker command failed")
-            self.update_bundling_state()
+            self.update_bundle_state()
 
         except Exception as ex:
             self.solution.handle_exception(ex)
