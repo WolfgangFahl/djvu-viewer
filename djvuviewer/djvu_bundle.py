@@ -281,17 +281,33 @@ class DjVuBundle:
                 )
                 return
 
+
+            if os.path.exists(djvu_path):
+                os.remove(djvu_path)
+
+
             if self.debug:
                 print(f"trying to\nmv {bundled_path} {djvu_path}")
             os.sync()
             print(f"Sleeping {sleep} secs")
             time.sleep(sleep)
-            self.move_file(bundled_path, djvu_path)
+            try:
+                shutil.move(bundled_path, djvu_path)
+                if self.debug:
+                    print(f"Moved: {bundled_path} → {djvu_path}")
+                # Restore original timestamps
+                os.sync()
+                print(f"Sleeping {sleep} secs")
+                time.sleep(sleep)
+                os.utime(djvu_path, (original_atime, original_mtime))
+                if self.debug:
+                    print(f"Restored timestamps to {djvu_path}")
+            except Exception as e:
+                if self.debug:
+                    print(f"Failed to move {bundled_path} → {djvu_path}: {e}")
 
-            # Restore original timestamps
-            os.utime(djvu_path, (original_atime, original_mtime))
-            if self.debug:
-                print(f"Restored timestamps to {djvu_path}")
+
+
 
 
             # Update the DjVuFile object to reflect it's now bundled
@@ -360,18 +376,6 @@ class DjVuBundle:
             self._add_error(f"{msg}\n{result.stderr}")
 
         return result
-
-    def move_file(self, src: str, dst: str, sudo: bool = False) -> bool:
-        """Move file """
-        try:
-            shutil.move(src, dst)
-            if self.debug:
-                print(f"Moved: {src} → {dst}")
-            return True
-        except Exception as e:
-            if self.debug:
-                print(f"Failed to move {src} → {dst}: {e}")
-            return False
 
     def generate_bundling_script(self) -> str:
         """
