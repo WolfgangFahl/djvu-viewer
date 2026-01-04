@@ -48,6 +48,8 @@ class DjVuViewerWebServer(InputWebserver):
         InputWebserver.__init__(self, config=DjVuViewerWebServer.get_config())
         self.users = Sso_Users(self.config.short_name)
         self.login = Login(self, self.users)
+        self.djvu_config = DjVuConfig.get_instance()
+
 
         @ui.page("/")
         async def home(client: Client):
@@ -70,6 +72,9 @@ class DjVuViewerWebServer(InputWebserver):
         @ui.page("/login")
         async def login(client: Client) -> None:
             return await self.page(client, DjVuSolution.show_login)
+
+        # Add the static files route for serving the backup files
+        app.add_static_files("/backups", self.djvu_config.backup_path)
 
         @app.get("/djvu/content/{file:path}")
         def get_content(file: str) -> FileResponse:
@@ -171,7 +176,6 @@ class DjVuViewerWebServer(InputWebserver):
         configure me
         """
         super().configure_run()
-        self.djvu_config = DjVuConfig.get_instance()
         djvu_cmd_args = Namespace(
             # From BaseCmd
             debug=self.args.debug,

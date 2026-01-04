@@ -5,12 +5,12 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+import os
 from pathlib import Path
 import urllib.parse
 
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuFile, DjVuPage
+from djvuviewer.djvu_bundle import DjVuBundle
+from djvuviewer.djvu_core import DjVuPage
 from djvuviewer.djvu_processor import DjVuProcessor
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
@@ -47,16 +47,18 @@ class DjVuDebug:
         self.page_title = page_title
         self.mw_image = None
         self.mw_image_new = None
+        self.djvu_file = None
+        self.djvu_bundle=None
         self.total_pages = 0
         self.view_lod = []
         self.lod_grid = None
         self.load_task = None
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
+        self.bundle_state_container=None
         self.dproc = DjVuProcessor(
             verbose=self.solution.debug, debug=self.solution.debug
         )
-
 
     def authenticated(self) -> bool:
         """
@@ -84,9 +86,10 @@ class DjVuDebug:
             if self.mw_image:
                 relpath = self.config.extract_and_clean_path(self.mw_image.url)
                 abspath = self.config.djvu_abspath(f"/images/{relpath}")
-                self.mw_image.djvu_file = self.dproc.get_djvu_file(
+                self.djvu_file = self.dproc.get_djvu_file(
                     abspath, config=self.config, progressbar=self.progressbar
                 )
+                self.djvu_bundle = DjVuBundle(self.djvu_file, config=self.config, debug=self.context.args.debug)
                 success = True
 
         except Exception as ex:
@@ -94,19 +97,13 @@ class DjVuDebug:
             raise
         return success
 
-    def _get_sources(self):
-        """
-        Yields tuples of (Source Label, WikiImage Instance) for generic iteration.
-        This makes adding a 3rd or 4th source trivial in the future.
-        """
-        sources = [("Current Wiki", self.mw_image), ("New Wiki", self.mw_image_new)]
+    def get_header_html(self) -> str:
+        """Helper to generate HTML summary our DjVuFile instance."""
+        djvu_file=self.djvu_file
+        if not djvu_file:
+            markup="<div>No DjVu file information loaded.</div>"
+            return markup
 
-        for label, image_obj in sources:
-            if image_obj and hasattr(image_obj, "djvu_file") and image_obj.djvu_file:
-                yield label, image_obj.djvu_file
-
-    def _get_single_header_html(self, title: str, djvu_file: DjVuFile) -> str:
-        """Helper to generate HTML summary for a single DjVuFile instance."""
         format_type = "Bundled" if djvu_file.bundled else "Indirect/Indexed"
 
         # Safe aggregations
@@ -129,7 +126,6 @@ class DjVuDebug:
         # Build HTML
         html_parts = [
             f"<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'>",
-            f"<h6 style='margin: 0 0 10px 0; color: #1976D2;'>{title}</h6>",
             "<div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>",
             f"<strong>Path:</strong><span style='word-break: break-all;'>{djvu_file.path}</span>",
             f"<strong>Format:</strong><span>{format_type}</span>",
@@ -147,28 +143,58 @@ class DjVuDebug:
             tar_info,
             "</div></div>",
         ]
-        return "".join(html_parts)
+        markup=f"<div style='display: flex; flex-wrap: wrap; gap: 16px;'>{''.join(html_parts)}</div>"
+        return markup
 
-    def get_header_html(self) -> str:
-        """Generate document info as HTML using a loop over available sources."""
-        html_blocks = [
-            self._get_single_header_html(label, djvu_file)
-            for label, djvu_file in self._get_sources()
-        ]
+    def setup_djvu_info(self):
+        # Generate header HTML
+        header_html = self.get_header_html()
 
-        if not html_blocks:
-            return "<div>No DjVu file information loaded.</div>"
+        # Header
+        ui.html(header_html)
 
-        return f"<div style='display: flex; flex-wrap: wrap; gap: 16px;'>{''.join(html_blocks)}</div>"
+    def update_bundle_state(self):
+        if not hasattr(self, 'djvu_bundle') or self.djvu_bundle is None:
+            self.bundle_state_container.clear()
+            with self.bundle_state_container:
+                ui.label("No bundle information available")
+            return
 
-    def _create_page_record(
-        self, source_name: str, djvu_path: str, page: DjVuPage
+        self.bundle_state_container.clear()
+        with self.bundle_state_container:
+            ui.label("Bundling State").classes("text-subtitle1 mb-2")
+
+            # Bundled status - just a disabled checkbox
+            ui.checkbox("Bundled", value=self.djvu_file.bundled).props('disable')
+
+            # Backup file - just a disabled checkbox and download link
+            backup_exists = os.path.exists(self.djvu_bundle.backup_file)
+            with ui.row().classes("gap-4 items-center"):
+                ui.checkbox("Backup exists", value=backup_exists).props('disable')
+
+                if backup_exists:
+                    backup_rel_path = os.path.relpath(
+                        self.djvu_bundle.backup_file,
+                        self.config.backup_path
+                    )
+                    download_url = f"{self.config.url_prefix}/backups/{backup_rel_path}"
+                    ui.link(f"⬇️{backup_rel_path}", download_url).classes("text-primary")
+
+            with ui.expansion('Bundling script', icon='code'):
+                # Script
+                script = ("# File is already bundled\n# No script needed"
+                          if self.djvu_file.bundled
+                          else self.djvu_bundle.generate_bundling_script())
+                ui.code(script, language='bash').classes('w-full text-xs')
+
+
+    def create_page_record(
+        self, djvu_path: str, page: DjVuPage
     ) -> dict:
         """Helper to create a single dictionary record for the LOD."""
         filename_stem = Path(djvu_path).name
 
         record = {
-            "Source": source_name,
             "#": page.page_index,
             "Page": page.page_index,
             "Filename": page.path or "—",
@@ -206,36 +232,37 @@ class DjVuDebug:
         Convert page records into a List of Dicts by iterating over abstract sources.
         """
         view_lod = []
+        if not self.djvu_file:
+            return
 
-        for source_name, djvu_file in self._get_sources():
-            if not djvu_file:
-                continue
-
-            for page in djvu_file.pages:
-                record = self._create_page_record(source_name, djvu_file.path, page)
-                view_lod.append(record)
-                self.total_pages += 1
+        for page in self.djvu_file.pages:
+            record = self.create_page_record(self.djvu_file.path, page)
+            view_lod.append(record)
+            self.total_pages += 1
 
         return view_lod
+
 
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
         try:
             # Load file metadata (blocking IO)
             await run.io_bound(self.load_djvu_file)
-
-            # Generate header HTML
-            header_html = self.get_header_html()
-
             # Convert pages to view format
             self.view_lod = self.get_view_lod()
 
             # Clear and update UI
             self.content_row.clear()
-            with self.content_row:
-                # Header
-                ui.html(header_html)
+            # side by side
+            with self.card_row:
+                with ui.splitter() as splitter:
+                    with splitter.before:
+                        self.setup_djvu_info()
+                    with splitter.after:
+                        with ui.element("div").classes("w-full") as self.bundle_state_container:
+                            self.update_bundle_state()
 
+            with self.content_row:
                 # Grid
                 self.lod_grid = ListOfDictsGrid()
                 self.lod_grid.load_lod(self.view_lod)
@@ -257,12 +284,28 @@ class DjVuDebug:
         """Create background task to reload debug info."""
         self.load_task = background_tasks.create(self.load_debug_info())
 
+    async def bundle(self):
+        """
+        run the bundle activities in background
+        """
+        try:
+            if os.path.exists(self.djvu_bundle.backup_file):
+                with self.content_row:
+                    ui.notify(f"{self.djvu_bundle.backup_file} already exists")
+            else:
+                self.djvu_bundle.create_backup_zip()
+            self.update_bundling_state()
+
+        except Exception as ex:
+            self.solution.handle_exception(ex)
+
+
     def on_bundle(self):
         """
         handle bundle click
         """
         with self.content_row:
-            ui.notify("bundling not implemented yet")
+            self.bundle_task=background_tasks.create(self.bundle())
 
     def on_refresh(self):
         """Handle refresh button click."""
@@ -298,7 +341,7 @@ class DjVuDebug:
                 on_click=self.on_refresh,
             ).tooltip("Refresh debug info")
             self.bundle_button = ui.button(
-                icon="package",
+                icon="archive",
                 on_click=self.on_bundle,
             ).tooltip("bundle the shown DjVu file")
             self.bundle_button.enabled = self.authenticated()
@@ -307,7 +350,8 @@ class DjVuDebug:
                 desc="Loading DjVu",
                 unit="pages",
             )
-
+        # side by side cards for bundle infos left: djvu right: state
+        self.card_row=ui.row().classes("w-full")
         # Content row for all content
         self.content_row = ui.row()
 

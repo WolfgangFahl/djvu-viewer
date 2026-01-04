@@ -9,6 +9,7 @@ import os
 import re
 import shlex
 import shutil
+from datetime import datetime
 import subprocess
 import tarfile
 import tempfile
@@ -254,6 +255,12 @@ class DjVuBundle:
         part_files = self.get_part_filenames()
 
         try:
+            original_stat = os.stat(djvu_path)
+            original_atime = original_stat.st_atime
+            original_mtime = original_stat.st_mtime
+            if self.debug:
+                print(f"Preserving timestamps - atime: {original_atime}, mtime: {original_mtime}")
+
             # Remove component parts
             for part_file in part_files:
                 part_path = os.path.join(djvu_dir, part_file)
@@ -279,15 +286,35 @@ class DjVuBundle:
             os.sync()
             print(f"Sleeping {sleep} secs")
             time.sleep(sleep)
-            self.move_file(bundled_path, djvu_path,sudo=True)
+            self.move_file(bundled_path, djvu_path)
+
+            # Restore original timestamps
+            os.utime(djvu_path, (original_atime, original_mtime))
             if self.debug:
-                print(f"Moved {bundled_path} to {djvu_path}")
+                print(f"Restored timestamps to {djvu_path}")
+
 
             # Update the DjVuFile object to reflect it's now bundled
             self.djvu_file.bundled = True
 
         except Exception as e:
             self._add_error(f"Error during finalization: {e}")
+
+    @property
+    def basename(self)->str:
+        djvu_path = self.djvu_file.path
+
+        # Get base filename without extension
+        basename = os.path.basename(djvu_path)
+        return basename
+
+    @property
+    def backup_file(self)->str:
+        stem = os.path.splitext(self.basename)[0]
+
+        # Create backup ZIP path
+        backup_file = os.path.join(self.config.backup_path, f"{stem}.zip")
+        return backup_file
 
     def create_backup_zip(self) -> str:
         """
@@ -301,12 +328,7 @@ class DjVuBundle:
 
         djvu_path = self.djvu_file.path
 
-        # Get base filename without extension
-        basename = os.path.basename(djvu_path)
-        stem = os.path.splitext(basename)[0]
-
-        # Create backup ZIP path
-        backup_file = os.path.join(self.config.backup_path, f"{stem}.zip")
+        backup_file=self.backup_file
 
         # Get list of page files
         part_files = self.get_part_filenames()
@@ -315,7 +337,7 @@ class DjVuBundle:
         # Create ZIP archive
         with zipfile.ZipFile(backup_file, "w", zipfile.ZIP_DEFLATED) as zipf:
             # Add main index file
-            zipf.write(djvu_path, basename)
+            zipf.write(djvu_path, self.basename)
 
             # Add each page file
             for part_file in part_files:
@@ -339,16 +361,17 @@ class DjVuBundle:
 
         return result
 
-    def move_file(self, src: str, dst: str, sudo:bool=False) -> bool:
-        """Move file using shell."""
-        prefix="sudo " if sudo else ""
-        cmd = f"{prefix}mv {shlex.quote(src)} {shlex.quote(dst)}"
-        result = self.run_cmd(cmd, f"Failed to move {src} → {dst}")
-
-        if result.returncode == 0 and self.debug:
-            print(f"Moved: {src} → {dst}")
-
-        return result.returncode == 0
+    def move_file(self, src: str, dst: str, sudo: bool = False) -> bool:
+        """Move file """
+        try:
+            shutil.move(src, dst)
+            if self.debug:
+                print(f"Moved: {src} → {dst}")
+            return True
+        except Exception as e:
+            if self.debug:
+                print(f"Failed to move {src} → {dst}: {e}")
+            return False
 
     def generate_bundling_script(self) -> str:
         """
@@ -377,7 +400,7 @@ class DjVuBundle:
             "#!/bin/bash",
             "# DjVu bundling script",
             f"# Generated for: {djvu_path}",
-            "# Date: $(date)",
+            f"# Date: {datetime.now().isoformat()}",
             "",
             "set -e  # Exit on error",
             "",
