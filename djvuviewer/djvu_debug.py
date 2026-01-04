@@ -182,9 +182,7 @@ class DjVuDebug:
 
             with ui.expansion('Bundling script', icon='code'):
                 # Script
-                script = ("# File is already bundled\n# No script needed"
-                          if self.djvu_file.bundled
-                          else self.djvu_bundle.generate_bundling_script())
+                script = self.djvu_bundle.generate_bundling_script()
                 ui.code(script, language='bash').classes('w-full text-xs')
 
 
