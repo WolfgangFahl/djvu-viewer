@@ -4,8 +4,10 @@ Created on 2026-01-03
 @author: wf
 """
 
+from datetime import datetime
 import io
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
@@ -13,16 +15,13 @@ import subprocess
 import tarfile
 import tempfile
 import time
-import zipfile
-from datetime import datetime
-from pathlib import Path
 from typing import List, Optional
+import zipfile
 
 from basemkit.shell import Shell
-from PIL import Image
-
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
+from djvuviewer.image_convert import ImageConverter
 from djvuviewer.tarball import Tarball
 
 
@@ -569,12 +568,6 @@ class DjVuBundle:
             )
 
     @classmethod
-    def convert_ppm_to_png(cls, ppm_path: str, png_path: str) -> None:
-        """Convert PPM to PNG using PIL."""
-        img = Image.open(ppm_path)
-        img.save(png_path, "PNG")
-
-    @classmethod
     def render_djvu_page_cli(
         cls,
         djvu_path: str,
@@ -604,7 +597,7 @@ class DjVuBundle:
             )
 
             # Step 2: PPM → PNG
-            cls.convert_ppm_to_png(tmp_ppm_path, output_path)
+            ImageConverter.convert_ppm_to_png(tmp_ppm_path, output_path)
 
             return output_path
 

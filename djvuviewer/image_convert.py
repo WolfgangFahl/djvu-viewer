@@ -25,6 +25,13 @@ class ImageConverter:
         self.png_data = png_data
         self.dpi = dpi
 
+    @classmethod
+    def convert_ppm_to_png(cls, ppm_path: str, png_path: str) -> None:
+        """Convert PPM to PNG using PIL."""
+        img = Image.open(ppm_path)
+        img.save(png_path, "PNG")
+
+
     def convert_to_jpg(
         self, target_dpi: int = None, scale: float = None, quality: int = 85
     ) -> bytes:

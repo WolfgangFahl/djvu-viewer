@@ -89,7 +89,7 @@ class DjVuCatalog:
         """
         view_record = {"#": index}
 
-        raw_name = record.get("name", record.get("title", ""))
+        raw_name = record.get("title", "")
         filename = raw_name.replace("File:", "").replace("Datei:", "")
         self.solution.add_links(view_record, filename)
         view_record["size"] = record.get("size")

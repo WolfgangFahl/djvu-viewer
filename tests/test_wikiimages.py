@@ -17,7 +17,7 @@ class TestMediaWikiImages(Basetest):
     Test MediaWiki Images handling
     """
 
-    def setUp(self, debug=False, profile=True):
+    def setUp(self, debug=True, profile=True):
         """
         setUp test environment
         """

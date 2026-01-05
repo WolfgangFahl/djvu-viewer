@@ -19,7 +19,6 @@ class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
-    name: str
     url: str
     mime: str
     size: int
@@ -47,7 +46,6 @@ class MediaWikiImage:
         ts_str = self.timestamp.replace("Z", "+00:00")
         ts_dt= datetime.fromisoformat(ts_str)
         return ts_dt
-
 
 
 class MediaWikiImages:
