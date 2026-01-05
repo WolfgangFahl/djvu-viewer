@@ -638,7 +638,7 @@ class DjVuActions:
             max_errors: Maximum allowed error percentage before skipping update
             url: Optional single file URL for targeted update
         """
-        djvu_lod = self.get_djvu_lod()
+        djvu_lod = self.djvu_files.get_djvu_lod()
         djvu_by_path, duplicates = LOD.getLookup(djvu_lod, "path")
 
         if len(duplicates) > 0:
