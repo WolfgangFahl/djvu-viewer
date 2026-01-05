@@ -23,7 +23,6 @@ from lodstorage.lod import LOD
 from tqdm import tqdm
 
 
-
 class DjVuActions:
     """
     DjVu file processing operations.
@@ -61,6 +60,7 @@ class DjVuActions:
         self.config = config
         self.args = args
         self.djvu_files = djvu_files
+        self.dvm=self.djvu_files.dvm
         self.dproc = dproc
         self.images_path = images_path
         self.output_path = output_path
