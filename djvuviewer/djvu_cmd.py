@@ -206,7 +206,7 @@ class DjVuCmd(BaseCmd):
         Converts indirect/multi-file DjVu files to bundled format.
         """
         self.actions.bundle_djvu_files()
-        self.actions.report_errors(profiler_time_func=self.profiler.time)
+        self.actions.report_errors(profiler=self.profiler)
 
     def catalog(self) -> None:
         """
@@ -215,7 +215,7 @@ class DjVuCmd(BaseCmd):
         Scans DjVu files and stores their metadata in the database.
         """
         self.actions.catalog_and_store(limit=self.args.limit, sample_record_count=1)
-        self.actions.report_errors(profiler_time_func=self.profiler.time)
+        self.actions.report_errors(profiler=self.profiler)
 
     def convert(self) -> None:
         """
@@ -224,7 +224,7 @@ class DjVuCmd(BaseCmd):
         Converts DjVu files to PNG format using database records.
         """
         self.actions.convert_from_database(serial=self.args.serial, url=self.args.url)
-        self.actions.report_errors(profiler_time_func=self.profiler.time)
+        self.actions.report_errors(profiler=self.profiler)
 
     def dbupdate(self) -> None:
         """
@@ -235,7 +235,7 @@ class DjVuCmd(BaseCmd):
         self.actions.update_from_database(
             max_errors=self.args.max_errors, url=self.args.url
         )
-        self.actions.report_errors(profiler_time_func=self.profiler.time)
+        self.actions.report_errors(profiler=self.profiler)
 
     def initdb(self) -> None:
         """
@@ -244,7 +244,7 @@ class DjVuCmd(BaseCmd):
         Initializes the database schema with sample records.
         """
         self.actions.init_database()
-        self.actions.report_errors(profiler_time_func=self.profiler.time)
+        self.actions.report_errors(profiler=self.profiler)
 
 
 def main(argv: Optional[List[str]] = None) -> int:

@@ -12,15 +12,17 @@ import time
 import traceback
 from typing import Any, Dict, List, Optional, Tuple
 
+from basemkit.profiler import Profiler
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.tarball import Tarball
-from djvuviewer.djvu_files import DjVuFiles
 from lodstorage.lod import LOD
 from tqdm import tqdm
+
+from djvuviewer.djvu_files import DjVuFiles
 
 
 class DjVuActions:
@@ -570,12 +572,12 @@ class DjVuActions:
             print(f"{err_percent:.1f}% errors ✅ < {max_errors:.1f}% limit")
             self.store(djvu_lod, page_lod)
 
-    def report_errors(self, profiler_time_func=None) -> None:
+    def report_errors(self, profiler:Profiler=None) -> None:
         """
         Report errors collected during processing.
 
         Args:
-            profiler_time_func: Optional function for timing/profiling output
+            profiler: Optional profiler for timing/profiling output
 
         Note:
             Displays check mark if no errors, cross mark with count if errors occurred.
@@ -587,8 +589,8 @@ class DjVuActions:
         else:
             msg = f" ❌ {len(self.errors)} errors"
 
-        if profiler_time_func:
-            profiler_time_func(msg)
+        if profiler:
+            profiler.time(msg)
         else:
             print(msg)
 
