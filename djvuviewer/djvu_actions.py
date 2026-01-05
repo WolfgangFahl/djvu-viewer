@@ -624,7 +624,7 @@ class DjVuActions:
             serial: If True, use serial processing; otherwise use parallel
             url: Optional single file URL for targeted conversion
         """
-        djvu_lod = self.get_djvu_lod()
+        djvu_lod = self.djvu_files.get_djvu_lod()
         djvu_files = self.get_djvu_files(djvu_lod, url=url)
         self.convert_djvu(djvu_files, serial=serial)
 
