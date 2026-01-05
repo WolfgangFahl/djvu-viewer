@@ -29,18 +29,18 @@ class DjVuConfig:
 
     # singleton
     _instance: Optional["DjVuConfig"] = None
-
-    tarball_path: Optional[str] = None
-    images_path: Optional[str] = None
-    db_path: Optional[str] = None
-    queries_path: Optional[str] = None
+    is_example:bool=False
+    tarball_path: Optional[str] = None # target path for viewer files in tar or zip format
+    images_path: Optional[str] = None # MediaWiki images directory
+    db_path: Optional[str] = None # full Path for the djvu index database
+    queries_path: Optional[str] = None # Path for YAML files with named parameterized queries
     backup_path: Optional[str] = None  # Path for bundle backups
+    log_path: Optional[str]=None # Path for log files
     container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
     new_url: Optional[str] = None
-    url_prefix: Optional[str] = (
-        ""  # URL prefix for proxied deployments (e.g., "/djvu-viewer")
-    )
+    url_prefix: Optional[str] = ""  # URL prefix for proxied deployments (e.g., "/djvu-viewer")
+
 
     def __post_init__(self):
         """
@@ -49,16 +49,31 @@ class DjVuConfig:
         examples_path = DjVuConfig.get_examples_path()
         if self.queries_path is None:
             self.queries_path = os.path.join(examples_path, "djvu_queries.yaml")
-        if self.tarball_path is None:
+        if self.is_example:
             self.tarball_path = os.path.join(examples_path, "djvu_images")
-        if self.images_path is None:
             self.images_path = os.path.join(examples_path, "images")
-        if self.db_path is None:
             self.db_path = os.path.join(examples_path, "djvu_data.db")
-        if self.backup_path is None:
             self.backup_path = os.path.join(examples_path, "backup")
-        if self.container_name is None:
-            self.container_name = "genwiki39-mw"
+            # Create log directory for example configuration
+            self.log_path="/tmp/djvu-viewer/log"
+            os.makedirs(self.log_path, exist_ok=True)
+        else:
+            # List of required fields to check
+            required_fields = ["tarball_path", "images_path", "db_path", "backup_path", "log_path"]
+
+            # Check which required fields are missing
+            missing_fields = [
+                field for field in required_fields
+                if not getattr(self, field, None)
+            ]
+
+            if missing_fields:
+                raise ValueError(
+                    f"Incomplete DjVuConfig. Missing required fields: {', '.join(missing_fields)}.\n"
+                    f"For configuration help, see: https://github.com/WolfgangFahl/djvu-viewer/wiki/Help#Configuration"
+                )
+            if self.container_name is None:
+                self.container_name = "genwiki39-mw"
 
     def djvu_relpath(self, path: str) -> str:
         """Convert path to wiki image-relative format by removing './' and '/images/'."""
@@ -134,7 +149,7 @@ class DjVuConfig:
                 instance = cls.load_from_yaml_file(config_path)
             else:
                 # Return default instance if no config file found
-                instance = cls()
+                instance = cls(is_example=True)
             cls._instance = instance
         return cls._instance
 

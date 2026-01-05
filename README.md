@@ -14,3 +14,5 @@ DjVu Viewer and tarball converter
 
 # Documentation
 - [DjVu catalog and Viewer](https://wiki.bitplan.com/index.php/djvu-viewer)
+## Help
+- [Help](https://github.com/WolfgangFahl/djvu-viewer/wiki/Help)
