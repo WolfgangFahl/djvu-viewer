@@ -4,57 +4,50 @@ Created on 2026-01-02
 @author: wf
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Union
 
-import requests
+from basemkit.yamlable import lod_storable
+from djvuviewer.djvu_config import DjVuConfig
 from ngwidgets.progress import Progressbar
+import requests
 
 
-@dataclass
+@lod_storable
 class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
-
     name: str
     url: str
     mime: str
     size: int
     user: Optional[str] = None
-    timestamp: Optional[datetime] = None
+    timestamp: Optional[str] = None
     description_url: Optional[str] = None
     height: Optional[int] = None
     width: Optional[int] = None
+    pagecount: Optional[int]=None
+    descriptionurl: Optional[str]=None
+    descriptionshorturl: Optional[str]=None
+    ns: Optional[int]= None
+    title: Optional[str]=None
+    # key
+    relpath: Optional[str] = field(init=False, default=None)
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "MediaWikiImage":
-        """
-        Factory method to create an instance from a MediaWiki API result dict.
-        """
-        # Parse timestamp if available, usually ISO 8601 format like "2023-01-01T12:00:00Z"
-        ts_str = data.get("timestamp")
-        ts = None
-        if ts_str:
-            try:
-                # Basic ISO parsing
-                ts = datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%SZ")
-            except ValueError:
-                pass
+    def __post_init__(self):
+        if self.url:
+            self.relpath=DjVuConfig.djvu_relpath(self.url)
 
-        mw_image = cls(
-            name=data.get("name") or data.get("title", "?"),
-            url=data.get("url", ""),
-            mime=data.get("mime", "application/octet-stream"),
-            size=data.get("size", 0),
-            user=data.get("user", None),
-            timestamp=ts,
-            description_url=data.get("descriptionurl"),
-            height=data.get("height"),
-            width=data.get("width"),
-        )
-        return mw_image
+    @property
+    def timestamp_datetime(self):
+        # Format: 2013-04-10T20:03:08Z
+        # replacing Z with +00:00 for timezone awareness if running Python 3.7+
+        ts_str = self.timestamp.replace("Z", "+00:00")
+        ts_dt= datetime.fromisoformat(ts_str)
+        return ts_dt
+
 
 
 class MediaWikiImages:

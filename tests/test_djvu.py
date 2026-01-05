@@ -76,7 +76,7 @@ class TestDjVu(Basetest):
             for relurl, _elen, expected_bundled in self.test_tuples:
                 if not expected_bundled:
                     djvu_path = self.get_djvu(relurl)
-                    rel_path = self.config.djvu_relpath(djvu_path)
+                    rel_path = DjVuConfig.djvu_relpath(djvu_path)
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
                     djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
@@ -233,7 +233,7 @@ class TestDjVu(Basetest):
         ]
 
         for input_path, expected, description in test_cases:
-            result = self.config.djvu_relpath(input_path)
+            result = DjVuConfig.djvu_relpath(input_path)
             if self.debug:
                 print(f"\n{description}")
                 print(f"  Input:    {input_path}")
@@ -273,7 +273,7 @@ class TestDjVu(Basetest):
 
         for relurl, elen, expected_bundled in self.test_tuples:
             djvu_path = self.get_djvu(relurl)
-            rel_path = self.config.djvu_relpath(djvu_path)
+            rel_path = DjVuConfig.djvu_relpath(djvu_path)
             if self.debug:
                 print(f"getting DjVuFile for {rel_path}")
             djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)

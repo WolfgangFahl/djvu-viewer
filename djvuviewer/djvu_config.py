@@ -75,7 +75,8 @@ class DjVuConfig:
             if self.container_name is None:
                 self.container_name = "genwiki39-mw"
 
-    def djvu_relpath(self, path: str) -> str:
+    @classmethod
+    def djvu_relpath(cls, path: str) -> str:
         """Convert path to wiki image-relative format by removing './' and '/images/'."""
 
         # Look for 'images/' anywhere in the path and extract everything after it
@@ -109,7 +110,7 @@ class DjVuConfig:
 
     def djvu_abspath(self, path: str) -> str:
         """Get absolute DjVu path by prepending images_path to relative path."""
-        djvu_path = self.images_path + self.djvu_relpath(path)
+        djvu_path = self.images_path + DjVuConfig.djvu_relpath(path)
         return djvu_path
 
     def extract_and_clean_path(self, url: str) -> str:
@@ -124,7 +125,7 @@ class DjVuConfig:
         """
         # URL decode
         decoded_url = urllib.parse.unquote(url)
-        relpath = self.djvu_relpath(decoded_url)
+        relpath = DjVuConfig.djvu_relpath(decoded_url)
         return relpath
 
     @classmethod

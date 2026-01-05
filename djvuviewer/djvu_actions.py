@@ -3,9 +3,9 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+from datetime import datetime
 import os
-import shlex
+import logging
 import time
 import traceback
 from argparse import Namespace
@@ -22,6 +22,7 @@ from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.tarball import Tarball
+from validators.card import amex
 
 
 class DjVuActions:
@@ -72,6 +73,21 @@ class DjVuActions:
         # Configure processor output path
         if self.output_path:
             self.dproc.output_path = self.output_path
+        self.setup_logging()
+
+    def setup_logging(self):
+        """Configure file-based logging if log_path is set."""
+        self.logger = logging.getLogger("djvu_actions")
+        self.logger.setLevel(logging.INFO)
+        # Ensure we don't duplicate handlers
+        if not self.logger.handlers:
+            log_name=f"djvu_{datetime.now():%Y%m%d_%H%M%S}.log"
+            log_path=os.path.join(self.config.log_path,log_name)
+            fh = logging.FileHandler(log_path, mode='a', encoding='utf-8')
+            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            fh.setFormatter(formatter)
+            self.logger.addHandler(fh)
+
 
     def add_page(
         self,
@@ -155,10 +171,12 @@ class DjVuActions:
 
     def catalog_djvu(self, limit: int = 10000000) -> Tuple[List[Dict], List[Dict]]:
         """
-        Catalog DjVu files by scanning and extracting metadata.
+        Catalog DjVu files by scanning and extracting metadata
 
-        This is the first pass operation that reads DjVu files from the filesystem
-        and creates database records containing file and page information.
+
+
+        This is the first pass operation that reads DjVu files from
+        the filesystem and creates database records containing file and page information.
 
         Args:
             limit: Maximum number of pages to process before stopping
@@ -261,10 +279,10 @@ class DjVuActions:
                 )
                 image = mw_client.fetch_image(f"File:{url}")
                 url = image.url
-                url = self.config.djvu_relpath(url)
+                url = DjVuConfig.djvu_relpath(url)
 
             djvu_path = self.config.djvu_abspath(url)
-            relpath = self.config.djvu_relpath(djvu_path)
+            relpath = DjVuConfig.djvu_relpath(djvu_path)
 
             if not os.path.exists(djvu_path):
                 raise FileNotFoundError(f"File not found: {djvu_path}")

@@ -421,7 +421,7 @@ class DjVuProcessor:
                 if os.path.exists(component_path):
                     page_iso, page_size = ImageJob.get_fileinfo(component_path)
 
-            relpath = config.djvu_relpath(djvu_path)
+            relpath = DjVuConfig.djvu_relpath(djvu_path)
             # 5. Construct Page Object
             djvu_page = DjVuPage(
                 path=page_filename,
