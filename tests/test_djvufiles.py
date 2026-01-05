@@ -21,9 +21,13 @@ class TestDjVuFiles(Basetest):
         Basetest.setUp(self, debug=debug, profile=profile)
         self.config=DjVuConfig.get_instance()
         self.djvu_files=DjvuFiles(config=self.config)
-        self.limit=5000
+        self.limit=10
 
-    def testDiff(self):
+    def show_images(self,images):
+        for image in images:
+            print(json.dumps(asdict(image),indent=2))
+
+    def test_diff(self):
         """
         test diff between wiki and migration
         """
@@ -34,5 +38,17 @@ class TestDjVuFiles(Basetest):
         diff_images=self.djvu_files.get_diff("wiki", "new")
         if self.debug:
             print(f"wiki:{len(wiki_images)} new: {len(new_images)} diff:{len(diff_images)} ")
-            for image in diff_images:
-                print(json.dumps(asdict(image),indent=2))
+            self.show_images(diff_images)
+
+    def test_wikimedia_commons(self):
+        """
+        Test fetching images from Wikimedia Commons
+        """
+        url="https://commons.wikimedia.org/w"
+        name="commons"
+        try:
+            images=self.djvu_files.fetch_images(url, name, self.limit)
+            self.fail("commons will not work in Miser mode")
+            self.show_images(images)
+        except RuntimeError as error:
+            self.assertTrue("Miser" in str(error))

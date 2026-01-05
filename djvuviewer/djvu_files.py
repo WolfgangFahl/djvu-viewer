@@ -4,7 +4,6 @@ Created on 2026-01-05
 @author: wf
 """
 from typing import Dict, List, Optional
-from typing import Set
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.wiki_images import MediaWikiImage

@@ -4,9 +4,10 @@ Created on 2026-01-02
 @author: wf
 """
 
-from dataclasses import dataclass, field
+from dataclasses import field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Union
+from djvuviewer.version import Version
 
 from basemkit.yamlable import lod_storable
 from djvuviewer.djvu_config import DjVuConfig
@@ -93,7 +94,8 @@ class MediaWikiImages:
 
         # Default filters
         self.mime_types = tuple(mime_types) if mime_types else ()
-
+        # User agent
+        self.user_agent=f"{Version.name}/{Version.version}"
         # Default properties if none provided
         if aiprop is None:
             self.aiprop = ("url", "mime", "size", "timestamp", "user", "dimensions")
@@ -136,6 +138,7 @@ class MediaWikiImages:
                 mw_image = MediaWikiImage.from_dict(info_dict)
 
         return mw_image
+
 
     def fetch_allimages(
         self,
@@ -221,8 +224,15 @@ class MediaWikiImages:
         """
         Helper to execute the request and handle basic errors.
         """
+        headers = {
+            'User-Agent': f'{self.user_agent} (via {self.__class__.__name__})'
+        }
         resp = self.session.get(
-            self.api_url, params=params, timeout=self.timeout, allow_redirects=True
+            self.api_url,
+            params=params,
+            timeout=self.timeout,
+            headers=headers,
+            allow_redirects=True
         )
         resp.raise_for_status()
         data = resp.json()
