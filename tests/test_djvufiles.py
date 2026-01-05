@@ -27,6 +27,8 @@ class TestDjVuFiles(Basetest):
         """
         test diff between wiki and migration
         """
+        if not self.config.new_url:
+            return
         wiki_images=self.djvu_files.fetch_images(self.config.base_url,"wiki",limit=self.limit)
         new_images=self.djvu_files.fetch_images(self.config.new_url,"new",limit=self.limit)
         diff_images=self.djvu_files.get_diff("wiki", "new")
