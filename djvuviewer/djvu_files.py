@@ -3,12 +3,15 @@ Created on 2026-01-05
 
 @author: wf
 """
-from typing import Dict, List, Optional
+from typing import Any,Dict, List, Optional
+
 from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.wiki_images import MediaWikiImage
 
-class DjvuFiles:
+
+class DjVuFiles:
     """
     Handler for a list of DjVu Files from various MediaWiki sources.
     """
@@ -29,6 +32,12 @@ class DjvuFiles:
         # Client instances: {name_or_url: DjVuMediaWikiImages}
         self.mw_clients: Dict[str, DjVuMediaWikiImages] = {}
 
+        self.lod=None
+        # SQL db based
+        if self.config.db_path:
+            self.dvm = DjVuManager(config=self.config)
+            self.get_djvu_lod()
+
     def get_client(self, url: str, name: Optional[str] = None) -> DjVuMediaWikiImages:
         """
         Get or create a MediaWiki client. If a 'name' is provided, the client
@@ -48,8 +57,30 @@ class DjvuFiles:
 
         return self.mw_clients[key]
 
+
+    def get_djvu_lod(self) -> List[Dict[str, Any]]:
+        """
+        Retrieve all DjVu file records from the database.
+
+        Returns:
+            List of dictionaries containing DjVu file records
+        """
+        self.lod = self.dvm.query("all_djvu")
+        return self.lod
+
+    def add_to_cache(self,key:str, images:List[MediaWikiImage]):
+        # Update cache
+        self.images[key] =images
+
+        # cache lookup map
+        self.images_by_relpath[key] = {
+            img.relpath: img
+            for img in images
+            if img.relpath
+        }
+
     def fetch_images(self, url: str, name: Optional[str] = None,
-                     limit: int = 50000, refresh: bool = False) -> List[dict]:
+                     limit: int = 50000, refresh: bool = False) -> List[MediaWikiImage]:
         """
         Fetch images for a specific wiki. Can be called with just the name
         if the client was already initialized, or a fresh URL.
@@ -61,7 +92,7 @@ class DjvuFiles:
             refresh: Force API call even if cached.
 
         Returns:
-            List[dict]: The list of image metadata.
+            List[MediaWikImage]: The list of MediaWiki image metadata objects.
         """
         key = name if name else url
 
@@ -74,17 +105,7 @@ class DjvuFiles:
         # Fetch actual data
         current_images = client.fetch_allimages(limit=limit,as_objects=True)
 
-        # Update cache
-        self.images[key] = current_images
-
-        # cach lookup map
-        self.images_by_relpath[key] = {
-            img.relpath: img
-            for img in current_images
-            if img.relpath
-        }
-
-
+        self.add_to_cache(key,current_images)
         return current_images
 
     def get_diff(self, name_a: str, name_b: str) -> List[MediaWikiImage]:

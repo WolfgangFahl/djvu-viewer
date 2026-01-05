@@ -7,11 +7,11 @@ Created on 04.01.2026
 from argparse import Namespace
 
 from basemkit.profiler import Profiler
-
 from djvuviewer.djvu_actions import DjVuActions
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
+
+from djvuviewer.djvu_files import DjVuFiles
 
 
 class DjVuContext:
@@ -23,7 +23,7 @@ class DjVuContext:
         self.config = config
         self.args = args
         # Initialize manager and processor
-        self.dvm = DjVuManager(config=self.config)
+        self.djvu_files = DjVuFiles(config=self.config)
         self.dproc = DjVuProcessor(
             debug=self.args.debug,
             verbose=self.args.verbose,
@@ -37,7 +37,7 @@ class DjVuContext:
         self.actions = DjVuActions(
             config=self.config,
             args=self.args,
-            dvm=self.dvm,
+            djvu_files=self.djvu_files,
             dproc=self.dproc,
             images_path=self.args.images_path,
             output_path=self.args.output_path,

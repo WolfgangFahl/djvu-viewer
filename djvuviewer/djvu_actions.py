@@ -3,25 +3,25 @@ Created on 2026-01-02
 
 @author: wf
 """
-from datetime import datetime
-import os
-import logging
-import time
-import traceback
 from argparse import Namespace
 from dataclasses import asdict
+from datetime import datetime
+import logging
+import os
+import time
+import traceback
 from typing import Any, Dict, List, Optional, Tuple
-
-from lodstorage.lod import LOD
-from tqdm import tqdm
 
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
-from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.tarball import Tarball
+from djvuviewer.djvu_files import DjVuFiles
+from lodstorage.lod import LOD
+from tqdm import tqdm
+
 
 
 class DjVuActions:
@@ -36,7 +36,7 @@ class DjVuActions:
         self,
         config: DjVuConfig,
         args: Namespace,
-        dvm: DjVuManager,
+        djvu_files:DjVuFiles,
         dproc: DjVuProcessor,
         images_path: str,
         output_path: Optional[str] = None,
@@ -50,7 +50,7 @@ class DjVuActions:
         Args:
             config: DjVu configuration object
             args: command line arguments
-            dvm: DjVu manager for database operations
+            djvu_files: DjVuFiles for images retrieval
             dproc: DjVu processor for file operations
             images_path: Base path for DjVu files
             output_path: Path for output files (PNG, tar, etc.)
@@ -60,7 +60,7 @@ class DjVuActions:
         """
         self.config = config
         self.args = args
-        self.dvm = dvm
+        self.djvu_files = djvu_files
         self.dproc = dproc
         self.images_path = images_path
         self.output_path = output_path
@@ -133,15 +133,6 @@ class DjVuActions:
         page_lod.append(row)
         return dpage
 
-    def get_djvu_lod(self) -> List[Dict[str, Any]]:
-        """
-        Retrieve all DjVu file records from the database.
-
-        Returns:
-            List of dictionaries containing DjVu file records
-        """
-        lod = self.dvm.query("all_djvu")
-        return lod
 
     def get_djvu_files(
         self, djvu_lod: List[Dict[str, Any]], url: Optional[str] = None
@@ -184,22 +175,14 @@ class DjVuActions:
             A tuple of (djvu_lod, page_lod) containing the list of DjVu records
             and page records respectively
         """
-        # @FIXME bootstrap differently e.g. directly from wiki images
-        # bootstrap_dvm = DjVuManager(config=self.config)
-        # lod = bootstrap_dvm.query("all_djvu")
-        mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(
-            self.config.base_url
-        )
         total = 0
         start_time = time.time()
         djvu_lod = []
         page_lod = []
-        images = mw_client.fetch_allimages(limit)
+        images = self.djvu_files.fetch_images(self.config.base_url,name="wiki",limit=limit)
 
-        for index, r in enumerate(images, start=1):
-            url = r.get("url")
-            path = self.config.extract_and_clean_path(url)
-            djvu_path = self.config.djvu_abspath(path)
+        for index, image in enumerate(images, start=1):
+            djvu_path = self.config.djvu_abspath(image.relpath)
 
             if not djvu_path or not os.path.exists(djvu_path):
                 self.errors.append(Exception(f"missing {djvu_path}"))
@@ -213,12 +196,12 @@ class DjVuActions:
             for document, page in self.dproc.yield_pages(djvu_path):
                 page_count = len(document.pages)
                 page_index += 1
-                self.add_page(page_lod, path, page_index, page)
+                self.add_page(page_lod, image.relpath, page_index, page)
                 bundled = document.type == 2
 
             iso_date, filesize = ImageJob.get_fileinfo(djvu_path)
             djvu = DjVu(
-                path=path,
+                path=image.relpath,
                 page_count=page_count,
                 bundled=bundled,
                 iso_date=iso_date,
@@ -235,7 +218,7 @@ class DjVuActions:
             elapsed = time.time() - start_time
             pages_per_sec = total / elapsed if elapsed > 0 else 0
             print(
-                f"{index:4d} {page_count:4d} {total:7d} {pages_per_sec:7.0f} pages/s: {path}"
+                f"{index:4d} {page_count:4d} {total:7d} {pages_per_sec:7.0f} pages/s: {image.relpath}"
             )
 
         return djvu_lod, page_lod

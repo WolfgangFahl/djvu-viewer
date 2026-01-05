@@ -5,7 +5,7 @@ Created on 2026-01-05
 """
 from basemkit.basetest import Basetest
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_files import DjvuFiles
+from djvuviewer.djvu_files import DjVuFiles
 from dataclasses import asdict
 import json
 
@@ -20,7 +20,7 @@ class TestDjVuFiles(Basetest):
         """
         Basetest.setUp(self, debug=debug, profile=profile)
         self.config=DjVuConfig.get_instance()
-        self.djvu_files=DjvuFiles(config=self.config)
+        self.djvu_files=DjVuFiles(config=self.config)
         self.limit=10
 
     def show_images(self,images):
@@ -39,6 +39,12 @@ class TestDjVuFiles(Basetest):
         if self.debug:
             print(f"wiki:{len(wiki_images)} new: {len(new_images)} diff:{len(diff_images)} ")
             self.show_images(diff_images)
+
+    def test_lod(self):
+        """
+        Test fetching images from index database
+        """
+        self.assertGreaterEqual(len(self.djvu_files.lod),4000)
 
     def test_wikimedia_commons(self):
         """
