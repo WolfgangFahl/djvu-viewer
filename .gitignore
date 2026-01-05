@@ -207,4 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 # nicegui
-djvuviewer.nicegui
+djvuviewer/.nicegui
