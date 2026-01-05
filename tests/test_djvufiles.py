@@ -44,7 +44,8 @@ class TestDjVuFiles(Basetest):
         """
         Test fetching images from index database
         """
-        self.assertGreaterEqual(len(self.djvu_files.lod),4000)
+        if not self.inPublicCI():
+            self.assertGreaterEqual(len(self.djvu_files.lod),4000)
 
     def test_wikimedia_commons(self):
         """
