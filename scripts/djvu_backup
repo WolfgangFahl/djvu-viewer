@@ -1,0 +1,177 @@
+#!/bin/bash
+#
+# WF 2025-01-04
+#
+# Script to update DjVu database with results from the bundling operation
+#
+# https://genwiki39.genealogy.net/sqlite/djvu/DjVu/query/ has the web
+# query interface
+#
+# Table structure:
+#
+# CREATE TABLE DjVu (
+#  path TEXT PRIMARY KEY,
+#  page_count INTEGER,
+#  bundled BOOLEAN,
+#  iso_date TEXT,
+#  filesize INTEGER,
+#  tar_iso_date TEXT,
+#  tar_filesize INTEGER
+#)
+# Usage: set_djvub <filename_stem>
+
+# PATHS
+DB="/home/wf/djvu/genwiki_djvu.db"
+BACKUP_DIR="/var/www/mediawiki/sites/genwiki.genealogy.net/djvu/backup"
+BASE_PATH="/var/www/mediawiki/sites/genwiki.genealogy.net"
+
+# show usage
+usage() {
+    cat << EOF
+Usage: $0 [OPTIONS] <filename_stem>
+
+Options:
+    -q           Quiet mode - SQL only
+    -a, --all    Process all files
+    -e, --exec   Execute SQL statements
+    -l, --list   show bundle backups
+
+Examples:
+    $0 VZ1885_Hoeningen-ZB07
+    $0 -q VZ1885_Hoeningen-ZB07
+    $0 -a
+    $0 -a -e
+
+EOF
+    exit 1
+}
+
+
+# List zip contents
+# $1: ZIP_FILE
+list_zip() {
+    local ZIP_FILE="$1"
+    echo "Listing contents of: $ZIP_FILE"
+    if [ ! -f "$ZIP_FILE" ]; then
+        echo "ERROR: ZIP file not found: $ZIP_FILE"
+        exit 1
+    fi
+    unzip -l "$ZIP_FILE"
+}
+
+# Execute SQL with timeout handling
+# $1: SQL statement
+sql() {
+    sqlite3 -cmd ".timeout $TIMEOUT" "$DB" "$1"
+}
+
+# current SQLite record
+# $1: the DJVU FILE
+select_current() {
+    local DJVU_FILE="$1"
+    sql "SELECT path, bundled, filesize FROM DjVu WHERE path LIKE '%/$DJVU_FILE' LIMIT 1;"
+}
+
+# Get actual file size from path
+#  $1: db_path
+get_actual_size() {
+    local db_path="$1"
+    local full_path="$BASE_PATH$db_path"
+
+    if [ ! -f "$full_path" ]; then
+        echo "ERROR: File not found: $full_path"
+        return 1
+    fi
+
+    stat -f%z "$full_path" 2>/dev/null || stat -c%s "$full_path" 2>/dev/null
+}
+
+# Update database with bundled information
+#  $1: db_path
+#  $2: zip_total_size
+update_database() {
+    local db_path="$1"
+    local zip_total="$2"
+    local sql="UPDATE DjVu SET bundled = 1, filesize = $zip_total WHERE path = '$db_path';"
+
+    if [ $EXEC -eq 1 ]; then
+        # Execute with timeout
+        if sql "$sql" 2>&1; then
+            [ $QUIET -eq 0 ] && echo "✓ Executed: $sql"
+            return 0
+        else
+            echo "✗ ERROR executing: $sql" >&2
+            return 1
+        fi
+    else
+        # Dry-run mode
+        echo "$sql"
+    fi
+}
+
+# update the database
+#
+# $1: DJVU_FILE
+update() {
+    result=$(select_current "$1")
+    if [ -n "$result" ]; then
+      db_path=$(echo "$result" | cut -d'|' -f1)
+      actual_size=$(get_actual_size "$db_path")
+      update_database $db_path $actual_size
+   fi
+}
+
+# process a single zip file
+# $1 zip file
+process_zip() {
+  local ZIP_FILE="$1"
+  local STEM=$(basename "$ZIP_FILE" .zip)
+  local DJVU_FILE="$STEM.djvu"
+  # Main execution
+  case $QUIET in
+    0)
+      list_zip "$ZIP_FILE"
+      echo "Current database entry for: $DJVU_FILE"
+      result=$(select_current "$DJVU_FILE")
+      echo "$result"
+      update "$DJVU_FILE"
+      ;;
+    1)
+      update "$DJVU_FILE"
+     ;;
+  esac
+}
+
+# PARAMS
+QUIET=0
+EXEC=0
+TIMEOUT=10000
+
+if [[ $# -eq 0 ]];then usage; fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage;;
+    -e|--exec)
+      EXEC=1
+      sql "PRAGMA journal_mode=WAL;"
+      ;;
+    -q|--quiet) QUIET=1;;
+    -l|--list)
+      for zip_file in "$BACKUP_DIR"/*.zip; do
+        STEM=$(basename $zip_file .zip)
+	echo $STEM
+      done
+      ;;
+    -a|--all)
+      for zip_file in "$BACKUP_DIR"/*.zip; do
+        [ -f "$zip_file" ] && process_zip "$zip_file"
+      done
+      exit 0
+      ;;
+    *)
+     STEM="$1"
+     process_zip "$BACKUP_DIR/${STEM}.zip"
+     ;;
+  esac
+  shift
+done
