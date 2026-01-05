@@ -36,7 +36,6 @@ class DjVuFiles:
         # SQL db based
         if self.config.db_path:
             self.dvm = DjVuManager(config=self.config)
-            self.get_djvu_lod()
 
     def get_client(self, url: str, name: Optional[str] = None) -> DjVuMediaWikiImages:
         """
