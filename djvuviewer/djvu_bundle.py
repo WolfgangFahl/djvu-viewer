@@ -166,8 +166,8 @@ class DjVuBundle:
 
                     try:
                         png_data = Tarball.read_from_tar(tarball_path, png_file)
-                        with Image.open(io.BytesIO(png_data)) as img:
-                            actual_width, actual_height = img.size
+                        image_conv = ImageConverter(png_data)
+                        actual_width, actual_height = image_conv.size
 
                         if actual_width != expected_width:
                             self._add_error(

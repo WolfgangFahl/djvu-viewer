@@ -14,7 +14,7 @@ class ImageConverter:
     Converter for image formats with DPI and scale handling
     """
 
-    def __init__(self, png_data: bytes, dpi: int):
+    def __init__(self, png_data: bytes, dpi: int=None):
         """
         Initialize the image converter
 
@@ -24,6 +24,24 @@ class ImageConverter:
         """
         self.png_data = png_data
         self.dpi = dpi
+        # Store the PIL Image object for reuse
+        self._img = Image.open(io.BytesIO(png_data))
+
+    @property
+    def size(self):
+        """Get image size (width, height)"""
+        return self._img.size
+
+    @property
+    def width(self):
+        """Get image width"""
+        return self._img.width
+
+    @property
+    def height(self):
+        """Get image height"""
+        return self._img.height
+
 
     @classmethod
     def convert_ppm_to_png(cls, ppm_path: str, png_path: str) -> None:
@@ -47,7 +65,7 @@ class ImageConverter:
             JPG image data as bytes
         """
         # Open image from bytes
-        img = Image.open(io.BytesIO(self.png_data))
+        img = self._img.copy()
 
         # Determine scaling factor
         if scale is not None:

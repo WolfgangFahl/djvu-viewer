@@ -3,7 +3,7 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+import json
 import datetime
 from dataclasses import asdict
 
@@ -39,17 +39,23 @@ class TestMediaWikiImages(Basetest):
         image_dict = asdict(image)
         if self.debug:
             print(image)
-            print(image_dict)
+            print(json.dumps(image_dict,indent=2))
         expected = {
-            "name": "Datei:AB1938 Heessen-Geschi.djvu",
-            "url": "https://wiki.genealogy.net/images//0/0c/AB1938_Heessen-Geschi.djvu",
-            "mime": "image/vnd.djvu",
-            "size": 161771,
-            "user": "KlausErdmann",
-            "timestamp": datetime.datetime(2008, 5, 17, 10, 0, 3),
-            "description_url": "https://wiki.genealogy.net/Datei:AB1938_Heessen-Geschi.djvu",
-            "height": 2689,
-            "width": 2095,
+          "url": "https://wiki.genealogy.net/images//0/0c/AB1938_Heessen-Geschi.djvu",
+          "mime": "image/vnd.djvu",
+          "size": 161771,
+          "user": "KlausErdmann",
+          "timestamp": "2008-05-17T10:00:03Z",
+          "description_url": None,
+          "height": 2689,
+          "width": 2095,
+          "pagecount": 3,
+          "descriptionurl": "https://wiki.genealogy.net/Datei:AB1938_Heessen-Geschi.djvu",
+          "descriptionshorturl": "https://wiki.genealogy.net/index.php?curid=499473",
+          "ns": None,
+          "title": "Datei:AB1938 Heessen-Geschi.djvu",
+          "relpath": "/0/0c/AB1938_Heessen-Geschi.djvu",
+          "filename": "AB1938 Heessen-Geschi.djvu"
         }
         self.assertEqual(image_dict, expected)
 

@@ -34,10 +34,15 @@ class MediaWikiImage:
     title: Optional[str]=None
     # key
     relpath: Optional[str] = field(init=False, default=None)
+    filename: Optional[str] = field(init=False, default=None)
 
     def __post_init__(self):
         if self.url:
             self.relpath=DjVuConfig.djvu_relpath(self.url)
+        if self.title:
+            # Split on colon and take everything after the last colon
+            # This handles cases like "Project:File:Example.jpg" or "File talk:Example.jpg"
+            self.filename=self.title.split(':')[-1].strip()
 
     @property
     def timestamp_datetime(self):
