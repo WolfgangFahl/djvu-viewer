@@ -35,6 +35,7 @@ class DjVuCatalog:
             browse_wiki: If True, browse MediaWiki API; if False, use local DB
         """
         self.solution = solution
+        self.progress_row = None
         self.progressbar = None
         self.config = config
         self.browse_wiki = browse_wiki
@@ -54,14 +55,14 @@ class DjVuCatalog:
         self.limit = 100 if self.browse_wiki else 10000
         self.images_url = self.config.base_url
 
-    def get_view_lod(self, lod: list) -> list:
+    def get_view_lod(self):
         """Convert records to view format with row numbers and links."""
         view_lod = []
-        for i, record in enumerate(lod):
+        for i, record in enumerate(self.lod):
             index = i + 1
             view_record = self.get_view_record(record, index)
             view_lod.append(view_record)
-        return view_lod
+        self.view_lod=view_lod
 
     def get_view_record(self, record: dict, index: int) -> dict:
         """Delegate to appropriate handler based on record type."""
@@ -147,6 +148,8 @@ class DjVuCatalog:
         try:
             if self.browse_wiki:
                 # Setup and show progress bar for API fetch
+                if self.progress_row:
+                    self.progress_row.visible=True
                 if self.progressbar:
                     self.progressbar.total = self.limit
                     self.progressbar.reset()
@@ -167,8 +170,7 @@ class DjVuCatalog:
                     lod = self.dvm.query("all_djvu")
         except Exception as ex:
             self.solution.handle_exception(ex)
-
-        return lod
+        self.lod=lod
 
     def configure_grid_options(self):
         """
@@ -187,7 +189,7 @@ class DjVuCatalog:
         """
         try:
             # Fetch data
-            self.lod = await run.io_bound(self.get_query_lod)
+            await run.io_bound(self.get_query_lod)
 
             if not self.lod:
                 with self.solution.container:
@@ -195,9 +197,9 @@ class DjVuCatalog:
                 return
 
             # Convert to view format with links
-            self.view_lod = self.get_view_lod(self.lod)
+            await run.io_bound(self.get_view_lod)
 
-            if self.grid_row:
+            if self.grid_row and self.view_lod:
                 # Clear and update grid
                 self.grid_row.clear()
                 with self.grid_row:
@@ -218,6 +220,10 @@ class DjVuCatalog:
 
         except Exception as ex:
             self.solution.handle_exception(ex)
+        finally:
+            with self.solution.container:
+                if self.progress_row:
+                    self.progress_row.visible=False
 
     def update_limit(self, new_limit):
         """Handler for limit dropdown change."""
@@ -279,6 +285,7 @@ class DjVuCatalog:
                 icon="refresh",
                 on_click=self.on_refresh,
             ).tooltip("Refresh catalog")
+        with ui.row() as self.progress_row:
             self.progressbar = NiceguiProgressbar(
                 total=1,  # Will be updated by get_djvu_file
                 desc="Loading DjVu Images",

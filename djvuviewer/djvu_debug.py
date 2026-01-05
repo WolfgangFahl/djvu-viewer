@@ -57,6 +57,13 @@ class DjVuDebug:
         self.load_task = None
         self.zip_size = 0
         self.bundle_size = 0
+
+        # options
+        self.update_index_db= True
+        self.create_package = False
+        self.package_type = 'tar'
+
+
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
         self.bundle_state_container = None
@@ -189,6 +196,12 @@ class DjVuDebug:
 
             # Bundled status - just a disabled checkbox
             ui.checkbox("Bundled", value=self.djvu_file.bundled).props("disable")
+
+            # bundling options
+            self.bundling_enabled = not self.djvu_file.bundled
+            ui.checkbox("Update Index DB").bind_value(self, 'update_index_db').bind_enabled_from(self, 'bundling_enabled')
+            ui.checkbox("Create DjVuViewer package").bind_value(self, 'create_package').bind_enabled_from(self, 'bundling_enabled')
+            ui.radio(['zip', 'tar']).props('inline').bind_value(self, 'package_type').bind_enabled_from(self, 'bundling_enabled')
 
             # Backup file - just a disabled checkbox and download link
             backup_exists = os.path.exists(self.djvu_bundle.backup_file)
