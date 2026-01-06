@@ -61,7 +61,8 @@ class DjVuDebug:
         # options
         self.update_index_db = True
         self.create_package = False
-        self.package_type = "package"
+        self.package_type = self.config.package_mode
+        self.bundling_enabled = False
 
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
@@ -188,25 +189,12 @@ class DjVuDebug:
             with self.bundle_state_container:
                 ui.label("No bundle information available")
             return
-
+        self.bundling_enabled = not self.djvu_file.bundled
         self.bundle_state_container.clear()
         with self.bundle_state_container:
             ui.label("Bundling State").classes("text-subtitle1 mb-2")
-
             # Bundled status - just a disabled checkbox
             ui.checkbox("Bundled", value=self.djvu_file.bundled).props("disable")
-
-            # bundling options
-            self.bundling_enabled = not self.djvu_file.bundled
-            ui.checkbox("Update Index DB").bind_value(
-                self, "update_index_db"
-            ).bind_enabled_from(self, "bundling_enabled")
-            ui.checkbox("Create DjVuViewer package").bind_value(
-                self, "create_package"
-            ).bind_enabled_from(self, "bundling_enabled")
-            ui.radio(["zip", "package"]).props("inline").bind_value(
-                self, "package_type"
-            ).bind_enabled_from(self, "bundling_enabled")
 
             # Backup file - just a disabled checkbox and download link
             backup_exists = os.path.exists(self.djvu_bundle.backup_file)
@@ -245,7 +233,7 @@ class DjVuDebug:
         # Add Links if config exists
         if hasattr(self, "config") and hasattr(self.config, "url_prefix"):
             base_url = f"{self.config.url_prefix}/djvu"
-
+            backlink=""
             # View Link
             if self.mw_image_new.description_url:
                 backlink = (
@@ -280,8 +268,10 @@ class DjVuDebug:
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
         try:
+            self.progress_row.visible=True
             # Load file metadata (blocking IO)
             await run.io_bound(self.load_djvu_file)
+            self.progress_row.visible=False
             # Convert pages to view format
             self.view_lod = self.get_view_lod()
 
@@ -401,12 +391,24 @@ class DjVuDebug:
                 on_click=self.on_bundle,
             ).tooltip("bundle the shown DjVu file")
             self.bundle_button.enabled = self.authenticated()
-            self.progressbar = NiceguiProgressbar(
-                total=1,  # Will be updated by get_djvu_file
-                desc="Loading DjVu",
-                unit="pages",
-            )
-        # side by side cards for bundle infos left: djvu right: state
+            ui.checkbox("Create archive package").bind_value(
+                self, "create_package"
+            ).bind_enabled_from(self, "bundling_enabled")
+            ui.radio(["zip", "tar"]).props("inline").bind_value(
+                self, "package_type"
+            ).bind_enabled_from(self, "bundling_enabled")
+            # bundling options
+            ui.checkbox("Update Index DB").bind_value(
+                self, "update_index_db"
+            ).bind_enabled_from(self, "bundling_enabled")
+
+            with ui.row() as self.progress_row:
+                self.progressbar = NiceguiProgressbar(
+                    total=1,  # Will be updated by get_djvu_file
+                    desc="Loading DjVu",
+                    unit="pages",
+                )
+            # side by side cards for bundle infos left: djvu right: state
         self.card_row = ui.row().classes("w-full")
         # Content row for all content
         self.content_row = ui.row()

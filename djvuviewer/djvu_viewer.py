@@ -161,13 +161,14 @@ class DjVuViewer:
             DjVuViewPage: dataclass instance with file,page and image_url
         """
         path = self.sanitize_path(path)
+        package_filename= f"{Path(path).stem}.{self.package_mode.ext}"
         package_file = (
-            Path(self.config.package_path) / f"{Path(path).stem}{self.package_mode.ext}"
+            Path(self.config.package_path) / package_filename
         )
         yaml_file = f"{Path(path).stem}.yaml"
 
         if not package_file.exists():
-            raise HTTPException(status_code=404, detail=f"Package {path} not found")
+            raise HTTPException(status_code=404, detail=f"Package {package_filename} for {path} not found")
 
         try:
             yaml_data = Packager.read_from_package(package_file, yaml_file).decode(
