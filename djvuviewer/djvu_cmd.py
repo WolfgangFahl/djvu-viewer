@@ -185,7 +185,7 @@ class DjVuCmd(BaseCmd):
         self.config.backup_path = self.args.backup_path
         self.config.container_name = self.args.container_name
         self.context = DjVuContext(self.config, self.args)
-        self.actions = self.context.actions
+        self.actions = DjVuContext(context=self.context)
         self.profiler = self.context.profiler
 
         # Dispatch to command handler

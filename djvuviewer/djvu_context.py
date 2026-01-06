@@ -37,8 +37,4 @@ class DjVuContext:
         )
         self.profiler = Profiler(self.args.command)
 
-        # Initialize actions handler
-        self.actions = DjVuActions(
-            context=self
-        )
 
