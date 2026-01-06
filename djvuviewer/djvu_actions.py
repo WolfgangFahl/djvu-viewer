@@ -536,7 +536,7 @@ class DjVuActions:
                     package_file = os.path.join(self.output_path, prefix + self.package_mode.ext)
 
                     if not os.path.isfile(package_file):
-                        raise Exception(f"package file for {path} missing")
+                        raise Exception(f"package file {package_file} for {prefix} missing")
 
                     package_iso_date, package_filesize = ImageJob.get_fileinfo(package_file)
                     if djvu_record:
