@@ -4,13 +4,14 @@ Created on 2025-02-25
 @author: wf
 """
 
+from argparse import ArgumentParser, Namespace
 import argparse
 import logging
-from argparse import ArgumentParser, Namespace
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
-
+from basemkit.profiler import Profiler
+from djvuviewer.djvu_actions import DjVuActions
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.version import Version
@@ -185,8 +186,7 @@ class DjVuCmd(BaseCmd):
         self.config.backup_path = self.args.backup_path
         self.config.container_name = self.args.container_name
         self.context = DjVuContext(self.config, self.args)
-        self.actions = DjVuContext(context=self.context)
-        self.profiler = self.context.profiler
+        self.actions = DjVuActions(context=self.context)
 
         # Dispatch to command handler
         command_handlers = {
@@ -199,6 +199,7 @@ class DjVuCmd(BaseCmd):
 
         handler = command_handlers.get(self.args.command)
         if handler:
+            self.profiler = Profiler(self.args.command)
             handler()
             handled = True
         else:

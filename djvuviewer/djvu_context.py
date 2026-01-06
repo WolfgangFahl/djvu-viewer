@@ -34,6 +34,5 @@ class DjVuContext:
             max_workers=self.args.max_workers,
             pngmode=self.args.pngmode,
         )
-        self.profiler = Profiler(self.args.command)
 
 

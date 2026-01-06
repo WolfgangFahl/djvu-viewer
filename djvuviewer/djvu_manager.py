@@ -100,7 +100,7 @@ class DjVuManager:
         if not any(f"tar_{field}" in columns for field in fields):
             return  # Already migrated or new database
 
-        print(f"Migrating {table_name} from tar to generic package ...")
+        print(f"Migrating {table_name} index table from tar to generic package ...")
         # Rename columns
         for field in fields:
             old_name = f"tar_{field}"

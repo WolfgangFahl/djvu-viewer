@@ -3,6 +3,7 @@
 	<name>djvu-viewer</name>
 	<comment></comment>
 	<projects>
+		<project>pybasemkit</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

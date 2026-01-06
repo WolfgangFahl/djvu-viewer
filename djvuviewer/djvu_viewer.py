@@ -7,18 +7,18 @@ Created on 2025-02-25
 
 import logging
 import mimetypes
-import traceback
 from pathlib import Path
+import traceback
 from typing import Optional, Tuple
-
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, Response
-from fastapi.staticfiles import StaticFiles
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile, DjVuViewPage
 from djvuviewer.image_convert import ImageConverter
-from djvuviewer.packager import PackageMode, Packager
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
+
+from djvuviewer.packager import Packager, PackageMode
 
 
 class DjVuViewer:
@@ -39,7 +39,7 @@ class DjVuViewer:
         self.config = config
         self.url_prefix = self.config.url_prefix.rstrip("/")
         self.app = app
-        self.package_mode = self.config.package_mode
+        self.package_mode = PackageMode.from_name(self.config.package_mode)
 
         if not DjVuViewer._static_mounted:
             app.mount(
@@ -167,7 +167,7 @@ class DjVuViewer:
         yaml_file = f"{Path(path).stem}.yaml"
 
         if not package_file.exists():
-            raise HTTPException(status_code=404, detail="Package not found")
+            raise HTTPException(status_code=404, detail=f"Package {path} not found")
 
         try:
             yaml_data = Packager.read_from_package(package_file, yaml_file).decode(

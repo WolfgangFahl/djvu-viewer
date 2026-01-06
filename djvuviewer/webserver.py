@@ -90,14 +90,14 @@ class DjVuViewerWebServer(InputWebserver):
             return file_response
 
         @app.get("/djvu/download/{path:path}")
-        def download_tarball(path: str) -> FileResponse:
+        def download_package(path: str) -> FileResponse:
             """
-            Serves the complete tarball for download.
+            Serves the complete package for download.
 
             Args:
                 path (str): The path to the DjVu document.
             """
-            response = self.djvu_viewer.get_tarball_response(path)
+            response = self.djvu_viewer.get_package_response(path)
             return response
 
         @app.get("/djvu/{path:path}/page/{scale:float}/{pageno:int}.{ext:str}")
@@ -248,7 +248,8 @@ class DjVuSolution(InputWebSolution):
                 )
             backparam = f"?backlink={backlink}" if backlink else ""
             local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
-            view_record["tarball"] = Link.create(url=local_url, text=filename)
+            archive_name=filename.replace(".djvu","."+self.djvu_config.package_mode)
+            view_record["Package"] = Link.create(url=local_url, text=archive_name)
 
             debug_url = f"{config.url_prefix}/djvu/debug/{filename}"
             view_record["debug"] = Link.create(url=debug_url, text="🔍")
@@ -266,7 +267,7 @@ class DjVuSolution(InputWebSolution):
         #    self.link_button(name="wikis", icon_name="menu_book", target="/wikis")
 
         with self.header:
-            self.link_button("DjVu Tarballs", "/djvu/catalog", "library_books")
+            self.link_button("DjVu Archives", "/djvu/catalog", "library_books")
             self.link_button("DjVu Wiki Images", "/djvu/browse", "image")
 
     async def show_login(self):
