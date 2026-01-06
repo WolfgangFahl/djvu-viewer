@@ -12,7 +12,7 @@ from typing import List, Optional
 import numpy
 from basemkit.yamlable import lod_storable
 
-from djvuviewer.tarball import Tarball
+from djvuviewer.packager import Packager
 
 
 @lod_storable
@@ -75,8 +75,8 @@ class DjVu:
     bundled: bool = False
     iso_date: Optional[str] = None
     filesize: Optional[int] = None
-    tar_filesize: Optional[int] = None
-    tar_iso_date: Optional[str] = None
+    package_filesize: Optional[int] = None
+    package_iso_date: Optional[str] = None
     dir_pages: Optional[int] = None
 
     @classmethod
@@ -86,8 +86,8 @@ class DjVu:
             path="images/b/b3/AB1951-Suenninghausen.djvu",
             iso_date="2009-06-02",
             filesize=85,
-            tar_filesize=0,
-            tar_iso_date="2026-01-02",
+            package_filesize=0,
+            package_iso_date="2026-01-02",
             page_count=4,
             dir_pages=5,
             bundled=False,
@@ -117,11 +117,13 @@ class DjVuFile(DjVu):
         return None
 
     @classmethod
-    def from_tarball(cls, tarball_path: Path, yaml_filename: str) -> "DjVuFile":
+    def from_package(cls, package_path: Path, yaml_filename: str) -> "DjVuFile":
         """
-        (re)-instantiate me from a YAML serialization in a tarball
+        (re)-instantiate me from a YAML serialization in a package
         """
-        yaml_data = Tarball.read_from_tar(tarball_path, yaml_filename).decode("utf-8")
+        yaml_data = Packager.read_from_package(package_path, yaml_filename).decode(
+            "utf-8"
+        )
         djvu_file = cls.from_yaml(yaml_data)
         return djvu_file
 

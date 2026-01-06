@@ -29,18 +29,23 @@ class DjVuConfig:
 
     # singleton
     _instance: Optional["DjVuConfig"] = None
-    is_example:bool=False
-    tarball_path: Optional[str] = None # target path for viewer files in tar or zip format
-    images_path: Optional[str] = None # MediaWiki images directory
-    db_path: Optional[str] = None # full Path for the djvu index database
-    queries_path: Optional[str] = None # Path for YAML files with named parameterized queries
+    is_example: bool = False
+    package_path: Optional[str] = (
+        None  # package path for viewer files in tar or zip format
+    )
+    images_path: Optional[str] = None  # MediaWiki images directory
+    db_path: Optional[str] = None  # full Path for the djvu index database
+    queries_path: Optional[str] = (
+        None  # Path for YAML files with named parameterized queries
+    )
     backup_path: Optional[str] = None  # Path for bundle backups
-    log_path: Optional[str]=None # Path for log files
+    log_path: Optional[str] = None  # Path for log files
     container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
     new_url: Optional[str] = None
-    url_prefix: Optional[str] = ""  # URL prefix for proxied deployments (e.g., "/djvu-viewer")
-
+    url_prefix: Optional[str] = (
+        ""  # URL prefix for proxied deployments (e.g., "/djvu-viewer")
+    )
 
     def __post_init__(self):
         """
@@ -50,21 +55,26 @@ class DjVuConfig:
         if self.queries_path is None:
             self.queries_path = os.path.join(examples_path, "djvu_queries.yaml")
         if self.is_example:
-            self.tarball_path = os.path.join(examples_path, "djvu_images")
+            self.package_path = os.path.join(examples_path, "djvu_images")
             self.images_path = os.path.join(examples_path, "images")
             self.db_path = os.path.join(examples_path, "djvu_data.db")
             self.backup_path = os.path.join(examples_path, "backup")
             # Create log directory for example configuration
-            self.log_path="/tmp/djvu-viewer/log"
+            self.log_path = "/tmp/djvu-viewer/log"
             os.makedirs(self.log_path, exist_ok=True)
         else:
             # List of required fields to check
-            required_fields = ["tarball_path", "images_path", "db_path", "backup_path", "log_path"]
+            required_fields = [
+                "package_path",
+                "images_path",
+                "db_path",
+                "backup_path",
+                "log_path",
+            ]
 
             # Check which required fields are missing
             missing_fields = [
-                field for field in required_fields
-                if not getattr(self, field, None)
+                field for field in required_fields if not getattr(self, field, None)
             ]
 
             if missing_fields:

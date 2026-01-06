@@ -10,7 +10,6 @@ from lodstorage.sql import SQLDB
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.multilang_querymanager import MultiLanguageQueryManager
 
-
 class DjVuManager:
     """
     manager for DjVu files
@@ -86,3 +85,27 @@ class DjVuManager:
             replace=True,  # avoid UNIQUE constraint errors
         )
         profiler.time()
+
+    def migrate_to_package_fields(self, table_name: str = "djvu"):
+        """
+        Migrate tar-specific fields to package-generic fields if needed.
+        """
+        # Check if old columns exist
+        cursor = self.sql_db.c.execute(f"PRAGMA table_info({table_name})")
+        columns = [row[1] for row in cursor.fetchall()]
+
+        fields = ["filesize", "iso_date"]
+
+        # Check if migration needed
+        if not any(f"tar_{field}" in columns for field in fields):
+            return  # Already migrated or new database
+
+        print(f"Migrating {table_name} from tar to generic package ...")
+        # Rename columns
+        for field in fields:
+            old_name = f"tar_{field}"
+            new_name = f"package_{field}"
+            if old_name in columns:
+                self.sql_db.c.execute(f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}")
+
+        self.sql_db.c.commit()

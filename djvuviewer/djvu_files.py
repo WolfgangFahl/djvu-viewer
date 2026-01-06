@@ -3,7 +3,8 @@ Created on 2026-01-05
 
 @author: wf
 """
-from typing import Any,Dict, List, Optional
+
+from typing import Any, Dict, List, Optional
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
@@ -32,7 +33,7 @@ class DjVuFiles:
         # Client instances: {name_or_url: DjVuMediaWikiImages}
         self.mw_clients: Dict[str, DjVuMediaWikiImages] = {}
 
-        self.lod=None
+        self.lod = None
         # SQL db based
         if self.config.db_path:
             self.dvm = DjVuManager(config=self.config)
@@ -56,7 +57,6 @@ class DjVuFiles:
 
         return self.mw_clients[key]
 
-
     def get_djvu_lod(self) -> List[Dict[str, Any]]:
         """
         Retrieve all DjVu file records from the database.
@@ -67,19 +67,22 @@ class DjVuFiles:
         self.lod = self.dvm.query("all_djvu")
         return self.lod
 
-    def add_to_cache(self,key:str, images:List[MediaWikiImage]):
+    def add_to_cache(self, key: str, images: List[MediaWikiImage]):
         # Update cache
-        self.images[key] =images
+        self.images[key] = images
 
         # cache lookup map
         self.images_by_relpath[key] = {
-            img.relpath: img
-            for img in images
-            if img.relpath
+            img.relpath: img for img in images if img.relpath
         }
 
-    def fetch_images(self, url: str, name: Optional[str] = None,
-                     limit: int = 50000, refresh: bool = False) -> List[MediaWikiImage]:
+    def fetch_images(
+        self,
+        url: str,
+        name: Optional[str] = None,
+        limit: int = 50000,
+        refresh: bool = False,
+    ) -> List[MediaWikiImage]:
         """
         Fetch images for a specific wiki. Can be called with just the name
         if the client was already initialized, or a fresh URL.
@@ -102,9 +105,9 @@ class DjVuFiles:
             return self.images[key]
 
         # Fetch actual data
-        current_images = client.fetch_allimages(limit=limit,as_objects=True)
+        current_images = client.fetch_allimages(limit=limit, as_objects=True)
 
-        self.add_to_cache(key,current_images)
+        self.add_to_cache(key, current_images)
         return current_images
 
     def get_diff(self, name_a: str, name_b: str) -> List[MediaWikiImage]:

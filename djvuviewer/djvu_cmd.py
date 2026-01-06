@@ -117,6 +117,12 @@ class DjVuCmd(BaseCmd):
             help="PNG generation mode: cli (ddjvu command) or pil (Python Imaging Library) (default: %(default)s)",
         )
         parser.add_argument(
+            "--packagemode",
+            choices=["tar", "zip","none"],
+            default="zip",
+            help="package generation mode: tar or zip (default: %(default)s)",
+        )
+        parser.add_argument(
             "--serial",
             action="store_true",
             help="Use serial processing instead of parallel",

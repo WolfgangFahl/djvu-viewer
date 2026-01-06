@@ -14,7 +14,7 @@ class ImageConverter:
     Converter for image formats with DPI and scale handling
     """
 
-    def __init__(self, png_data: bytes, dpi: int=None):
+    def __init__(self, png_data: bytes, dpi: int = None):
         """
         Initialize the image converter
 
@@ -42,13 +42,11 @@ class ImageConverter:
         """Get image height"""
         return self._img.height
 
-
     @classmethod
     def convert_ppm_to_png(cls, ppm_path: str, png_path: str) -> None:
         """Convert PPM to PNG using PIL."""
         img = Image.open(ppm_path)
         img.save(png_path, "PNG")
-
 
     def convert_to_jpg(
         self, target_dpi: int = None, scale: float = None, quality: int = 85

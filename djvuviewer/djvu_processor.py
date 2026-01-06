@@ -9,7 +9,6 @@ import logging
 import os
 import shutil
 import sys
-import tarfile
 import tempfile
 from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
@@ -25,12 +24,13 @@ from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig, PngMode
 from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
 from djvuviewer.djvu_image import ImageJob
+from djvuviewer.packager import PackageMode, Packager
 
 if sys.platform != "win32":
     import resource
 
 
-class DjVuContext(djvu.decode.Context):
+class DjVuDecodeContext(djvu.decode.Context):
     """
     A lightweight wrapper around djvu.decode.Context to handle messages.
     """
@@ -57,7 +57,7 @@ class DjVuProcessor:
 
     def __init__(
         self,
-        tar: bool = True,
+        package_mode: Optional[PackageMode] = None,
         verbose: bool = False,
         debug: bool = False,
         batch_size: int = 100,
@@ -70,7 +70,7 @@ class DjVuProcessor:
         Initializes the DjVuProcessor.
 
         Args:
-            tar(bool,optional): Enable tarball creation (default: True).
+            package_mode (Optional[PackageMode]): Package format (TAR/ZIP) or None to disable packaging
             verbose (bool, optional): Enable verbose output (default: False).
             debug (bool, optional): Enable debug logging (default: False).
             batch_size (int, optional): Number of pages to process in each batch (default: 100).
@@ -79,7 +79,8 @@ class DjVuProcessor:
             pngmode(str): PNG generation mode - "cli" or "pil" (default: "pil")
             clean_temp(bool): if True remove files from temp directories when tar done
         """
-        self.tar = tar
+        self.package_mode=package_mode
+        self.do_package = package_mode is not None
         self.verbose = verbose
         self.debug = debug
         self.batch_size = batch_size
@@ -92,7 +93,7 @@ class DjVuProcessor:
         else:
             self.max_workers = max_workers
         self.clean_temp = clean_temp
-        self.context = DjVuContext()  # delegate context instance
+        self.context = DjVuDecodeContext()  # delegate context instance
         self.context.message_handler = self.handle_message
         self.djvu_pixel_format = djvu.decode.PixelFormatRgbMask(
             0xFF0000, 0xFF00, 0xFF, bpp=32
@@ -100,32 +101,6 @@ class DjVuProcessor:
         self.djvu_pixel_format.rows_top_to_bottom = 1
         self.djvu_pixel_format.y_top_to_bottom = 0
         self.shell = Shell()
-
-    def create_tarball(
-        self, source_dir: str, output_tar: str, include_ext: Optional[List[str]] = None
-    ):
-        """
-        Creates a tar archive from the given source directory, including only specific file types.
-
-        Args:
-            source_dir (str): Directory containing files to archive.
-            output_tar (str): Path to the output tar file.
-            include_ext (Optional[List[str]]): List of file extensions to include.
-                - "yaml": Includes metadata files.
-                - "png": Includes lossless original images.
-                - "jpg": Includes compressed thumbnails.
-                Defaults to ["yaml", "png", "jpg"].
-        """
-        if include_ext is None:
-            include_ext = [
-                "yaml",
-                "png",
-                "jpg",
-            ]  # yaml metadata, png lossless original, jpg thumbnails
-        with tarfile.open(output_tar, "w") as tar:
-            for file in os.listdir(source_dir):
-                if any(file.lower().endswith(ext) for ext in include_ext):
-                    tar.add(os.path.join(source_dir, file), arcname=file)
 
     def handle_message(self, message):
         if isinstance(message, djvu.decode.ErrorMessage):
@@ -266,7 +241,7 @@ class DjVuProcessor:
             # Save PNG
             # Use PIL with rendered buffer
             self.save_image_to_png(image_job, output_path, free_buffer)
-        image_job.log(f"save png ({self.pngmode}) done")
+        image_job.log(f"save png ({self.pngmode}) to {output_path} done")
         return output_path
 
     def render_pagejob_to_buffer(self, image_job: ImageJob, mode: int) -> numpy.ndarray:
@@ -574,7 +549,7 @@ class DjVuProcessor:
 
     def prepare(self, output_path: str, relurl: str):
         """
-        Prepares the output directory and sets up temporary storage if tarball creation is enabled.
+        Prepares the output directory and sets up temporary storage if package creation is enabled.
 
         Args:
             output_path (str): The final destination path for output files.
@@ -582,7 +557,7 @@ class DjVuProcessor:
 
         Attributes:
             final_output_path (str): The actual output path where the final files will be stored.
-            temp_dir (Optional[str]): A temporary directory for intermediate storage if tarball creation is enabled.
+            temp_dir (Optional[str]): A temporary directory for intermediate storage if package creation is enabled.
             output_path (str): The working output path (either temporary or final).
             profiler (Profiler): Profiler instance for tracking processing time.
         """
@@ -593,7 +568,7 @@ class DjVuProcessor:
         # process without any output
         if output_path is None:
             return
-        if self.tar:
+        if self.do_package:
             # Use a temporary directory for intermediate PNG storage
             self.temp_dir = tempfile.mkdtemp()
             self.output_path = self.temp_dir
@@ -602,18 +577,22 @@ class DjVuProcessor:
         # Prepare output directory if needed
         os.makedirs(self.final_output_path, exist_ok=True)
 
-    def wrap_as_tarball(self, djvu_path: str):
+    def wrap_as_package(self, djvu_path: str):
         """
-        Wraps processed output files into a tarball
+        Wraps processed output files into a package
 
         Args:
             djvu_path (str): The path to the original DjVu file.
 
         """
-        tarball_path = os.path.join(
-            self.final_output_path, f"{Path(djvu_path).stem}.tar"
+        if not self.package_mode:
+            raise ValueError("Cannot wrap package: package_mode not configured")
+
+        package_mode=self.package_mode
+        package_path = os.path.join(
+            self.final_output_path, f"{Path(djvu_path).stem}.{package_mode.ext}"
         )
-        self.create_tarball(self.output_path, tarball_path)
+        Packager.create_package(self.output_path, package_path, mode=package_mode)
         if self.clean_temp:
             shutil.rmtree(self.temp_dir)
 

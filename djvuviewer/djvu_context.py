@@ -12,6 +12,7 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_processor import DjVuProcessor
 
 from djvuviewer.djvu_files import DjVuFiles
+from djvuviewer.packager import PackageMode
 
 
 class DjVuContext:
@@ -24,9 +25,11 @@ class DjVuContext:
         self.args = args
         # Initialize manager and processor
         self.djvu_files = DjVuFiles(config=self.config)
+        self.package_mode = PackageMode.from_name(args.package_mode)
         self.dproc = DjVuProcessor(
             debug=self.args.debug,
             verbose=self.args.verbose,
+            package_mode=self.package_mode,
             batch_size=self.args.batch_size,
             limit_gb=self.args.limit_gb,
             max_workers=self.args.max_workers,

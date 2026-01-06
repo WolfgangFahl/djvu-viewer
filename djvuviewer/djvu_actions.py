@@ -3,26 +3,27 @@ Created on 2026-01-02
 
 @author: wf
 """
-from argparse import Namespace
-from dataclasses import asdict
-from datetime import datetime
+
 import logging
 import os
 import time
 import traceback
+from argparse import Namespace
+from dataclasses import asdict
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
-from djvuviewer.djvu_bundle import DjVuBundle
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
-from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
-from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from djvuviewer.tarball import Tarball
 from lodstorage.lod import LOD
 from tqdm import tqdm
 
+from djvuviewer.djvu_bundle import DjVuBundle
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_files import DjVuFiles
+from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
+from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
+from djvuviewer.packager import PackageMode, Packager
 
 
 class DjVuActions:
@@ -37,7 +38,7 @@ class DjVuActions:
         self,
         config: DjVuConfig,
         args: Namespace,
-        djvu_files:DjVuFiles,
+        djvu_files: DjVuFiles,
         dproc: DjVuProcessor,
         images_path: str,
         output_path: Optional[str] = None,
@@ -61,8 +62,9 @@ class DjVuActions:
         """
         self.config = config
         self.args = args
+        self.package_mode = PackageMode.from_name(args.package_mode)
         self.djvu_files = djvu_files
-        self.dvm=self.djvu_files.dvm
+        self.dvm = self.djvu_files.dvm
         self.dproc = dproc
         self.images_path = images_path
         self.output_path = output_path
@@ -82,13 +84,12 @@ class DjVuActions:
         self.logger.setLevel(logging.INFO)
         # Ensure we don't duplicate handlers
         if not self.logger.handlers:
-            log_name=f"djvu_{datetime.now():%Y%m%d_%H%M%S}.log"
-            log_path=os.path.join(self.config.log_path,log_name)
-            fh = logging.FileHandler(log_path, mode='a', encoding='utf-8')
-            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+            log_name = f"djvu_{datetime.now():%Y%m%d_%H%M%S}.log"
+            log_path = os.path.join(self.config.log_path, log_name)
+            fh = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+            formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
             fh.setFormatter(formatter)
             self.logger.addHandler(fh)
-
 
     def add_page(
         self,
@@ -135,7 +136,6 @@ class DjVuActions:
         page_lod.append(row)
         return dpage
 
-
     def get_djvu_files(
         self, djvu_lod: List[Dict[str, Any]], url: Optional[str] = None
     ) -> List[str]:
@@ -181,7 +181,9 @@ class DjVuActions:
         start_time = time.time()
         djvu_lod = []
         page_lod = []
-        images = self.djvu_files.fetch_images(self.config.base_url,name="wiki",limit=limit)
+        images = self.djvu_files.fetch_images(
+            self.config.base_url, name="wiki", limit=limit
+        )
 
         for index, image in enumerate(images, start=1):
             djvu_path = self.config.djvu_abspath(image.relpath)
@@ -363,7 +365,7 @@ class DjVuActions:
         serial: bool = False,
     ) -> None:
         """
-        Convert DjVu files to PNG format and create tarball archives.
+        Convert DjVu files to PNG format and create archive in tar or zip format.
 
         This is the second pass operation that processes DjVu files,
         extracts images, and stores them along with metadata.
@@ -384,10 +386,12 @@ class DjVuActions:
                     djvu_path = self.config.djvu_abspath(path)
                     djvu_file = None
                     prefix = ImageJob.get_prefix(path)
-                    tar_file = os.path.join(self.output_path, prefix + ".tar")
+                    package_file = os.path.join(
+                        self.output_path, prefix + self.package_mode.ext
+                    )
 
-                    # Skip if tarball already exists and not forcing reprocessing
-                    if os.path.isfile(tar_file) and not self.force:
+                    # Skip if package already exists and not forcing reprocessing
+                    if os.path.isfile(package_file) and not self.force:
                         continue
 
                     # Process all pages in the document
@@ -424,9 +428,9 @@ class DjVuActions:
                     yaml_file = os.path.join(self.dproc.output_path, prefix + ".yaml")
                     djvu_file.save_to_yaml_file(yaml_file)
 
-                    # Create tarball after YAML is saved
-                    if self.dproc.tar:
-                        self.dproc.wrap_as_tarball(djvu_path)
+                    # Create package after YAML is saved
+                    if self.dproc.do_package:
+                        self.dproc.wrap_as_package(djvu_path)
 
                 except BaseException as e:
                     self.errors.append(e)
@@ -441,21 +445,21 @@ class DjVuActions:
 
     def get_db_records(
         self,
-        tarball_file: str,
+        package_file: str,
         yaml_file: str,
     ) -> List[Dict[str, Any]]:
         """
-        Extract database records from a tarball's YAML metadata.
+        Extract database records from a packages's YAML metadata.
 
         Args:
-            tarball_file: Path to the tarball file
-            yaml_file: Name of the YAML file within the tarball
+            package_file: Path to the package file
+            yaml_file: Name of the YAML file within the package
 
         Returns:
             List of dictionaries containing page records
         """
         page_lod = []
-        yaml_data = Tarball.read_from_tar(tarball_file, yaml_file).decode("utf-8")
+        yaml_data = Packager.read_from_package(package_file, yaml_file).decode("utf-8")
         djvu_file = DjVuFile.from_yaml(yaml_data)  # @UndefinedVariable
 
         for page in djvu_file.pages:
@@ -514,7 +518,7 @@ class DjVuActions:
         """
         Update the DjVu database with metadata from processed files.
 
-        Reads metadata from tarball archives and updates the database records
+        Reads metadata from package archives and updates the database records
         with processing information and extracted page data.
 
         Args:
@@ -540,18 +544,18 @@ class DjVuActions:
                 try:
                     djvu_record = djvu_by_path.get(path)
                     prefix = ImageJob.get_prefix(path)
-                    tar_file = os.path.join(self.output_path, prefix + ".tar")
+                    package_file = os.path.join(self.output_path, prefix + self.package_mode.ext)
 
-                    if not os.path.isfile(tar_file):
-                        raise Exception(f"tar file for {path} missing")
+                    if not os.path.isfile(package_file):
+                        raise Exception(f"package file for {path} missing")
 
-                    tar_iso_date, tar_filesize = ImageJob.get_fileinfo(tar_file)
+                    package_iso_date, package_filesize = ImageJob.get_fileinfo(package_file)
                     if djvu_record:
-                        djvu_record["tar_iso_date"] = tar_iso_date
-                        djvu_record["tar_filesize"] = tar_filesize
+                        djvu_record["package_iso_date"] = package_iso_date
+                        djvu_record["package_filesize"] = package_filesize
 
-                    tar_lod = self.get_db_records(tar_file, prefix + ".yaml")
-                    page_lod.extend(tar_lod)
+                    package_lod = self.get_db_records(package_file, prefix + ".yaml")
+                    page_lod.extend(package_lod)
 
                 except BaseException as e:
                     self.errors.append(e)
@@ -572,7 +576,7 @@ class DjVuActions:
             print(f"{err_percent:.1f}% errors ✅ < {max_errors:.1f}% limit")
             self.store(djvu_lod, page_lod)
 
-    def report_errors(self, profiler:Profiler=None) -> None:
+    def report_errors(self, profiler: Profiler = None) -> None:
         """
         Report errors collected during processing.
 

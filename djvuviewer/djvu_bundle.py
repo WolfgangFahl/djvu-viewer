@@ -4,25 +4,25 @@ Created on 2026-01-03
 @author: wf
 """
 
-from datetime import datetime
 import io
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
 import subprocess
-import tarfile
 import tempfile
 import time
-from typing import List, Optional
 import zipfile
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional
 
 from basemkit.shell import Shell
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.image_convert import ImageConverter
-from djvuviewer.tarball import Tarball
+from djvuviewer.packager import Packager
 
 
 class DjVuBundle:
@@ -51,45 +51,28 @@ class DjVuBundle:
         self.djvu_dump_log = None
 
     @classmethod
-    def from_tarball(cls, tar_file: str, with_check: bool = True) -> "DjVuBundle":
+    def from_package(cls, package_file: str, with_check: bool = True) -> "DjVuBundle":
         """
-        Create a DjVuBundle from a tarball file.
+        Create a DjVuBundle from a package file.
 
         Args:
-            tar_file: Path to the tar archive
+            package_file: Path to the package archive
             with_check: If True, automatically run validation checks
 
         Returns:
             DjVuBundle: Instance with loaded metadata and optional validation
 
         Example:
-            bundle = DjVuBundle.from_tarball("document.tar")
+            bundle = DjVuBundle.from_package("document.zip")
             if not bundle.is_valid():
                 print(bundle.get_error_summary())
         """
-        tarball_path = Path(tar_file)
-
-        # Find YAML file in tarball
-        with tarfile.open(tar_file) as tar:
-            yaml_files = [m.name for m in tar.getmembers() if m.name.endswith(".yaml")]
-
-        if not yaml_files:
-            # Create a minimal bundle with an error
-            bundle = cls(DjVuFile(pages=[]))
-            bundle.errors.append(f"No YAML metadata file found in tarball: {tar_file}")
-            return bundle
-
-        if len(yaml_files) > 1:
-            # Use first one but warn
-            bundle = cls(DjVuFile.from_tarball(tarball_path, yaml_files[0]))
-            bundle.errors.append(
-                f"Found {len(yaml_files)} YAML files, expected 1. Using {yaml_files[0]}"
-            )
-        else:
-            bundle = cls(DjVuFile.from_tarball(tarball_path, yaml_files[0]))
+        package_path = Path(package_file)
+        yaml_indexfile = Packager.get_indexfile(package_path)
+        bundle = cls(DjVuFile.from_package(package_path, yaml_indexfile))
 
         if with_check:
-            bundle.check_tarball(tar_file)
+            bundle.check_package(package_file)
 
         return bundle
 
@@ -97,99 +80,106 @@ class DjVuBundle:
         """Add an error message to the error list."""
         self.errors.append(message)
 
-    def check_tarball(self, tar_file: str, relurl: Optional[str] = None):
+    def check_package(self, package_file: str, relurl: Optional[str] = None):
         """
-        Verify that a tar file exists and contains expected contents with correct dimensions.
+        Verify that a package file exists and contains expected contents with correct dimensions.
         Collects errors instead of raising exceptions.
 
         Args:
-            tar_file: Path to the tar file to validate
+            package_file: Path to the package file to validate
             relurl: Optional relative URL for error context
         """
         context = f" for {relurl}" if relurl else ""
+        package_path = Path(package_file)
 
         # Check file exists
-        if not os.path.isfile(tar_file):
-            self._add_error(f"Expected tar file '{tar_file}' was not created{context}")
+        if not package_path.is_file():
+            self._add_error(
+                f"Expected package file '{package_file}' was not created{context}"
+            )
+            return
+
+        # Check if archive is readable
+        if not Packager.archive_exists(package_path):
+            self._add_error(
+                f"Package file '{package_file}' is not a valid archive{context}"
+            )
             return
 
         try:
-            with tarfile.open(tar_file) as tar:
-                members = tar.getmembers()
+            # Get list of members using abstracted interface
+            members = Packager.list_archive_members(package_path)
 
-                # Check tar is not empty
-                if len(members) == 0:
-                    self._add_error(f"Tar file '{tar_file}' is empty{context}")
-                    return
+            # Check archive is not empty
+            if len(members) == 0:
+                self._add_error(f"Package file '{package_file}' is empty{context}")
+                return
 
-                # Find PNG files
-                png_files = [m.name for m in members if m.name.endswith(".png")]
-                if len(png_files) == 0:
-                    self._add_error(f"No PNG files found in tar{context}")
+            # Find PNG files
+            png_files = [m for m in members if m.endswith(".png")]
+            if len(png_files) == 0:
+                self._add_error(f"No PNG files found in package{context}")
 
-                # Check for YAML file
-                yaml_files = [m.name for m in members if m.name.endswith(".yaml")]
-                if len(yaml_files) == 0:
-                    self._add_error(f"No YAML file found in tar{context}")
-                    return
-                elif len(yaml_files) > 1:
+            # Check for YAML file
+            yaml_files = [m for m in members if m.endswith(".yaml")]
+            if len(yaml_files) == 0:
+                self._add_error(f"No YAML file found in package{context}")
+                return
+            elif len(yaml_files) > 1:
+                self._add_error(
+                    f"Expected 1 YAML file in package, found {len(yaml_files)}{context}"
+                )
+
+            # Create dimension mapping from metadata
+            page_dimensions = {
+                i + 1: (page.width, page.height)
+                for i, page in enumerate(self.djvu_file.pages)
+            }
+
+            # Verify PNG dimensions match metadata
+            for png_file in sorted(png_files):
+                basename = os.path.basename(png_file)
+                match = re.search(r"(\d+)\.png$", basename)
+
+                if not match:
                     self._add_error(
-                        f"Expected 1 YAML file in tar, found {len(yaml_files)}{context}"
+                        f"Could not extract page number from PNG: {png_file}{context}"
+                    )
+                    continue
+
+                page_num = int(match.group(1))
+                if page_num not in page_dimensions:
+                    self._add_error(
+                        f"PNG {png_file} references page {page_num} not in YAML{context}"
+                    )
+                    continue
+
+                expected_width, expected_height = page_dimensions[page_num]
+
+                try:
+                    png_data = Packager.read_from_package(package_path, png_file)
+                    image_conv = ImageConverter(png_data)
+                    actual_width, actual_height = image_conv.size
+
+                    if actual_width != expected_width:
+                        self._add_error(
+                            f"PNG {png_file} width mismatch: expected {expected_width}, "
+                            f"got {actual_width}{context}"
+                        )
+
+                    if actual_height != expected_height:
+                        self._add_error(
+                            f"PNG {png_file} height mismatch: expected {expected_height}, "
+                            f"got {actual_height}{context}"
+                        )
+                except Exception as e:
+                    self._add_error(
+                        f"Failed to read/validate PNG {png_file}: {e}{context}"
                     )
 
-                # Create dimension mapping from metadata
-                page_dimensions = {
-                    i + 1: (page.width, page.height)
-                    for i, page in enumerate(self.djvu_file.pages)
-                }
-
-                # Verify PNG dimensions match metadata
-                tarball_path = Path(tar_file)
-                for png_file in sorted(png_files):
-                    basename = os.path.basename(png_file)
-                    match = re.search(r"(\d+)\.png$", basename)
-
-                    if not match:
-                        self._add_error(
-                            f"Could not extract page number from PNG: {png_file}{context}"
-                        )
-                        continue
-
-                    page_num = int(match.group(1))
-                    if page_num not in page_dimensions:
-                        self._add_error(
-                            f"PNG {png_file} references page {page_num} not in YAML{context}"
-                        )
-                        continue
-
-                    expected_width, expected_height = page_dimensions[page_num]
-
-                    try:
-                        png_data = Tarball.read_from_tar(tarball_path, png_file)
-                        image_conv = ImageConverter(png_data)
-                        actual_width, actual_height = image_conv.size
-
-                        if actual_width != expected_width:
-                            self._add_error(
-                                f"PNG {png_file} width mismatch: expected {expected_width}, "
-                                f"got {actual_width}{context}"
-                            )
-
-                        if actual_height != expected_height:
-                            self._add_error(
-                                f"PNG {png_file} height mismatch: expected {expected_height}, "
-                                f"got {actual_height}{context}"
-                            )
-                    except Exception as e:
-                        self._add_error(
-                            f"Failed to read/validate PNG {png_file}: {e}{context}"
-                        )
-
-        except tarfile.TarError as e:
-            self._add_error(f"Failed to open tar file '{tar_file}': {e}{context}")
         except Exception as e:
             self._add_error(
-                f"Unexpected error checking tar file '{tar_file}': {e}{context}"
+                f"Unexpected error checking package file '{package_file}': {e}{context}"
             )
 
     def get_part_filenames(self) -> List[str]:

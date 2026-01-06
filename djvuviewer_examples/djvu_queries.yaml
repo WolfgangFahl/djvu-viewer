@@ -39,8 +39,8 @@
   sql: |
     SELECT
       ROUND(SUM(filesize)/1024/1024/1024.0, 1) AS total_djvu_gb,
-      ROUND(SUM(tar_filesize)/1024/1024/1024.0, 1) AS total_tar_gb,
-      ROUND(CAST(SUM(tar_filesize) AS REAL) / SUM(filesize), 1) AS average_ratio
+      ROUND(SUM(package_filesize)/1024/1024/1024.0, 1) AS total_package_gb,
+      ROUND(CAST(SUM(package_filesize) AS REAL) / SUM(filesize), 1) AS average_ratio
     FROM DjVu
     WHERE bundled = 1
 

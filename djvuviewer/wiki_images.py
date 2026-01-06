@@ -7,12 +7,13 @@ Created on 2026-01-02
 from dataclasses import field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Union
-from djvuviewer.version import Version
 
-from basemkit.yamlable import lod_storable
-from djvuviewer.djvu_config import DjVuConfig
-from ngwidgets.progress import Progressbar
 import requests
+from basemkit.yamlable import lod_storable
+from ngwidgets.progress import Progressbar
+
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.version import Version
 
 
 @lod_storable
@@ -20,6 +21,7 @@ class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
+
     url: str
     mime: str
     size: int
@@ -28,29 +30,29 @@ class MediaWikiImage:
     description_url: Optional[str] = None
     height: Optional[int] = None
     width: Optional[int] = None
-    pagecount: Optional[int]=None
-    descriptionurl: Optional[str]=None
-    descriptionshorturl: Optional[str]=None
-    ns: Optional[int]= None
-    title: Optional[str]=None
+    pagecount: Optional[int] = None
+    descriptionurl: Optional[str] = None
+    descriptionshorturl: Optional[str] = None
+    ns: Optional[int] = None
+    title: Optional[str] = None
     # key
     relpath: Optional[str] = field(init=False, default=None)
     filename: Optional[str] = field(init=False, default=None)
 
     def __post_init__(self):
         if self.url:
-            self.relpath=DjVuConfig.djvu_relpath(self.url)
+            self.relpath = DjVuConfig.djvu_relpath(self.url)
         if self.title:
             # Split on colon and take everything after the last colon
             # This handles cases like "Project:File:Example.jpg" or "File talk:Example.jpg"
-            self.filename=self.title.split(':')[-1].strip()
+            self.filename = self.title.split(":")[-1].strip()
 
     @property
     def timestamp_datetime(self):
         # Format: 2013-04-10T20:03:08Z
         # replacing Z with +00:00 for timezone awareness if running Python 3.7+
         ts_str = self.timestamp.replace("Z", "+00:00")
-        ts_dt= datetime.fromisoformat(ts_str)
+        ts_dt = datetime.fromisoformat(ts_str)
         return ts_dt
 
 
@@ -95,7 +97,7 @@ class MediaWikiImages:
         # Default filters
         self.mime_types = tuple(mime_types) if mime_types else ()
         # User agent
-        self.user_agent=f"{Version.name}/{Version.version}"
+        self.user_agent = f"{Version.name}/{Version.version}"
         # Default properties if none provided
         if aiprop is None:
             self.aiprop = ("url", "mime", "size", "timestamp", "user", "dimensions")
@@ -138,7 +140,6 @@ class MediaWikiImages:
                 mw_image = MediaWikiImage.from_dict(info_dict)
 
         return mw_image
-
 
     def fetch_allimages(
         self,
@@ -224,15 +225,13 @@ class MediaWikiImages:
         """
         Helper to execute the request and handle basic errors.
         """
-        headers = {
-            'User-Agent': f'{self.user_agent} (via {self.__class__.__name__})'
-        }
+        headers = {"User-Agent": f"{self.user_agent} (via {self.__class__.__name__})"}
         resp = self.session.get(
             self.api_url,
             params=params,
             timeout=self.timeout,
             headers=headers,
-            allow_redirects=True
+            allow_redirects=True,
         )
         resp.raise_for_status()
         data = resp.json()

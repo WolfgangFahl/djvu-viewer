@@ -62,7 +62,7 @@ class DjVuCatalog:
             index = i + 1
             view_record = self.get_view_record(record, index)
             view_lod.append(view_record)
-        self.view_lod=view_lod
+        self.view_lod = view_lod
 
     def get_view_record(self, record: dict, index: int) -> dict:
         """Delegate to appropriate handler based on record type."""
@@ -111,7 +111,7 @@ class DjVuCatalog:
             - filesize: int
             - iso_date: str
             - bundled: bool
-            - tar_filesize, tar_iso_date, dir_pages (optional)
+            - package_filesize, package_iso_date, dir_pages (optional)
         """
         view_record = {"#": index}
 
@@ -128,10 +128,11 @@ class DjVuCatalog:
         view_record["date"] = record.get("iso_date")
         view_record["bundled"] = "✓" if record.get("bundled") else "X"
 
-        if record.get("tar_filesize"):
-            view_record["tar_size"] = record.get("tar_filesize")
-        if record.get("tar_iso_date"):
-            view_record["tar_date"] = record.get("tar_iso_date")
+        # Generic package fields (works with tar, zip, or any package format)
+        if record.get("package_filesize"):
+            view_record["package_size"] = record.get("package_filesize")
+        if record.get("package_iso_date"):
+            view_record["package_date"] = record.get("package_iso_date")
         if record.get("dir_pages"):
             view_record["dir_pages"] = record.get("dir_pages")
 
@@ -149,7 +150,7 @@ class DjVuCatalog:
             if self.browse_wiki:
                 # Setup and show progress bar for API fetch
                 if self.progress_row:
-                    self.progress_row.visible=True
+                    self.progress_row.visible = True
                 if self.progressbar:
                     self.progressbar.total = self.limit
                     self.progressbar.reset()
@@ -170,7 +171,7 @@ class DjVuCatalog:
                     lod = self.dvm.query("all_djvu")
         except Exception as ex:
             self.solution.handle_exception(ex)
-        self.lod=lod
+        self.lod = lod
 
     def configure_grid_options(self):
         """
@@ -204,7 +205,7 @@ class DjVuCatalog:
                 self.grid_row.clear()
                 with self.grid_row:
                     record_count = len(self.view_lod)
-                    mode = "MediaWiki API" if self.browse_wiki else "Tarball Database"
+                    mode = "MediaWiki API" if self.browse_wiki else "Package Database"
                     ui.label(f"{record_count} records from {mode}").classes(
                         "text-caption"
                     )
@@ -223,7 +224,7 @@ class DjVuCatalog:
         finally:
             with self.solution.container:
                 if self.progress_row:
-                    self.progress_row.visible=False
+                    self.progress_row.visible = False
 
     def update_limit(self, new_limit):
         """Handler for limit dropdown change."""

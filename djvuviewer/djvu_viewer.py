@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile, DjVuViewPage
 from djvuviewer.image_convert import ImageConverter
-from djvuviewer.tarball import Tarball
+from djvuviewer.packager import PackageMode, Packager
 
 
 class DjVuViewer:
@@ -28,7 +28,7 @@ class DjVuViewer:
 
     _static_mounted = False
 
-    def __init__(self, app: FastAPI, config: DjVuConfig):
+    def __init__(self, app: FastAPI, config: DjVuConfig, package_mode: PackageMode):
         """
         Initialize the DjVu viewer.
 
@@ -39,6 +39,7 @@ class DjVuViewer:
         self.config = config
         self.url_prefix = self.config.url_prefix.rstrip("/")
         self.app = app
+        self.package_mode = package_mode
 
         if not DjVuViewer._static_mounted:
             app.mount(
@@ -70,14 +71,16 @@ class DjVuViewer:
 
     def get_file_content(self, file: str) -> Tuple[str, bytes]:
         """
-        Retrieves a content file (PNG, JPG, YAML, etc.) from the tarball
+        Retrieves a content file (PNG, JPG, YAML, etc.) from the package
 
         Args:
             file (str): The full path in the format <DjVu name>/<file name>.
         """
         djvu_name, filename = file.split("/", 1)
-        tarball_path = Path(self.config.tarball_path) / f"{djvu_name}.tar"
-        file_content = Tarball.read_from_tar(tarball_path, filename)
+        package_path = (
+            Path(self.config.package_path) / f"{djvu_name}{self.package_mode.ext}"
+        )
+        file_content = Packager.read_from_package(package_path, filename)
         return filename, file_content
 
     def create_content_response(self, filename: str, file_content: bytes) -> Response:
@@ -90,24 +93,37 @@ class DjVuViewer:
 
         return content_response
 
-    def get_tarball_response(self, path: str) -> FileResponse:
-        """Serves the complete tarball for download."""
-        path = self.sanitize_path(path)
-        tarball_file = Path(self.config.tarball_path) / f"{Path(path).stem}.tar"
+    def get_package_response(self, path: str) -> FileResponse:
+        """Serves the complete package for download for my package mode.
 
-        if not tarball_file.exists():
-            raise HTTPException(status_code=404, detail="Tarball not found")
+        Args:
+            path: The path to the package resource.
+
+        Returns:
+            FileResponse configured with the appropriate package file and media type.
+
+        Raises:
+            HTTPException: If the package file does not exist (404).
+        """
+        path = self.sanitize_path(path)
+        package_filename = f"{Path(path).stem}{self.package_mode.ext}"
+        package_file = Path(self.config.package_path) / package_filename
+
+        if not package_file.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Package {package_filename} not found"
+            )
 
         response = FileResponse(
-            path=tarball_file,
-            media_type="application/x-tar",
-            filename=f"{Path(path).stem}.tar",  # Sets Content-Disposition automatically
+            path=package_file,
+            media_type=self.package_mode.media_type,
+            filename=package_filename,
         )
         return response
 
     def get_content(self, file: str) -> Response:
         """
-        Retrieves a content file (PNG, JPG, YAML, etc.) from the tarball and serves it as a response.
+        Retrieves a content file (PNG, JPG, YAML, etc.) from the package and serves it as a response.
 
         Args:
             file (str): The full path in the format <DjVu name>/<file name>.
@@ -123,12 +139,12 @@ class DjVuViewer:
                 detail="Invalid file path format. Expected <DjVu name>/<file name>.",
             )
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Tarball not found")
+            raise HTTPException(status_code=404, detail="DjVu  not found in archive")
         except KeyError:
             djvu_name, filename = file.split("/", 1)
             raise HTTPException(
                 status_code=404,
-                detail=f"File {filename} of DjVu {djvu_name} not found in tarball",
+                detail=f"File {filename} of DjVu {djvu_name} not found in archive",
             )
         content_response = self.create_content_response(filename, file_content)
         return content_response
@@ -145,19 +161,23 @@ class DjVuViewer:
             DjVuViewPage: dataclass instance with file,page and image_url
         """
         path = self.sanitize_path(path)
-        tarball_file = Path(self.config.tarball_path) / f"{Path(path).stem}.tar"
+        package_file = (
+            Path(self.config.package_path) / f"{Path(path).stem}{self.package_mode.ext}"
+        )
         yaml_file = f"{Path(path).stem}.yaml"
 
-        if not tarball_file.exists():
-            raise HTTPException(status_code=404, detail="Tarball not found")
+        if not package_file.exists():
+            raise HTTPException(status_code=404, detail="Package not found")
 
         try:
-            yaml_data = Tarball.read_from_tar(tarball_file, yaml_file).decode("utf-8")
+            yaml_data = Packager.read_from_package(package_file, yaml_file).decode(
+                "utf-8"
+            )
             djvu_file = DjVuFile.from_yaml(yaml_data)  # @UndefinedVariable
         except Exception as ex:
             self.handle_exception(ex)
             raise HTTPException(
-                status_code=500, detail=f"Error reading {yaml_file} from tarball"
+                status_code=500, detail=f"Error reading {yaml_file} from package"
             )
 
         page_count = len(djvu_file.pages)
@@ -256,7 +276,7 @@ class DjVuViewer:
         self, path: str, page_index: int, backlink: str = None
     ) -> HTMLResponse:
         """
-        Fetches and renders an HTML page displaying the PNG image of the given DjVu file page from a tarball.
+        Fetches and renders an HTML page displaying the PNG image of the given DjVu file page from a package.
         """
         djvu_view_page = self.get_djvu_view_page(path, page_index)
         djvu_file = djvu_view_page.file
@@ -297,7 +317,7 @@ class DjVuViewer:
         fast_forward = min(last_page, page_index + 10)
         select_markup = self.create_page_dropdown(path, page_index, total_pages)
         download_page_url = f"{self.url_prefix}{image_url}"
-        download_tar_url = f"{self.url_prefix}/djvu/download/{path}"
+        download_package_url = f"{self.url_prefix}/djvu/download/{path}"
         help_url = "https://github.com/WolfgangFahl/djvu-viewer/wiki/Help"
         # Add back button if backlink is provided
         back_button = ""
@@ -329,7 +349,7 @@ class DjVuViewer:
                 <a href="{self.url_prefix}/djvu/{path}?page={fast_forward}" title="Fast Forward (Jump +10 Pages)">⏩</a>
                 <a href="{self.url_prefix}/djvu/{path}?page={last_page}" title="Last Page ({total_pages}/{total_pages})">⏭</a>
                 | <a href="{download_page_url}" title="Page" download>⬇️</a>
-                <a href="{download_tar_url}"  title="Tarball" download>📦</a>
+                <a href="{download_package_url}"  title="Package" download>📦</a>
                 <a href="{help_url}" title="Help" target="_blank">❓</a>
             </div>
             <img src="{self.url_prefix}{image_url}" alt="DjVu Page {page_index}">

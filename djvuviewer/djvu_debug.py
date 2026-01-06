@@ -59,10 +59,9 @@ class DjVuDebug:
         self.bundle_size = 0
 
         # options
-        self.update_index_db= True
+        self.update_index_db = True
         self.create_package = False
-        self.package_type = 'tar'
-
+        self.package_type = "package"
 
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
@@ -142,7 +141,7 @@ class DjVuDebug:
         )
         dpi = first_page.dpi if (first_page and first_page.dpi) else "—"
 
-        tar_info = (
+        package_info = (
             f"{djvu_file.tar_filesize:,} bytes ({djvu_file.tar_iso_date})"
             if djvu_file.tar_filesize
             else None
@@ -156,7 +155,7 @@ class DjVuDebug:
             "<div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>",
             label_value(self.config.base_url, view_record.get("wiki", "")),
             label_value(self.config.new_url, view_record.get("new", "")),
-            label_value("Tarball", view_record.get("tarball", "")),
+            label_value("Package", view_record.get("package", "")),
             label_value("Path", djvu_file.path, "word-break: break-all;"),
             label_value("Format", format_type),
             label_value("Pages (Doc)", djvu_file.page_count),
@@ -166,7 +165,7 @@ class DjVuDebug:
             label_value("File Date", djvu_file.iso_date or "—"),
             label_value("Main Size", main_size),
             label_value("Pages Size", f"{total_page_size:,} bytes"),
-            label_value("Tarball", tar_info),
+            label_value("Package", package_info),
             "</div></div>",
         ]
 
@@ -199,9 +198,15 @@ class DjVuDebug:
 
             # bundling options
             self.bundling_enabled = not self.djvu_file.bundled
-            ui.checkbox("Update Index DB").bind_value(self, 'update_index_db').bind_enabled_from(self, 'bundling_enabled')
-            ui.checkbox("Create DjVuViewer package").bind_value(self, 'create_package').bind_enabled_from(self, 'bundling_enabled')
-            ui.radio(['zip', 'tar']).props('inline').bind_value(self, 'package_type').bind_enabled_from(self, 'bundling_enabled')
+            ui.checkbox("Update Index DB").bind_value(
+                self, "update_index_db"
+            ).bind_enabled_from(self, "bundling_enabled")
+            ui.checkbox("Create DjVuViewer package").bind_value(
+                self, "create_package"
+            ).bind_enabled_from(self, "bundling_enabled")
+            ui.radio(["zip", "package"]).props("inline").bind_value(
+                self, "package_type"
+            ).bind_enabled_from(self, "bundling_enabled")
 
             # Backup file - just a disabled checkbox and download link
             backup_exists = os.path.exists(self.djvu_bundle.backup_file)

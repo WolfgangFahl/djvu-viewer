@@ -4,15 +4,15 @@ Created on 2025-02-24
 @author: wf
 """
 
+from argparse import Namespace
 import argparse
 import glob
 import json
 import os
-from argparse import Namespace
+import shutil
 from typing import List, Optional
 
 from basemkit.basetest import Basetest
-
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_cmd import DjVuCmd
 from djvuviewer.djvu_config import DjVuConfig
@@ -21,6 +21,8 @@ from djvuviewer.djvu_image import ImageJob
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.download import Download
+
+from djvuviewer.packager import PackageMode
 
 
 class TestDjVu(Basetest):
@@ -37,7 +39,7 @@ class TestDjVu(Basetest):
         base_dir = os.path.expanduser("/tmp/djvu")
 
         # Set up subdirectories
-        self.output_dir = os.path.join(base_dir, "test_pngs")
+        self.output_dir = os.path.join(base_dir, "test_archive")
         self.db_path = os.path.join(base_dir, "test_db", "genwiki_images.db")
         self.backup_path = os.path.join(base_dir, "backup")
         # Create all necessary directories
@@ -106,6 +108,7 @@ class TestDjVu(Basetest):
             max_workers=None,
             debug=self.debug,
             pngmode="pil",
+            package_mode="zip",
             verbose=self.debug,
             quiet=False,
             about=False,
@@ -355,45 +358,51 @@ class TestDjVu(Basetest):
         expected_errors = 0 if self.local else 49
         self.check_command("catalog", expected_errors)
 
-    def check_tarball(self, tar_file: str, relurl: Optional[str] = None):
+    def check_package(self, package_file: str, relurl: Optional[str] = None):
         """
-        Test helper: Verify tarball and assert validity.
+        Test helper: Verify package and assert validity.
 
         Args:
-            tar_file: Path to the tar file to validate
+            package_file: Path to the tar file to validate
             relurl: Optional relative URL for error context
         """
-        bundle = DjVuBundle.from_tarball(tar_file, with_check=False)
+        bundle = DjVuBundle.from_package(package_file, with_check=False)
 
-        # If relurl provided, re-check with context (bundle.check_tarball is idempotent)
+        # If relurl provided, re-check with context (bundle.check_package is idempotent)
         if relurl:
-            bundle.check_tarball(tar_file, relurl)
+            bundle.check_package(package_file, relurl)
 
         self.assertTrue(
             bundle.is_valid(),
-            f"Tarball validation failed for {relurl or tar_file}:\n{bundle.get_error_summary()}",
+            f"package validation failed for {relurl or package_file}:\n{bundle.get_error_summary()}",
         )
 
     def test_convert(self):
         """
-        Test the conversion with different PNG modes.
+        Test the conversion with different PNG and package modes.
         """
         png_modes = ["pil", "cli"]
+        package_modes = [PackageMode.TAR, PackageMode.ZIP]
 
         for relurl, _elen, _expected_bundled in self.test_tuples:
             base_name = os.path.splitext(os.path.basename(relurl))[0]
+            for package_mode in package_modes:
+                for pngmode in png_modes:
+                    with self.subTest(
+                        relurl=relurl, pngmode=pngmode, package_mode=package_mode
+                    ):
+                        args = self.get_args("convert")
+                        args.url = relurl
+                        args.force = True
+                        args.pngmode = pngmode
+                        args.package_mode = package_mode.name
+                        self.check_command("convert", args=args)
 
-            for pngmode in png_modes:
-                with self.subTest(relurl=relurl, pngmode=pngmode):
-                    args = self.get_args("convert")
-                    args.url = relurl
-                    args.force = True
-                    args.pngmode = pngmode
-                    self.check_command("convert", args=args)
-
-                    # Verify tar file was created and contains expected content
-                    tar_file = os.path.join(self.output_dir, f"{base_name}.tar")
-                    self.check_tarball(tar_file, relurl)
+                        # Verify tar file was created and contains expected content
+                        package_file = os.path.join(
+                            self.output_dir, f"{base_name}{package_mode.ext}"
+                        )
+                        self.check_package(package_file, relurl)
 
     def test_issue49(self):
         """
@@ -410,7 +419,11 @@ class TestDjVu(Basetest):
                     return
                 relurl = url
                 djvu_path = self.get_djvu(relurl)
-                dproc = DjVuProcessor(tar=False, debug=self.debug, verbose=self.debug)
+                dproc = DjVuProcessor(
+                    package_mode=PackageMode.ZIP,
+                    debug=self.debug,
+                    verbose=self.debug,
+                    clean_temp=False)
                 if self.debug:
                     print(f"processing {relurl}")
                 # for document, page in dproc.yield_pages(djvu_path):
@@ -423,8 +436,8 @@ class TestDjVu(Basetest):
 
                 if self.debug:
                     print(f"Processed {count} pages in {self.output_dir}")
-                    base_name = os.path.splitext(os.path.basename(relurl))[0]
-                pattern = os.path.join(self.output_dir, f"{base_name}_page_*.png")
+                base_name = os.path.splitext(os.path.basename(relurl))[0]
+                pattern = os.path.join(dproc.output_path, f"{base_name}_page_*.png")
                 png_files = glob.glob(pattern)
 
                 self.assertEqual(
@@ -432,6 +445,7 @@ class TestDjVu(Basetest):
                     page_count,
                     f"Expected {page_count} PNG files matching pattern '{pattern}', but found {len(png_files)}",
                 )
+                shutil.rmtree(dproc.temp_dir)
 
     def testDjVuManager(self):
         """

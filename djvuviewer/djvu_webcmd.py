@@ -15,7 +15,7 @@ from djvuviewer.webserver import DjVuViewerWebServer
 
 class DjVuViewerCmd(WebserverCmd):
     """
-    command line handling for DjVu Viewer and tarball converter
+    command line handling for DjVu Viewer and package converter
     """
 
     def __init__(self):
