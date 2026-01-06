@@ -28,7 +28,7 @@ class DjVuViewer:
 
     _static_mounted = False
 
-    def __init__(self, app: FastAPI, config: DjVuConfig, package_mode: PackageMode):
+    def __init__(self, app: FastAPI, config: DjVuConfig):
         """
         Initialize the DjVu viewer.
 
@@ -39,7 +39,7 @@ class DjVuViewer:
         self.config = config
         self.url_prefix = self.config.url_prefix.rstrip("/")
         self.app = app
-        self.package_mode = package_mode
+        self.package_mode = self.config.package_mode
 
         if not DjVuViewer._static_mounted:
             app.mount(
