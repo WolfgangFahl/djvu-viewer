@@ -382,7 +382,7 @@ class TestDjVu(Basetest):
         Test the conversion with different PNG and package modes.
         """
         png_modes = ["pil", "cli"]
-        package_modes = [PackageMode.TAR, PackageMode.ZIP]
+        package_modes = ["tar","zip"]
 
         for relurl, _elen, _expected_bundled in self.test_tuples:
             base_name = os.path.splitext(os.path.basename(relurl))[0]
@@ -395,12 +395,12 @@ class TestDjVu(Basetest):
                         args.url = relurl
                         args.force = True
                         args.pngmode = pngmode
-                        args.package_mode = package_mode.name
+                        args.package_mode = package_mode
                         self.check_command("convert", args=args)
 
                         # Verify tar file was created and contains expected content
                         package_file = os.path.join(
-                            self.output_dir, f"{base_name}{package_mode.ext}"
+                            self.output_dir, f"{base_name}.{package_mode}"
                         )
                         self.check_package(package_file, relurl)
 
