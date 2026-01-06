@@ -422,8 +422,8 @@ class DjVuProcessor:
             bundled=is_bundled,
             iso_date=iso_date,
             filesize=filesize,
-            # tar_filesize/date are not calculated by the processor, typically 0 or None initially
-            tar_filesize=0,
+            # package_filesize/date are not calculated by the processor, typically 0 or None initially
+            package_filesize=0,
             dir_pages=dir_pages,
             pages=pages,
         )

@@ -142,8 +142,8 @@ class DjVuDebug:
         dpi = first_page.dpi if (first_page and first_page.dpi) else "—"
 
         package_info = (
-            f"{djvu_file.tar_filesize:,} bytes ({djvu_file.tar_iso_date})"
-            if djvu_file.tar_filesize
+            f"{djvu_file.package_filesize:,} bytes ({djvu_file.package_iso_date})"
+            if djvu_file.package_filesize
             else None
         )
 
