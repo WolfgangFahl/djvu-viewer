@@ -91,6 +91,7 @@ class DjVuBundle:
         """
         context = f" for {relurl}" if relurl else ""
         package_path = Path(package_file)
+        yaml_indexfile = Packager.get_indexfile(package_path)
 
         # Check file exists
         if not package_path.is_file():
@@ -120,14 +121,10 @@ class DjVuBundle:
             if len(png_files) == 0:
                 self._add_error(f"No PNG files found in package{context}")
 
-            # Check for YAML file
-            yaml_files = [m for m in members if m.endswith(".yaml")]
-            if len(yaml_files) == 0:
-                self._add_error(f"No YAML file found in package{context}")
-                return
-            elif len(yaml_files) > 1:
+            # Check for YAML index file
+            if not yaml_indexfile in members:
                 self._add_error(
-                    f"Expected 1 YAML file in package, found {len(yaml_files)}{context}"
+                    f"Expected  {yaml_indexfile} file in package"
                 )
 
             # Create dimension mapping from metadata
@@ -181,6 +178,8 @@ class DjVuBundle:
             self._add_error(
                 f"Unexpected error checking package file '{package_file}': {e}{context}"
             )
+        # done
+        pass
 
     def get_part_filenames(self) -> List[str]:
         """

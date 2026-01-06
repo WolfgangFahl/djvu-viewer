@@ -11,6 +11,7 @@ from basemkit.basetest import Basetest
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_files import DjVuFiles
+from djvuviewer import djvu_files
 
 
 class TestDjVuFiles(Basetest):
@@ -50,12 +51,18 @@ class TestDjVuFiles(Basetest):
             )
             self.show_images(diff_images)
 
-    def test_lod(self):
+    def test_djvu_files(self):
         """
-        Test fetching images from index database
+        Test fetching djvu image files from index database
         """
         if not self.inPublicCI():
-            self.assertGreaterEqual(len(self.djvu_files.lod), 4000)
+            file_limit=3
+            djvu_files_by_path=self.djvu_files.get_djvu_files_by_path(file_limit=file_limit,page_limit=100)
+            if self.debug:
+                for djvu_file in djvu_files_by_path.values():
+                    print (djvu_file.to_yaml())
+                    self.assertTrue(len(djvu_file.pages)>0)
+            self.assertGreaterEqual(len(djvu_files_by_path), file_limit)
 
     def test_wikimedia_commons(self):
         """

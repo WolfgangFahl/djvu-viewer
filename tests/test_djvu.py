@@ -47,8 +47,8 @@ class TestDjVu(Basetest):
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         os.makedirs(self.backup_path, exist_ok=True)
         self.local = os.path.exists(DjVuConfig.get_config_file_path())
-        # set to True to emulate CI mode
-        force_test = False
+        # set to True to emulate CI mode to create a fresh djvu_data.db
+        force_test = True
         if force_test:
             self.local = False
         self.config = DjVuConfig.get_instance(test=force_test)
@@ -370,7 +370,7 @@ class TestDjVu(Basetest):
 
         # If relurl provided, re-check with context (bundle.check_package is idempotent)
         if relurl:
-            bundle.check_package(package_file, relurl)
+            bundle.check_package(package_file, relurl=relurl)
 
         self.assertTrue(
             bundle.is_valid(),

@@ -59,8 +59,8 @@ class DjVuPage:
             width=2829,
             height=4194,
             dpi=216,
-            djvu_path="b/b3/AB1951-Suenninghausen.djvu",
-            page_key="b/b3/AB1951-Suenninghausen.djvu#0001",
+            djvu_path="/images/b/b3/AB1951-Suenninghausen.djvu",
+            page_key="/images/b/b3/AB1951-Suenninghausen.djvu#0001",
             error_msg="-sample error message-",
         )
         return sample_page
@@ -83,7 +83,7 @@ class DjVu:
     def get_sample(cls):
         """Returns a sample DjVu instance for testing."""
         sample_djvu = cls(
-            path="images/b/b3/AB1951-Suenninghausen.djvu",
+            path="/images/b/b3/AB1951-Suenninghausen.djvu",
             iso_date="2009-06-02",
             filesize=85,
             package_filesize=0,

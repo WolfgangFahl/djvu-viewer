@@ -303,7 +303,6 @@ class DjVuProcessor:
     def get_djvu_file(
         self,
         djvu_path: str,
-        config: DjVuConfig,
         progressbar: Optional["Progressbar"] = None,
     ) -> DjVuFile:
         """

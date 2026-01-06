@@ -4,12 +4,14 @@ Created on 2026-01-05
 @author: wf
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.wiki_images import MediaWikiImage
+from lodstorage.lod import LOD
 
 
 class DjVuFiles:
@@ -32,6 +34,9 @@ class DjVuFiles:
 
         # Client instances: {name_or_url: DjVuMediaWikiImages}
         self.mw_clients: Dict[str, DjVuMediaWikiImages] = {}
+
+        # silently track errors
+        self.errors=[]
 
         self.lod = None
         # SQL db based
@@ -58,15 +63,53 @@ class DjVuFiles:
 
         return self.mw_clients[key]
 
-    def get_djvu_lod(self) -> List[Dict[str, Any]]:
+    def get_djvu_files_by_path(self,file_limit:int=None,page_limit:int=None) -> Dict[str, DjVuFile]:
         """
-        Retrieve all DjVu file records from the database.
+        Retrieve all DjVu file and page records from the database
+        using the all_djvu and all_pages queries and reassemble
+        ad DjVuFile objects
 
         Returns:
-            List of dictionaries containing DjVu file records
+        List of DjVuFiles reassembled from the records
+            e.g. dict:
+            {
+                'path':
+                '/images/b/b3/AB1951-Suenninghausen.djvu',
+                'page_count': 4,
+                'bundled': False,
+                'iso_date': '2009-06-02',
+                'filesize': 85,
+                'package_filesize': 0,
+                'package_iso_date':
+                '2026-01-02',
+                'dir_pages': 5
+            }
         """
-        self.lod = self.dvm.query("all_djvu")
-        return self.lod
+        djvu_files_by_path={}
+        if file_limit is None:
+            file_limit=10000
+        djvu_file_records = self.dvm.query("all_djvu",  param_dict = {"limit":file_limit})
+        if page_limit is None and file_limit is None:
+            djvu_page_records = self.dvm.query("all_pages", param_dict = {"limit":10000000})
+        for djvu_file_record in djvu_file_records:
+            djvu_file = DjVuFile.from_dict(djvu_file_record) # @UndefinedVariable
+            djvu_files_by_path[djvu_file.path]=djvu_file
+            if file_limit is not None: # query pages per file mode
+                if page_limit is None:
+                    page_limit=10000
+                djvu_page_records = self.dvm.query("all_pages_for_path", param_dict = {"djvu_path": djvu_file.path,"limit":page_limit})
+                for djvu_page_record in djvu_page_records:
+                    djvu_page = DjVuPage.from_dict(djvu_page_record) # @UndefinedVariable
+                    djvu_file.pages.append(djvu_page)
+        if file_limit is None: # all mode
+            for djvu_page_record in djvu_page_records:
+                djvu_page = DjVuPage.from_dict(djvu_page_record) # @UndefinedVariable
+                djvu_file=djvu_files_by_path.get(djvu_page.djvu_path,None)
+                if djvu_file is None:
+                    self.errors.append(f"djvu_file {djvu_page.djvu_path} missing for page {djvu_page.page_index}")
+                else:
+                    djvu_file.pages.append(djvu_page)
+        return djvu_files_by_path
 
     def add_to_cache(self, key: str, images: List[MediaWikiImage]):
         # Update cache

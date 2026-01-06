@@ -47,11 +47,15 @@
 # Alle DjVu-Datensätze abrufen
 'all_djvu':
   param_list:
+    - name: limit
+      type: int
+      default_value: 10000
   sql: |
     SELECT
       *
     FROM DjVu
     ORDER BY page_count
+    LIMIT {{ limit }}
 
 # Alle Bild-Datensätze mit konfigurierbarem Limit abrufen
 'all_pages':
@@ -64,6 +68,23 @@
       *
     FROM page
     ORDER BY path
+    LIMIT {{ limit }}
+
+ # Alle Bild-Datensätze für einen Pfad mit konfigurierbarem Limit abrufen
+'all_pages_for_path':
+  param_list:
+    - name: limit
+      type: int
+      default_value: 50
+    - name: djvu_path
+      type: str
+      default_value: "/images/b/b3/AB1951-Suenninghausen.djvu"
+  sql: |
+    SELECT
+      *
+    FROM page
+    WHERE djvu_path= "{{ djvu_path }}"
+    ORDER BY page_index
     LIMIT {{ limit }}
 
 # Seiten nach DjVu-Pfad abrufen

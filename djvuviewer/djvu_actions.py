@@ -154,8 +154,6 @@ class DjVuActions:
         """
         Catalog DjVu files by scanning and extracting metadata
 
-
-
         This is the first pass operation that reads DjVu files from
         the filesystem and creates database records containing file and page information.
 
@@ -529,19 +527,13 @@ class DjVuActions:
             desc="Updating the DjVu meta data database",
             unit="file",
         ) as pbar:
-            for path in djvu_files:
+            for relpath in djvu_files:
                 try:
-                    djvu_record = djvu_by_path.get(path)
-                    prefix = ImageJob.get_prefix(path)
-                    package_file = os.path.join(self.output_path, prefix + self.package_mode.ext)
-
-                    if not os.path.isfile(package_file):
-                        raise Exception(f"package file {package_file} for {prefix} missing")
-
-                    package_iso_date, package_filesize = ImageJob.get_fileinfo(package_file)
-                    if djvu_record:
-                        djvu_record["package_iso_date"] = package_iso_date
-                        djvu_record["package_filesize"] = package_filesize
+                    djvu_record = djvu_by_path.get(relpath)
+                    if djvu_record is None:
+                        djvu_path = self.config.djvu_abspath(relpath)
+                        djvu_file=self.dproc.get_djvu_file(djvu_path=djvu_path)
+                        djvu_record=asdict(djvu_file)
 
                     package_lod = self.get_db_records(package_file, prefix + ".yaml")
                     page_lod.extend(package_lod)
