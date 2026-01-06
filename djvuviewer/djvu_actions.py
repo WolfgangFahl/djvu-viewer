@@ -4,26 +4,25 @@ Created on 2026-01-02
 @author: wf
 """
 
+from dataclasses import asdict
+from datetime import datetime
 import logging
 import os
 import time
 import traceback
-from argparse import Namespace
-from dataclasses import asdict
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
-from lodstorage.lod import LOD
-from tqdm import tqdm
-
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
-from djvuviewer.djvu_files import DjVuFiles
-from djvuviewer.djvu_processor import DjVuProcessor, ImageJob
+from djvuviewer.djvu_processor import ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from djvuviewer.packager import PackageMode, Packager
+from lodstorage.lod import LOD
+from tqdm import tqdm
+
+from djvuviewer.djvu_context import DjVuContext
+from djvuviewer.packager import Packager
 
 
 class DjVuActions:
@@ -36,41 +35,31 @@ class DjVuActions:
 
     def __init__(
         self,
-        config: DjVuConfig,
-        args: Namespace,
-        djvu_files: DjVuFiles,
-        dproc: DjVuProcessor,
-        images_path: str,
-        output_path: Optional[str] = None,
-        debug: bool = False,
-        verbose: bool = False,
-        force: bool = False,
+        context=DjVuContext
     ):
         """
         Initialize DjVuActions with required components.
 
         Args:
-            config: DjVu configuration object
-            args: command line arguments
-            djvu_files: DjVuFiles for images retrieval
-            dproc: DjVu processor for file operations
-            images_path: Base path for DjVu files
-            output_path: Path for output files (PNG, tar, etc.)
-            debug: Enable debug mode
-            verbose: Enable verbose output
-            force: Force reprocessing of existing files
+            context=DjVuContext
         """
-        self.config = config
-        self.args = args
-        self.package_mode = PackageMode.from_name(args.package_mode)
-        self.djvu_files = djvu_files
-        self.dvm = self.djvu_files.dvm
-        self.dproc = dproc
-        self.images_path = images_path
-        self.output_path = output_path
-        self.debug = debug
-        self.verbose = verbose
-        self.force = force
+        self.context = context
+
+        # Direct references from context
+        self.config = context.config
+        self.args = context.args
+        self.djvu_files = context.djvu_files
+        self.dvm=context.djvu_files.dvm
+        self.dproc = context.dproc
+        self.package_mode = context.package_mode
+
+        # Convenience attributes derived from args
+        self.images_path = self.args.images_path
+        self.output_path = self.args.output_path
+        self.debug = self.args.debug
+        self.verbose = self.args.verbose
+        self.force = self.args.force
+
         self.errors: List[Exception] = []
 
         # Configure processor output path

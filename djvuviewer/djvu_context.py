@@ -35,18 +35,10 @@ class DjVuContext:
             max_workers=self.args.max_workers,
             pngmode=self.args.pngmode,
         )
+        self.profiler = Profiler(self.args.command)
 
         # Initialize actions handler
         self.actions = DjVuActions(
-            config=self.config,
-            args=self.args,
-            djvu_files=self.djvu_files,
-            dproc=self.dproc,
-            images_path=self.args.images_path,
-            output_path=self.args.output_path,
-            debug=self.args.debug,
-            verbose=self.args.verbose,
-            force=self.args.force,
+            context=self
         )
 
-        self.profiler = Profiler(self.args.command)

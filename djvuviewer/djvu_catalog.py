@@ -43,6 +43,7 @@ class DjVuCatalog:
         self.ui_container = None
 
         # Initialize database manager if using DB mode
+        # FIXME muda - this is in djvu_files module
         self.dvm = DjVuManager(config=self.config) if not browse_wiki else None
 
         self.lod = []
