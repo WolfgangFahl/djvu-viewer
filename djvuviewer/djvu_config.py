@@ -46,6 +46,8 @@ class DjVuConfig:
     url_prefix: Optional[str] = (
         ""  # URL prefix for proxied deployments (e.g., "/djvu-viewer")
     )
+    # package display mode
+    package_mode: Optional[str] = "tar"
 
     def __post_init__(self):
         """
@@ -70,6 +72,7 @@ class DjVuConfig:
                 "db_path",
                 "backup_path",
                 "log_path",
+                "package_mode"
             ]
 
             # Check which required fields are missing

@@ -25,7 +25,7 @@ class DjVuContext:
         self.args = args
         # Initialize manager and processor
         self.djvu_files = DjVuFiles(config=self.config)
-        self.package_mode = PackageMode.from_name(args.package_mode)
+        self.package_mode = PackageMode.from_name(self.config.package_mode)
         self.dproc = DjVuProcessor(
             debug=self.args.debug,
             verbose=self.args.verbose,
