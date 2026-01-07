@@ -96,7 +96,7 @@ class DjVuDebug:
                     title=self.page_title
                 )
             if self.mw_image or self.mw_image_new:
-                url=self.mw_image_url if self.mw_image else self.mw_image_new.url
+                url=self.mw_image.url if self.mw_image else self.mw_image_new.url
                 relpath = self.config.extract_and_clean_path(url)
                 abspath = self.config.djvu_abspath(f"/images/{relpath}")
                 self.djvu_file = self.dproc.get_djvu_file(
@@ -119,7 +119,7 @@ class DjVuDebug:
         self.solution.add_links(view_record, filename)
 
         if not djvu_file:
-            return f"<div>No DjVu file information loaded for {self.config.base_url}</div>"
+            return f"<div>No DjVu file information loaded for <a href='{self.config.base_url}/Datei:{self.pagetitle}'>{self.pagetitle}</a></div>"
 
         def label_value(label: str, value, span_style: str = "") -> str:
             """Helper to create a label-value HTML row."""
