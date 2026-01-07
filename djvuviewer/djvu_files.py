@@ -129,9 +129,7 @@ class DjVuFiles:
                     param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
                 )
                 for djvu_page_record in djvu_page_records:
-                    djvu_page = DjVuPage.from_dict(
-                        djvu_page_record
-                    )  # @UndefinedVariable
+                    djvu_page = DjVuPage.from_dict(djvu_page_record)  # @UndefinedVariable
                     djvu_file.pages.append(djvu_page)
         if file_limit is None:  # all mode
             for djvu_page_record in djvu_page_records:

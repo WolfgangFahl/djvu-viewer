@@ -1,0 +1,112 @@
+@startuml
+hide circle
+title DjVu and MediaWiki Image Classes with Examples
+header see https://github.com/WolfgangFahl/djvu-viewer
+!pragma useIntermediatePackages false
+
+' Class definitions
+class DjVu {
+  path: str
+  page_count: int
+  bundled: bool
+  iso_date: Optional[str]
+  filesize: Optional[int]
+  package_filesize: Optional[int]
+  package_iso_date: Optional[str]
+  dir_pages: Optional[int]
+}
+
+note top of DjVu
+A [[https://en.wikipedia.org/wiki/DjVu DjVu]] document file,
+typically used for scanned documents and digital archives.
+Can be bundled (single file) or indirect (multi-file).
+end note
+
+class DjVuPage {
+  path: str
+  page_index: int
+  valid: bool
+  iso_date: Optional[str]
+  filesize: Optional[int]
+  width: Optional[int]
+  height: Optional[int]
+  dpi: Optional[int]
+  djvu_path: Optional[str]
+  page_key: Optional[str]
+  error_msg: Optional[str]
+}
+
+note top of DjVuPage
+Represents a single page within a DjVu document.
+Contains metadata about dimensions, resolution,
+and validation status.
+end note
+
+class MediaWikiImage {
+  url: str
+  mime: str
+  size: int
+  user: Optional[str]
+  timestamp: Optional[str]
+  description_url: Optional[str]
+  height: Optional[int]
+  width: Optional[int]
+  pagecount: Optional[int]
+}
+
+note top of MediaWikiImage
+Represents an image file in a
+[[https://www.mediawiki.org MediaWiki]] installation,
+containing metadata about the file, uploader,
+and timestamps.
+end note
+
+' Relationships
+DjVu *-- DjVuPage : contains
+
+' Example instances
+object "AB1953-Gohr.djvu" as djvu_ex <<DjVu>> {
+  path = "/images/1/1e/AB1953-Gohr.djvu"
+  page_count = 2
+  bundled = False
+  iso_date = "2007-09-09T08:33:16+00:00"
+  filesize = 27733
+  package_filesize = None
+  package_iso_date = None
+  dir_pages = None
+}
+
+object "page_001.djvu" as page1_ex <<DjVuPage>> {
+  path = "gohr_s108_0001.djvu"
+  page_index = 1
+  valid = 0
+  iso_date = "2007-09-09T08:33:16+00:00"
+  filesize = 27733
+  width = 1689
+  height = 2584
+  dpi = 300
+  djvu_path = "/images/1/1e/AB1953-Gohr.djvu "
+  page_key = "/images/1/1e/AB1953-Gohr.djvu#0001 "
+  error_msg = None
+}
+
+object "MediaWiki_Image" as mw_ex <<MediaWikiImage>> {
+  url = "https://wiki.genealogy.net/images//1/1e/AB1953-Gohr.djvu"
+  mime = "image/vnd.djvu"
+  size = 27733
+  user = "KlausErdmann"
+  timestamp = "2007-09-09T08:33:16Z"
+  description_url = "https://wiki.genealogy.net/Datei:AB1953-Gohr.djvu"
+  height = 2584
+  width = 1689
+  pagecount = 2
+}
+
+' Connect instances to classes
+djvu_ex .. DjVu : <<instanceOf>>
+page1_ex .. DjVuPage : <<instanceOf>>
+mw_ex .. MediaWikiImage : <<instanceOf>>
+
+' Show instance relationships
+djvu_ex *-- page1_ex
+@enduml

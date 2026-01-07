@@ -163,6 +163,7 @@ class DjVuFile(DjVu):
                 "utf-8"
             )
             djvu_file = cls.from_yaml(yaml_data)
+            djvu_file.set_fileinfo(package_path)
         return djvu_file
 
 
