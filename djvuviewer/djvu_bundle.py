@@ -502,15 +502,15 @@ class DjVuBundle:
             Path to bundled file
         """
         djvu_path = self.djvu_file.path
+        full_path = self.config.djvu_abspath(djvu_path)
 
         if output_path is None:
-            full_path = self.config.djvu_abspath(djvu_path)
             dirname = os.path.dirname(full_path)
             basename = os.path.basename(djvu_path)
             stem = os.path.splitext(basename)[0]
             output_path = os.path.join(dirname, f"{stem}_bundled.djvu")
 
-        cmd = f"djvmcvt -b {shlex.quote(djvu_path)} {shlex.quote(output_path)}"
+        cmd = f"djvmcvt -b {shlex.quote(full_path)} {shlex.quote(output_path)}"
         self.run_cmd(cmd, "Failed to bundle DjVu file")
 
         if not os.path.exists(output_path):
