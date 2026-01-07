@@ -241,7 +241,7 @@ class DjVuCmd(BaseCmd):
         Updates the DjVu database with metadata from processed files.
         """
         self.actions.update_from_database(
-            max_errors=self.args.max_errors, path=self.args.url
+            max_errors=self.args.max_errors, url=self.args.url
         )
         self.actions.report_errors(profiler=self.profiler)
 

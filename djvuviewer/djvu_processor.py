@@ -302,7 +302,7 @@ class DjVuProcessor:
 
     def get_djvu_file(
         self,
-        djvu_path: str,
+        full_path: str,
         progressbar: Optional["Progressbar"] = None,
     ) -> DjVuFile:
         """
@@ -313,16 +313,19 @@ class DjVuProcessor:
         the pixel data of the images.
 
         Args:
-            djvu_path (str): The file system path to the .djvu file.
+            full_path (str): The file system path to the .djvu file.
             config(DjVuConfig): the config to use for path handling
             progressbar (Optional[Progressbar]): Optional progress bar to track processing
 
         Returns:
             DjVuFile: The structured representation of the DjVu file.
         """
+        # get the relative path
+        relpath = DjVuConfig.djvu_relpath(full_path)
+
         # 1. Get container file metadata
-        self.ensure_file_exists(djvu_path)
-        iso_date, filesize = ImageJob.get_fileinfo(djvu_path)
+        self.ensure_file_exists(full_path)
+        iso_date, filesize = ImageJob.get_fileinfo(full_path)
 
         pages: List[DjVuPage] = []
         is_bundled = False
@@ -330,7 +333,7 @@ class DjVuProcessor:
         doc_info_captured = False
 
         # Get document to determine total pages for progress bar
-        document = self.context.new_document(djvu.decode.FileURI(djvu_path))
+        document = self.context.new_document(djvu.decode.FileURI(full_path))
         document.decoding_job.wait()
 
         # Set up progress bar if provided
@@ -338,11 +341,11 @@ class DjVuProcessor:
             total_pages = len(document.pages)
             progressbar.total = total_pages
             progressbar.reset()
-            progressbar.set_description(f"Loading {os.path.basename(djvu_path)}")
+            progressbar.set_description(f"Loading {os.path.basename(full_path)}")
 
         # 2. Iterate pages using existing generator
         # document is the same reference in every iteration
-        for document, page in self.yield_pages(djvu_path):
+        for document, page in self.yield_pages(full_path):
 
             # Capture document-level flags on first pass
             if not doc_info_captured:
@@ -371,7 +374,7 @@ class DjVuProcessor:
                 error_msg = str(e)
                 if self.debug:
                     logging.warning(
-                        f"Failed to get info for page {page_index} in {djvu_path}: {e}"
+                        f"Failed to get info for page {page_index} in {full_path}: {e}"
                     )
 
             # 4. Determine Filename and File-specific stats
@@ -389,13 +392,12 @@ class DjVuProcessor:
 
             # If not bundled (Indirect), the page is likely a separate file on disk
             if not is_bundled:
-                dirname = os.path.dirname(djvu_path)
+                dirname = os.path.dirname(full_path)
                 component_path = os.path.join(dirname, page_filename)
                 # Only override if the component file physically exists
                 if os.path.exists(component_path):
                     page_iso, page_size = ImageJob.get_fileinfo(component_path)
 
-            relpath = DjVuConfig.djvu_relpath(djvu_path)
             # 5. Construct Page Object
             djvu_page = DjVuPage(
                 path=page_filename,
@@ -416,7 +418,7 @@ class DjVuProcessor:
 
         # 6. Construct and return File Object
         djvu_file = DjVuFile(
-            path=djvu_path,
+            path=relpath,
             page_count=len(pages),
             bundled=is_bundled,
             iso_date=iso_date,

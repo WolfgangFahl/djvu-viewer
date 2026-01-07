@@ -69,13 +69,14 @@ class DjVuManager:
             f"storing {len(lod)} {entity_name} records  to SQL", profile=profile
         )
         if with_drop:
+            # @FIXME should be with_create
             self.sql_db.execute(f"DROP TABLE IF EXISTS {entity_name}")
         self.entity_info = self.sql_db.createTable(
             listOfRecords=lod,
             entityName=entity_name,
             primaryKey=primary_key,
-            withCreate=True,
-            withDrop=True,
+            withCreate=with_drop,
+            withDrop=with_drop,
             sampleRecordCount=sampleRecordCount,
         )
         self.sql_db.store(

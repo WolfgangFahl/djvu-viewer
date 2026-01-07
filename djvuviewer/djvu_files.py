@@ -241,6 +241,7 @@ class DjVuFiles:
         djvu_lod: List[Dict[str, Any]],
         page_lod: List[Dict[str, Any]],
         sample_record_count: int = 1,
+        with_drop:bool=False
     ) -> None:
         """
         Store DjVu and page records in the database.
@@ -254,16 +255,17 @@ class DjVuFiles:
             lod=page_lod,
             entity_name="Page",
             primary_key="page_key",
-            with_drop=True,
+            with_drop=with_drop,
             sampleRecordCount=sample_record_count,
         )
         self.dvm.store(
             lod=djvu_lod,
             entity_name="DjVu",
             primary_key="path",
-            with_drop=True,
+            with_drop=with_drop,
             sampleRecordCount=sample_record_count,
         )
+        pass
 
     def get_db_records(
         self,
@@ -308,7 +310,7 @@ class DjVuFiles:
         djvu_lod = [djvu_record]
         page_record = asdict(DjVuPage.get_sample())
         page_lod = [page_record]
-        self.store(djvu_lod, page_lod, sample_record_count=1)
+        self.store_lods(djvu_lod, page_lod, sample_record_count=1,with_drop=True)
 
     def get_diff(self, name_a: str, name_b: str) -> List[MediaWikiImage]:
         """

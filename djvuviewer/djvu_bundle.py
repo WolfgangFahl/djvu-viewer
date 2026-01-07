@@ -4,7 +4,6 @@ Created on 2026-01-03
 @author: wf
 """
 
-import io
 import os
 import re
 import shlex
@@ -201,12 +200,13 @@ class DjVuBundle:
             djvudump output string (empty on error)
         """
         djvu_path = self.djvu_file.path
+        full_path = self.config.djvu_abspath(djvu_path)
 
-        if not os.path.exists(djvu_path):
-            self._add_error(f"File not found: {djvu_path}")
+        if not os.path.exists(full_path):
+            self._add_error(f"File not found: {full_path}")
             return ""
 
-        cmd = f"djvudump {shlex.quote(djvu_path)}"
+        cmd = f"djvudump {shlex.quote(full_path)}"
         result = self.run_cmd(cmd, "djvudump failed")
 
         if result.returncode == 0:
@@ -313,17 +313,18 @@ class DjVuBundle:
             raise ValueError(f"File {self.djvu_file.path} is already bundled")
 
         djvu_path = self.djvu_file.path
+        full_path = self.config.djvu_abspath(djvu_path)
 
         backup_file = self.backup_file
 
         # Get list of page files
         part_files = self.get_part_filenames()
-        djvu_dir = os.path.dirname(djvu_path)
+        djvu_dir = os.path.dirname(full_path)
 
         # Create ZIP archive
         with zipfile.ZipFile(backup_file, "w", zipfile.ZIP_DEFLATED) as zipf:
             # Add main index file
-            zipf.write(djvu_path, self.basename)
+            zipf.write(full_path, self.basename)
 
             # Add each page file
             for part_file in part_files:
@@ -503,7 +504,8 @@ class DjVuBundle:
         djvu_path = self.djvu_file.path
 
         if output_path is None:
-            dirname = os.path.dirname(djvu_path)
+            full_path = self.config.djvu_abspath(djvu_path)
+            dirname = os.path.dirname(full_path)
             basename = os.path.basename(djvu_path)
             stem = os.path.splitext(basename)[0]
             output_path = os.path.join(dirname, f"{stem}_bundled.djvu")

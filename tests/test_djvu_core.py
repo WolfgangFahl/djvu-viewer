@@ -29,7 +29,7 @@ class TestDjVuCore(Basetest):
         test retrieving a DjVuFile from the given package path
         """
         for package_mode in ["zip", "tar"]:
-            for filename in ["AB1932-Ramrath", "AB1938-Kreis-Beckum_Inhaltsverz"]:
+            for filename in ["AB1932-Ramrath", "AB1938_Kreis-Beckum_Inhaltsverz"]:
                 package_filename = f"{Path(filename).stem}.{package_mode}"
                 package_path = Path(self.config.package_path) / package_filename
                 djvu_file = DjVuFile.from_package(package_path)

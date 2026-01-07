@@ -76,22 +76,30 @@ class DjVuActions:
             fh.setFormatter(formatter)
             self.logger.addHandler(fh)
 
-    def get_djvu_files(self, path: Optional[str] = None) -> Dict[str, DjVuFile]:
+    def get_djvu_files(self, url: Optional[str] = None) -> Dict[str, DjVuFile]:
         """
         get DjVu files.
 
         Args:
-            path: Optional single path for processing e.g.
+            url: Optional single path for processing e.g.
             /images/1/1e/AB1953-Gohr.djvu
 
         Returns:
             Dict of DjVu file paths to process
 
         """
-        paths = [path] if path else None
-        djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
-            paths=paths, file_limit=self.args.limit
-        )
+        if url is None:
+            djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
+                file_limit=self.args.limit
+            )
+        else:
+            djvu_path=url
+            full_path = self.config.djvu_abspath(djvu_path)
+            djvu_file=djvu_file = self.dproc.get_djvu_file(full_path)
+            djvu_files_by_path = {
+                djvu_path:djvu_file
+            }
+            pass
         return djvu_files_by_path
 
     def init_database(self):
@@ -529,14 +537,14 @@ class DjVuActions:
         self.convert_djvu(djvu_paths, serial=serial)
 
     def update_from_database(
-        self, max_errors: float = 1.0, path: Optional[str] = None
+        self, max_errors: float = 1.0, url: Optional[str] = None
     ) -> None:
         """
         Update database with metadata from processed files.
 
         Args:
             max_errors: Maximum allowed error percentage before skipping update
-            path: Optional single file path for targeted update
+            url: Optional single file path for targeted update
         """
-        djvu_files = self.get_djvu_files(path=path)
+        djvu_files = self.get_djvu_files(url=url)
         self.update_database(djvu_files, max_errors=max_errors)

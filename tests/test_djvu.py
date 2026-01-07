@@ -48,7 +48,7 @@ class TestDjVu(Basetest):
         os.makedirs(self.backup_path, exist_ok=True)
         self.local = os.path.exists(DjVuConfig.get_config_file_path())
         # set to True to emulate CI mode to create a fresh djvu_data.db
-        force_test = True
+        force_test = False
         if force_test:
             self.local = False
         self.config = DjVuConfig.get_instance(test=force_test)
@@ -78,11 +78,11 @@ class TestDjVu(Basetest):
 
             for relurl, _elen, expected_bundled in self.test_tuples:
                 if not expected_bundled:
-                    djvu_path = self.get_djvu(relurl)
-                    rel_path = DjVuConfig.djvu_relpath(djvu_path)
+                    full_path = self.get_djvu(relurl)
+                    rel_path = DjVuConfig.djvu_relpath(full_path)
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
-                    djvu_file = self.dproc.get_djvu_file(djvu_path)
+                    djvu_file = self.dproc.get_djvu_file(full_path)
                     djvu_bundle = DjVuBundle(djvu_file, config=self.config)
                     self.test_bundles.append(djvu_bundle)
         return self.test_bundles
@@ -328,9 +328,12 @@ class TestDjVu(Basetest):
         """
         query_params = {
             "all_pages": {"limit": 50},
+            "all_pages_for_path": {"djvu_path":"/images/1/1e/AB1953-Gohr.djvu","limit":50},
+            "all_djvu": {"limit": 50},
+            "djvu_for_path": {"path":"/images/1/1e/AB1953-Gohr.djvu"},
             "pages_of_djvu":
                 {
-                    "djvu_path": "/images/a/a1/Treuen-Vogtland-AB-1905.djvu"
+                    "djvu_path": "/images/f/ff/AB1932-Ramrath.djvu "
                 },
         }
         djvm = DjVuManager(config=self.config)
@@ -340,8 +343,6 @@ class TestDjVu(Basetest):
             if self.debug:
                 print(query_name)
             param_dict = query_params.get(query_name, {})
-            if param_dict:
-                pass
             lod = djvm.query(query_name, param_dict=param_dict)
             if self.debug:
                 print(f"{len(lod)} records")
@@ -464,4 +465,4 @@ class TestDjVu(Basetest):
         if self.local:
             self.assertEqual(lod, [{"files": 4288, "pages": 1006670}])
         else:
-            self.assertEqual(lod, [{"files": 1, "pages": 4}])
+            self.assertEqual(lod, [{"files": 5, "pages":11}])
