@@ -169,7 +169,7 @@ class DjVuCatalog:
             else:
                 # Fetch from SQLite Database
                 if self.dvm:
-                    lod = self.dvm.query("all_djvu")
+                    lod = self.dvm.query("all_djvu",param_dict={"limit": self.limit})
         except Exception as ex:
             self.solution.handle_exception(ex)
         self.lod = lod
