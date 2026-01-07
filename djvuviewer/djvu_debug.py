@@ -95,8 +95,9 @@ class DjVuDebug:
                 self.mw_image_new = self.solution.webserver.mw_client_new.fetch_image(
                     title=self.page_title
                 )
-            if self.mw_image:
-                relpath = self.config.extract_and_clean_path(self.mw_image.url)
+            if self.mw_image or self.mw_image_new:
+                url=self.mw_image_url if self.mw_image else self.mw_image_new.url
+                relpath = self.config.extract_and_clean_path(url)
                 abspath = self.config.djvu_abspath(f"/images/{relpath}")
                 self.djvu_file = self.dproc.get_djvu_file(
                     abspath, progressbar=self.progressbar
@@ -108,7 +109,6 @@ class DjVuDebug:
 
         except Exception as ex:
             self.solution.handle_exception(ex)
-            raise
         return success
 
     def get_header_html(self) -> str:
