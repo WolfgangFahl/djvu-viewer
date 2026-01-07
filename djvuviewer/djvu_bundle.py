@@ -223,6 +223,7 @@ class DjVuBundle:
             bundled_path: Path to the new bundled DjVu file
         """
         djvu_path = self.djvu_file.path
+        full_path = self.config.djvu_abspath(djvu_path)
 
         # Verify backup ZIP exists before proceeding
         if not os.path.exists(zip_path):
@@ -235,13 +236,13 @@ class DjVuBundle:
             return
 
         # Get directory of original file
-        djvu_dir = os.path.dirname(djvu_path)
+        djvu_dir = os.path.dirname(full_path)
 
         # Get list of component files to remove
         part_files = self.get_part_filenames()
 
         try:
-            original_stat = os.stat(djvu_path)
+            original_stat = os.stat(full_path)
             original_atime = original_stat.st_atime
             original_mtime = original_stat.st_mtime
             if self.debug:
@@ -271,12 +272,12 @@ class DjVuBundle:
 
             if self.debug:
                 print(f"trying to\nmv {bundled_path} {djvu_path}")
-            if self.move_file(bundled_path, djvu_path):
+            if self.move_file(bundled_path, full_path):
                 # Restore original timestamps
                 os.sync()
                 print(f"Sleeping {sleep} secs")
                 time.sleep(sleep)
-                os.utime(djvu_path, (original_atime, original_mtime))
+                os.utime(full_path, (original_atime, original_mtime))
                 if self.debug:
                     print(f"Restored timestamps to {djvu_path}")
 

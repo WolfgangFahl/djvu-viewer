@@ -56,7 +56,7 @@ class DjVuDebug:
         self.lod_grid = None
         self.load_task = None
         self.zip_size = 0
-        self.bundle_size = 0
+        self.bundled_size = 0
 
         # options
         self.update_index_db = True
@@ -195,6 +195,8 @@ class DjVuDebug:
             ui.label("Bundling State").classes("text-subtitle1 mb-2")
             # Bundled status - just a disabled checkbox
             ui.checkbox("Bundled", value=self.djvu_file.bundled).props("disable")
+            if self.bundled_size > 0:
+                ui.label(f"Size: {self.bundled_size:,} bytes").classes("text-caption text-grey-7")
 
             # Backup file - just a disabled checkbox and download link
             backup_exists = os.path.exists(self.djvu_bundle.backup_file)
@@ -208,6 +210,10 @@ class DjVuDebug:
                     )
                     download_url = f"{self.config.url_prefix}/backups/{backup_rel_path}"
                     ui.link(f"⬇️{backup_rel_path}", download_url).classes("text-primary")
+                    # Add size labels when available
+                    if self.zip_size > 0:
+                        ui.label(f"{self.zip_size:,} bytes").classes("text-caption text-grey-7")
+
 
             with ui.expansion("Bundling script", icon="code"):
                 # Script
@@ -325,23 +331,25 @@ class DjVuDebug:
         run the bundle activities in background
         """
         try:
-            if os.path.exists(self.djvu_bundle.backup_file):
-                with self.content_row:
-                    ui.notify(f"{self.djvu_bundle.backup_file} already exists")
-            else:
-                zip_path = self.djvu_bundle.create_backup_zip()
-                self.zip_size = self.show_fileinfo(zip_path)
+            zip_path=self.djvu_bundle.backup_file
+            if self.create_package:
+                if os.path.exists(self.djvu_bundle.backup_file):
+                    with self.content_row:
+                        ui.notify(f"{self.djvu_bundle.backup_file} already exists")
+                else:
+                    zip_path = self.djvu_bundle.create_backup_zip()
+                    self.zip_size = self.show_fileinfo(zip_path)
 
-                bundled_path = self.djvu_bundle.convert_to_bundled()
-                self.bundled_size = self.show_fileinfo(bundled_path)
+            bundled_path = self.djvu_bundle.convert_to_bundled()
+            self.bundled_size = self.show_fileinfo(bundled_path)
 
-                self.djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=True)
-                docker_cmd = self.djvu_bundle.get_docker_cmd()
-                if docker_cmd:
-                    result = self.djvu_bundle.shell.run(docker_cmd)
-                    if result.returncode != 0:
-                        with self.content_row:
-                            ui.notify("docker command failed")
+            self.djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=True)
+            docker_cmd = self.djvu_bundle.get_docker_cmd()
+            if docker_cmd:
+                result = self.djvu_bundle.shell.run(docker_cmd)
+                if result.returncode != 0:
+                    with self.content_row:
+                        ui.notify("docker command failed")
             self.update_bundle_state()
 
         except Exception as ex:
