@@ -119,7 +119,7 @@ class DjVuDebug:
         self.solution.add_links(view_record, filename)
 
         if not djvu_file:
-            return "<div>No DjVu file information loaded.</div>"
+            return f"<div>No DjVu file information loaded for {self.config.base_url}</div>"
 
         def label_value(label: str, value, span_style: str = "") -> str:
             """Helper to create a label-value HTML row."""
