@@ -79,14 +79,13 @@ class DjVuDebug:
         allow = self.solution.webserver.authenticated()
         return allow
 
-    def load_djvu_file(self) -> bool:
+    def load_djvu_file(self) -> tuple[bool, str]:
         """
         Load DjVu file metadata via DjVuProcessor.
 
         Returns:
-            bool: True if successful, False otherwise
+            tuple[bool, str]: (success, error_message)
         """
-        success = False
         try:
             self.mw_image = self.solution.webserver.mw_client_base.fetch_image(
                 title=self.page_title
@@ -95,31 +94,29 @@ class DjVuDebug:
                 self.mw_image_new = self.solution.webserver.mw_client_new.fetch_image(
                     title=self.page_title
                 )
-            if self.mw_image or self.mw_image_new:
-                url=self.mw_image.url if self.mw_image else self.mw_image_new.url
-                relpath = self.config.extract_and_clean_path(url)
-                abspath = self.config.djvu_abspath(f"/images/{relpath}")
-                self.djvu_file = self.dproc.get_djvu_file(
-                    abspath, progressbar=self.progressbar
-                )
-                self.djvu_bundle = DjVuBundle(
-                    self.djvu_file, config=self.config, debug=self.context.args.debug
-                )
-                success = True
+
+            if not (self.mw_image or self.mw_image_new):
+                return False, f"Image not found in wiki: {self.page_title}"
+
+            url = self.mw_image.url if self.mw_image else self.mw_image_new.url
+            relpath = self.config.extract_and_clean_path(url)
+            abspath = self.config.djvu_abspath(f"/images/{relpath}")
+
+            self.djvu_file = self.dproc.get_djvu_file(
+                abspath, progressbar=self.progressbar
+            )
+            self.djvu_bundle = DjVuBundle(
+                self.djvu_file, config=self.config, debug=self.context.args.debug
+            )
+            return True, ""
 
         except Exception as ex:
+            error_msg = f"Error loading DjVu file: {str(ex)}"
             self.solution.handle_exception(ex)
-        return success
+            return False, error_msg
 
     def get_header_html(self) -> str:
         """Helper to generate HTML summary our DjVuFile instance."""
-        djvu_file = self.djvu_file
-        view_record = {}
-        filename = self.page_title
-        self.solution.add_links(view_record, filename)
-
-        if not djvu_file:
-            return f"<div>No DjVu file information loaded for <a href='{self.config.base_url}/Datei:{self.pagetitle}'>{self.pagetitle}</a></div>"
 
         def label_value(label: str, value, span_style: str = "") -> str:
             """Helper to create a label-value HTML row."""
@@ -127,6 +124,24 @@ class DjVuDebug:
                 return ""
             style_attr = f" style='{span_style}'" if span_style else ""
             return f"<strong>{label}:</strong><span{style_attr}>{value}</span>"
+
+        def link_list():
+            return [
+                label_value(self.config.base_url, view_record.get("wiki", "")),
+                label_value(self.config.new_url, view_record.get("new", "")),
+                label_value("Package", view_record.get("package", "")),
+            ]
+
+        djvu_file = self.djvu_file
+        view_record = {}
+        filename = self.page_title
+        self.solution.add_links(view_record, filename)
+
+        if not djvu_file:
+            links_html = ''.join(link_list())
+            error_html = f"<div>No DjVu file information loaded for <a href='{self.config.base_url}/Datei:{self.page_title}'>{self.page_title}</a></div>"
+            markup = f"<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'><div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>{links_html}</div>{error_html}</div>"
+            return markup
 
         format_type = "Bundled" if djvu_file.bundled else "Indirect/Indexed"
 
@@ -155,9 +170,7 @@ class DjVuDebug:
         html_parts = [
             "<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'>",
             "<div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>",
-            label_value(self.config.base_url, view_record.get("wiki", "")),
-            label_value(self.config.new_url, view_record.get("new", "")),
-            label_value("Package", view_record.get("package", "")),
+            *link_list(),
             label_value("Path", djvu_file.path, "word-break: break-all;"),
             label_value("Format", format_type),
             label_value("Pages (Doc)", djvu_file.page_count),
@@ -264,7 +277,7 @@ class DjVuDebug:
         """
         view_lod = []
         if not self.djvu_file:
-            return
+            return []
 
         for page in self.djvu_file.pages:
             record = self.create_page_record(self.djvu_file.path, page)
@@ -282,7 +295,14 @@ class DjVuDebug:
 
             self.progress_row.visible = True
             # Load file metadata (blocking IO)
-            await run.io_bound(self.load_djvu_file)
+            success, error_msg = await run.io_bound(self.load_djvu_file)
+
+            if not success:
+                self.content_row.clear()
+                with self.content_row:
+                    ui.notify(error_msg, type="negative")
+                    ui.label(error_msg).classes("text-negative")
+                return
             self.progress_row.visible = False
             # Convert pages to view format
             self.view_lod = self.get_view_lod()
