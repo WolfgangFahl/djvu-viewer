@@ -3,7 +3,7 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+import logging
 from dataclasses import field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Union
@@ -14,14 +14,14 @@ from ngwidgets.progress import Progressbar
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.version import Version
-
+logger = logging.getLogger(__name__)
 
 @lod_storable
 class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
-
+    page_id: int # if negative the page might be deleted or redirected
     url: str
     mime: str
     size: int
@@ -104,6 +104,23 @@ class MediaWikiImages:
         else:
             self.aiprop = tuple(aiprop)
 
+    def parse_image_response(self,data:Dict,title:str)->MediaWikiImage:
+        """Parse API response dict to MediaWikiImage object."""
+        pages = data.get("query", {}).get("pages", {})
+        logger.info(f"API Response for title '{title}':")
+        logger.info(f"Full data: {data}")
+        mw_image = None
+        for page_id, page_data in pages.items():
+            imageinfo = page_data.get("imageinfo", [])
+            if imageinfo:
+                # Merge page title into the image info dict to match 'allimages' structure
+                info_dict = imageinfo[0]
+                info_dict["title"] = page_data.get("title")
+                info_dict["page_id"] = page_id
+                mw_image = MediaWikiImage.from_dict(info_dict)
+        return mw_image
+
+
     def fetch_image(self, title: str) -> Optional[MediaWikiImage]:
         """
         Retrieve a single image by its file title (e.g., 'File:Example.jpg').
@@ -125,20 +142,7 @@ class MediaWikiImages:
         }
 
         data = self._make_request(params)
-        pages = data.get("query", {}).get("pages", {})
-        mw_image = None
-        for page_id, page_data in pages.items():
-            # If page_id is negative (e.g., "-1"), the page does not exist
-            if int(page_id) < 0:
-                continue
-
-            imageinfo = page_data.get("imageinfo", [])
-            if imageinfo:
-                # Merge page title into the image info dict to match 'allimages' structure
-                info_dict = imageinfo[0]
-                info_dict["title"] = page_data.get("title")
-                mw_image = MediaWikiImage.from_dict(info_dict)
-
+        mw_image=self.parse_image_response(data,title)
         return mw_image
 
     def fetch_allimages(

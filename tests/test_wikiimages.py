@@ -4,7 +4,6 @@ Created on 2026-01-02
 @author: wf
 """
 
-import datetime
 import json
 from dataclasses import asdict
 
@@ -59,6 +58,57 @@ class TestMediaWikiImages(Basetest):
             "filename": "AB1938 Heessen-Geschi.djvu",
         }
         self.assertEqual(image_dict, expected)
+
+    def test_api_to_image(self):
+        """Test parsing MediaWiki API response to MediaWikiImage object.
+
+        Verifies that parse_image_response correctly extracts image metadata
+        from API responses including URL, MIME type, dimensions, and file info.
+        """
+        test_cases = [
+            (
+                {
+                    'batchcomplete': '',
+                    'query': {
+                        'normalized': [{'from': 'File:Hemelingen-AB-1903.djvu', 'to': 'Datei:Hemelingen-AB-1903.djvu'}],
+                        'pages': {
+                            '-1': {
+                                'ns': 6,
+                                'title': 'Datei:Hemelingen-AB-1903.djvu',
+                                'missing': '',
+                                'known': '',
+                                'imagerepository': 'local',
+                                'imageinfo': [{
+                                    'timestamp': '2017-08-17T15:42:07Z',
+                                    'user': 'HReinhardt',
+                                    'size': 550,
+                                    'width': 1642,
+                                    'height': 2423,
+                                    'pagecount': 100,
+                                    'url': 'https://wiki.genealogy.net/images//2/2b/Hemelingen-AB-1903.djvu',
+                                    'descriptionurl': 'https://wiki.genealogy.net/Datei:Hemelingen-AB-1903.djvu',
+                                    'mime': 'image/vnd.djvu'
+                                }]
+                            }
+                        }
+                    }
+                },
+                'File:Hemelingen-AB-1903.djvu',
+                'Hemelingen-AB-1903.djvu',
+                -1,
+                'image/vnd.djvu',
+                550
+            ),
+        ]
+
+        for data, title, expected_filename, expected_page_id,expected_mime, expected_size in test_cases:
+            with self.subTest(title=title):
+                img = self.mwi.parse_image_response(data, title)
+                self.assertIsNotNone(img)
+                self.assertEqual(img.filename, expected_filename)
+                self.assertEqual(img.page_id,expected_page_id)
+                self.assertEqual(img.mime, expected_mime)
+                self.assertEqual(img.size, expected_size)
 
     def testFetchAllImages(self):
         """
