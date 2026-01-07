@@ -426,6 +426,7 @@ class DjVuBundle:
             "# Define variables",
             f"DJVU_PATH={shlex.quote(djvu_path)}",
             f"DJVU_DIR={shlex.quote(djvu_dir)}",
+            f"FULL_PATH={shlex.quote(full_path)}",
             f"BASENAME={shlex.quote(basename)}",
             f"BACKUP_FILE={shlex.quote(backup_file)}",
             f"BUNDLED_FILE={shlex.quote(bundled_file)}",
@@ -447,28 +448,33 @@ class DjVuBundle:
         script_lines.extend(
             [
                 "",
-                "# Step 2: Verify backup was created",
+                "# Step 2: Save original timestamps",
+                'ORIG_ATIME=$(stat -c %X "$FULL_PATH")',
+                'ORIG_MTIME=$(stat -c %Y "$FULL_PATH")',
+                "echo 'Saved original timestamps'",
+                "",
+                "# Step 3: Verify backup was created",  # Changed from Step 2
                 'if [ ! -f "$BACKUP_FILE" ]; then',
                 "  echo 'Error: Backup ZIP not created'",
                 "  exit 1",
                 "fi",
                 "echo 'Backup created: '$BACKUP_FILE",
                 "",
-                "# Step 3: Convert to bundled format",
+                "# Step 4: Convert to bundled format",  # Changed from Step 3
                 "echo 'Converting to bundled format...'",
-                'djvmcvt -b "$DJVU_PATH" "$BUNDLED_FILE"',
+                'djvmcvt -b "$FULL_PATH" "$BUNDLED_FILE"',
                 "",
-                "# Step 4: Verify bundled file was created",
+                "# Step 5: Verify bundled file was created",  # Changed from Step 4
                 'if [ ! -f "$BUNDLED_FILE" ]; then',
                 "  echo 'Error: Bundled file not created'",
                 "  exit 1",
                 "fi",
                 "echo 'Bundled file created: '$BUNDLED_FILE",
                 "",
-                "# Step 5: Sleep for CIFS sync (if needed)",
+                "# Step 6: Sleep for CIFS sync (if needed)",  # Changed from Step 5
                 "sleep 1",
                 "",
-                "# Step 6: Remove original files",
+                "# Step 7: Remove original files",  # Changed from Step 6
                 "echo 'Removing original files...'",
                 f'rm -f "$DJVU_PATH"',
             ]
@@ -483,9 +489,14 @@ class DjVuBundle:
         script_lines.extend(
             [
                 "",
-                "# Step 7: Move bundled file to original location",
+                "# Step 8: Move bundled file to original location",  # Changed from Step 7
                 "echo 'Moving bundled file to original location...'",
                 'mv "$BUNDLED_FILE" "$DJVU_PATH"',
+                "",
+                "# Step 9: Restore original timestamps",  # NEW STEP
+                "echo 'Restoring original timestamps...'",
+                'touch -a -d "@$ORIG_ATIME" "$DJVU_PATH"',
+                'touch -m -d "@$ORIG_MTIME" "$DJVU_PATH"',
                 "",
                 "echo 'Bundling complete!'",
                 f"echo 'Backup saved at: '$BACKUP_FILE",
@@ -495,7 +506,8 @@ class DjVuBundle:
         if docker_cmd:
             script_lines.extend([docker_cmd])
 
-        return "\n".join(script_lines) + "\n"
+        script="\n".join(script_lines) + "\n"
+        return script
 
     def convert_to_bundled(self, output_path: str = None) -> str:
         """

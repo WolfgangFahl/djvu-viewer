@@ -60,6 +60,7 @@ class DjVuDebug:
 
         # options
         self.update_index_db = True
+        self.update_wiki = True
         self.create_package = False
         self.package_type = self.config.package_mode
         self.bundling_enabled = False
@@ -345,7 +346,7 @@ class DjVuDebug:
 
             self.djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=True)
             docker_cmd = self.djvu_bundle.get_docker_cmd()
-            if docker_cmd:
+            if docker_cmd and self.update_wiki:
                 result = self.djvu_bundle.shell.run(docker_cmd)
                 if result.returncode != 0:
                     with self.content_row:
@@ -405,6 +406,9 @@ class DjVuDebug:
             ).bind_enabled_from(self, "bundling_enabled")
             ui.radio(["zip", "tar"]).props("inline").bind_value(
                 self, "package_type"
+            ).bind_enabled_from(self, "bundling_enabled")
+            ui.checkbox("update wiki").bind_value(
+                self, "update_wiki"
             ).bind_enabled_from(self, "bundling_enabled")
             # bundling options
             ui.checkbox("Update Index DB").bind_value(
