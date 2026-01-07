@@ -218,7 +218,7 @@ class DjVuDebug:
 
             with ui.expansion("Bundling script", icon="code"):
                 # Script
-                script = self.djvu_bundle.generate_bundling_script()
+                script = self.djvu_bundle.generate_bundling_script(update_index_db=self.update_index_db)
                 ui.code(script, language="bash").classes("w-full text-xs")
 
     def create_page_record(self, djvu_path: str, page: DjVuPage) -> dict:
@@ -276,6 +276,10 @@ class DjVuDebug:
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
         try:
+            if self.progressbar:
+                self.progressbar.reset()
+                self.progressbar.set_description("Loading DjVu file")
+
             self.progress_row.visible = True
             # Load file metadata (blocking IO)
             await run.io_bound(self.load_djvu_file)
@@ -316,6 +320,11 @@ class DjVuDebug:
             with self.content_row:
                 ui.notify(f"Error loading DjVu file: {str(ex)}", type="negative")
                 ui.label(f"Failed to load: {self.page_title}").classes("text-negative")
+        finally:
+            # Always hide progress when done
+            with self.solution.container:
+                if self.progress_row:
+                    self.progress_row.visible = False
 
     def reload_debug_info(self):
         """Create background task to reload debug info."""
@@ -354,6 +363,13 @@ class DjVuDebug:
                 if result.returncode != 0:
                     with self.content_row:
                         ui.notify("docker command failed")
+            if self.update_index_db:
+                success, msg = self.djvu_bundle.update_index_database()
+                with self.content_row:
+                    if success:
+                        ui.notify(msg, type="positive")
+                    else:
+                        ui.notify(msg, type="warning")
             self.update_bundle_state()
 
         except Exception as ex:
@@ -418,13 +434,14 @@ class DjVuDebug:
                 self, "update_index_db"
             ).bind_enabled_from(self, "bundling_enabled")
 
-            with ui.row() as self.progress_row:
-                self.progressbar = NiceguiProgressbar(
-                    total=1,  # Will be updated by get_djvu_file
-                    desc="Loading DjVu",
-                    unit="pages",
-                )
-            # side by side cards for bundle infos left: djvu right: state
+        with ui.row() as self.progress_row:
+            self.progressbar = NiceguiProgressbar(
+                total=1,  # Will be updated by get_djvu_file
+                desc="Loading DjVu",
+                unit="pages",
+            )
+            self.progress_row.visible = False
+        # side by side cards for bundle infos left: djvu right: state
         self.card_row = ui.row().classes("w-full")
         # Content row for all content
         self.content_row = ui.row()

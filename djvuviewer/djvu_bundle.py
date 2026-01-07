@@ -3,7 +3,8 @@ Created on 2026-01-03
 
 @author: wf
 """
-
+import logging
+import sqlite3
 import os
 import re
 import shlex
@@ -22,7 +23,7 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.image_convert import ImageConverter
 from djvuviewer.packager import Packager
-
+logger = logging.getLogger(__name__)
 
 class DjVuBundle:
     """
@@ -393,7 +394,52 @@ class DjVuBundle:
             docker_cmd = f"docker exec {self.config.container_name} php maintenance/refreshImageMetadata.php --force --mime=image/vnd.djvu --start={filename} --end={filename}"
         return docker_cmd
 
-    def generate_bundling_script(self) -> str:
+    def update_index_database(self) -> tuple[bool, str]:
+        """
+        Update SQLite database after bundling.
+        Sets bundled=1 and updates filesize to actual file size.
+
+        Returns:
+            tuple[bool, str]: (success, message)
+        """
+        if not hasattr(self.config, 'db_path') or not self.config.db_path:
+            msg = "No database path configured"
+            self._add_error(msg)
+            return False, msg
+
+        djvu_path = self.djvu_file.path
+        full_path = self.config.djvu_abspath(djvu_path)
+
+        if not os.path.exists(full_path):
+            msg = f"File not found for DB update: {full_path}"
+            self._add_error(msg)
+            return False, msg
+
+        try:
+            actual_size = os.path.getsize(full_path)
+
+            with sqlite3.connect(self.config.db_path, timeout=10.0) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE DjVu SET bundled = 1, filesize = ? WHERE path = ?",
+                    (actual_size, djvu_path)
+                )
+                conn.commit()
+
+                if cursor.rowcount == 0:
+                    msg = f"No database record found for path: {djvu_path}"
+                    self._add_error(msg)
+                    return False, msg
+
+            msg = f"Database updated: bundled=1, filesize={actual_size} for {djvu_path}"
+            return True, msg
+
+        except sqlite3.Error as e:
+            msg = f"Database update failed: {e}"
+            self._add_error(msg)
+            return False, msg
+
+    def generate_bundling_script(self,update_index_db:bool=False) -> str:
         """
         Generate a complete bash script for the bundling process.
 
@@ -413,6 +459,7 @@ class DjVuBundle:
         # Define paths
         backup_file = os.path.join(self.config.backup_path, f"{stem}.zip")
         bundled_file = os.path.join(djvu_dir, f"{stem}_bundled.djvu")
+        db_path = self.config.db_path
 
         # Build script content
         script_lines = [
@@ -427,6 +474,7 @@ class DjVuBundle:
             f"DJVU_PATH={shlex.quote(djvu_path)}",
             f"DJVU_DIR={shlex.quote(djvu_dir)}",
             f"FULL_PATH={shlex.quote(full_path)}",
+            f"DB_PATH='{shlex.quote(db_path)}'",
             f"BASENAME={shlex.quote(basename)}",
             f"BACKUP_FILE={shlex.quote(backup_file)}",
             f"BUNDLED_FILE={shlex.quote(bundled_file)}",
@@ -505,6 +553,23 @@ class DjVuBundle:
         docker_cmd = self.get_docker_cmd()
         if docker_cmd:
             script_lines.extend([docker_cmd])
+
+        # Add database update if enabled
+        if update_index_db:
+
+            script_lines.extend([
+                "# Update database",
+                "",
+                "# Get actual file size",
+                'FILESIZE=$(stat -f%z "$FULL_PATH" 2>/dev/null || stat -c%s "$FULL_PATH" 2>/dev/null)',
+                "",
+                "# Update SQLite database",
+                'sqlite3 "$DB_PATH" "UPDATE DjVu SET bundled = 1, filesize = $FILESIZE WHERE path = '"'"'$DJVU_PATH'"'"';"',
+                "",
+                'echo "Database updated: bundled=1, filesize=$FILESIZE for $DJVU_PATH"',
+                "",
+            ])
+
 
         script="\n".join(script_lines) + "\n"
         return script
