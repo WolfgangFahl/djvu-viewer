@@ -21,10 +21,10 @@ class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
-    page_id: int # if negative the page might be deleted or redirected
     url: str
     mime: str
     size: int
+    page_id: int=-1 # if negative the page might be deleted or redirected of fetched via allimages
     user: Optional[str] = None
     timestamp: Optional[str] = None
     description_url: Optional[str] = None

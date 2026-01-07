@@ -4,12 +4,12 @@ Created on 2026-01-02
 @author: wf
 """
 
-import json
 from dataclasses import asdict
+import json
+from typing import Dict
 
 from basemkit.basetest import Basetest
-
-from djvuviewer.wiki_images import MediaWikiImages
+from djvuviewer.wiki_images import MediaWikiImages, MediaWikiImage
 
 
 class TestMediaWikiImages(Basetest):
@@ -47,6 +47,7 @@ class TestMediaWikiImages(Basetest):
             "user": "KlausErdmann",
             "timestamp": "2008-05-17T10:00:03Z",
             "description_url": None,
+            'page_id': 499473,
             "height": 2689,
             "width": 2095,
             "pagecount": 3,
@@ -115,8 +116,14 @@ class TestMediaWikiImages(Basetest):
         test fetching all images
         """
         limit = 3
-        images = self.mwi.fetch_allimages(limit=limit)
-        for img in images:
-            if self.debug:
-                print(img)
-        self.assertEqual(len(images), limit)
+        for as_objects in [False,True]:
+            with self.subTest(as_object=as_objects):
+                images = self.mwi.fetch_allimages(limit=limit,as_objects=as_objects)
+                for img in images:
+                    if self.debug:
+                        print(img)
+                    if as_objects:
+                        self.assertTrue(isinstance(img, MediaWikiImage))
+                    else:
+                        self.assertTrue(isinstance(img,Dict))
+                self.assertEqual(len(images), limit)
