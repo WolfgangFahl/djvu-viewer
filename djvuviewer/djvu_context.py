@@ -5,9 +5,6 @@ Created on 04.01.2026
 """
 
 from argparse import Namespace
-
-from basemkit.profiler import Profiler
-
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_files import DjVuFiles
 from djvuviewer.djvu_processor import DjVuProcessor

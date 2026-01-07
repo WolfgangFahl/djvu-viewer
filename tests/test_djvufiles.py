@@ -39,12 +39,6 @@ class TestDjVuFiles(Basetest):
         for image in images:
             print(json.dumps(asdict(image), indent=2))
 
-    def test_djvufile_from_package(self):
-        """
-        test loading a djvu file from the given package
-        """
-        self.djvu_files.load_djvufile_from_package("AB1932-Ramrath")
-
     def test_diff(self):
         """
         test diff between wiki and migration

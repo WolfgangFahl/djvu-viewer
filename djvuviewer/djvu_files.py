@@ -221,56 +221,6 @@ class DjVuFiles:
                     results[source] = img
         return results
 
-    def load_djvufile_from_package(
-        self,
-        filename: str,
-    ) -> DjVuFile:
-        """
-        Load DjVu file data from a package archive.
-
-        Args:
-            filename: filename of  the DjVu file
-
-        Returns:
-            Complete DjVuFile object with all page data loaded from package
-
-        Raises:
-            FileNotFoundError: If package file does not exist
-        """
-        package_file = self.config.package_abspath(filename)
-        yaml_file = str(package_file).replace(".djvu", ".yaml")
-
-        if not package_file.exists():
-            raise FileNotFoundError(f"Package file not found: {package_file}")
-
-        yaml_data = Packager.read_from_package(package_file, yaml_file).decode("utf-8")
-        djvu_file = DjVuFile.from_yaml(yaml_data)  # @UndefinedVariable
-
-        return djvu_file
-
-    def load_djvufile_from_djvu(
-        self,
-        relpath: str,
-    ) -> DjVuFile:
-        """
-        Load DjVu file data directly from a DjVu file.
-
-        Args:
-            relpath: Relative path to the DjVu file
-
-        Returns:
-            Complete DjVuFile object with all page data loaded from file
-
-        Raises:
-            FileNotFoundError: If DjVu file does not exist
-        """
-        djvu_path = self.config.djvu_abspath(relpath)
-
-        if not djvu_path.exists():
-            raise FileNotFoundError(f"DjVu file not found: {djvu_path}")
-
-        return self.dproc.get_djvu_file(djvu_path=djvu_path)
-
     def store(
         self,
         djvu_files: List[DjVuFile],
@@ -284,9 +234,9 @@ class DjVuFiles:
             sample_record_count: Number of sample records for schema inference
         """
         djvu_lod, page_lod = self.get_db_records(djvu_files)
-        self._store_lods(djvu_lod, page_lod, sample_record_count)
+        self.store_lods(djvu_lod, page_lod, sample_record_count)
 
-    def _store_lods(
+    def store_lods(
         self,
         djvu_lod: List[Dict[str, Any]],
         page_lod: List[Dict[str, Any]],

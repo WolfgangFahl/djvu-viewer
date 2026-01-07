@@ -82,7 +82,7 @@ class TestDjVu(Basetest):
                     rel_path = DjVuConfig.djvu_relpath(djvu_path)
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
-                    djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
+                    djvu_file = self.dproc.get_djvu_file(djvu_path)
                     djvu_bundle = DjVuBundle(djvu_file, config=self.config)
                     self.test_bundles.append(djvu_bundle)
         return self.test_bundles
@@ -280,7 +280,7 @@ class TestDjVu(Basetest):
             rel_path = DjVuConfig.djvu_relpath(djvu_path)
             if self.debug:
                 print(f"getting DjVuFile for {rel_path}")
-            djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
+            djvu_file = self.dproc.get_djvu_file(djvu_path)
             if self.debug:
                 print(djvu_file)
                 print(djvu_file.to_yaml())
@@ -328,7 +328,10 @@ class TestDjVu(Basetest):
         """
         query_params = {
             "all_pages": {"limit": 50},
-            "pages_of_djvu": {"djvu_path": "/images/a/a1/Treuen-Vogtland-AB-1905.djvu"},
+            "pages_of_djvu":
+                {
+                    "djvu_path": "/images/a/a1/Treuen-Vogtland-AB-1905.djvu"
+                },
         }
         djvm = DjVuManager(config=self.config)
         djvm.sql_db.debug = self.debug
@@ -397,6 +400,7 @@ class TestDjVu(Basetest):
                         args.force = True
                         args.pngmode = pngmode
                         args.package_mode = package_mode
+                        self.config.package_mode=package_mode
                         self.check_command("convert", args=args)
 
                         # Verify tar file was created and contains expected content

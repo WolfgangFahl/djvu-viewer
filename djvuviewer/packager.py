@@ -3,14 +3,14 @@ Created on 2025-02-26
 
 @author: wf
 """
-
+import logging
 import os
 import tarfile
 import zipfile
 from enum import Enum
 from pathlib import Path
 from typing import List, Optional, Union
-
+logger = logging.getLogger(__name__)
 
 class PackageMode(Enum):
     """
@@ -106,6 +106,12 @@ class Packager:
             cls._create_zip(output_path, files_to_package)
         else:
             raise ValueError(f"Unsupported package mode: {mode}")
+        try:
+            archive_size = Path(output_path).stat().st_size
+            msg=f"Archive created successfully: {output_path} ({archive_size:,} bytes)"
+            logger.info(msg)
+        except Exception:
+            pass
 
     @staticmethod
     def get_indexfile(package_file: Union[str, Path]) -> str:

@@ -157,6 +157,8 @@ class DjVuActions:
                     valid=valid,
                     djvu_path=image.relpath,
                 )
+                pagefile_path=os.path.join(os.path.dirname(djvu_path),filename)
+                dpage.set_fileinfo(pagefile_path)
                 pages.append(dpage)
                 bundled = document.type == 2
 
@@ -233,7 +235,7 @@ class DjVuActions:
             # Show original file info
             original_size = self.show_fileinfo(djvu_path)
 
-            djvu_file = self.dproc.get_djvu_file(djvu_path, config=self.config)
+            djvu_file = self.dproc.get_djvu_file(djvu_path)
             djvu_bundle = DjVuBundle(djvu_file, config=self.config, debug=self.debug)
 
             # If only generating script, return it
@@ -461,43 +463,8 @@ class DjVuActions:
                 f"- updating database with {len(updated_files)}/{total_files} files"
             )
             # Use the new store() method with DjVuFile objects
-            self.store(updated_files, sample_record_count=min(10, len(updated_files)))
-
-    def load_djvufile_from_package(
-        self,
-        relpath: str,
-    ) -> DjVuFile:
-        """
-        Load complete DjVu file data from package or direct file.
-
-        Args:
-            relpath: Relative path to the DjVu file
-
-        Returns:
-            Complete DjVuFile object with all page data
-
-        Raises:
-            FileNotFoundError: If neither package nor DjVu file exists
-        """
-        # Try package first (faster, has pre-computed metadata)
-        package_file = self.config.package_abspath(relpath)
-        yaml_file = str(package_file).replace(".djvu", ".yaml")
-
-        if package_file.exists():
-            # Load from package if it exists
-            return self.load_from_package(str(package_file), yaml_file)
-
-        # Fallback to direct file processing
-        djvu_path = self.config.djvu_abspath(relpath)
-        if djvu_path.exists():
-            return self.dproc.get_djvu_file(djvu_path=djvu_path)
-
-        # Neither package nor file exists
-        raise FileNotFoundError(
-            f"Cannot load DjVu file: {relpath}\n"
-            f"  Package: {package_file} ❌\n"
-            f"  DjVu file: {djvu_path} ❌"
-        )
+            if updated_files:
+                self.djvu_files.store(updated_files, sample_record_count=min(10, len(updated_files)))
 
     def report_errors(self, profiler: Profiler = None) -> None:
         """

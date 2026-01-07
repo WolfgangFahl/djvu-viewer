@@ -4,27 +4,54 @@ Created on 2025-02-25
 @author: wf
 """
 
+from dataclasses import dataclass, field
 import datetime
 import os
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-import numpy
 from basemkit.yamlable import lod_storable
-
 from djvuviewer.packager import Packager
+import numpy
 
+@dataclass
+class BaseFile:
+    iso_date: Optional[str] = field(default=None, kw_only=True)
+    filesize: Optional[int] = field(default=None, kw_only=True)
+
+    @staticmethod
+    def get_fileinfo(filepath: str):
+        filesize = None
+        iso_date = None
+        if os.path.exists(filepath):
+            # Set file size in bytes
+            filesize = os.path.getsize(filepath)
+
+            # Get file modification time and convert to UTC ISO format with second precision
+            mtime = os.path.getmtime(filepath)
+            datetime_obj = datetime.datetime.fromtimestamp(
+                mtime, tz=datetime.timezone.utc
+            )
+            iso_date = datetime_obj.isoformat(timespec="seconds")
+        return iso_date, filesize
+
+    def set_fileinfo(self, filepath: str):
+        """
+        Set filesize and ISO date with sec prec for
+        the given filepath
+
+        Args:
+            filepath (str): Path to the file
+        """
+        self.iso_date, self.filesize = self.get_fileinfo(filepath)
 
 @lod_storable
-class DjVuPage:
+class DjVuPage(BaseFile):
     """Represents a single djvu page"""
 
     path: str
     page_index: int
     valid: bool = False
-    iso_date: Optional[str] = None
-    filesize: Optional[int] = None
     width: Optional[int] = None
     height: Optional[int] = None
     dpi: Optional[int] = None
@@ -65,39 +92,6 @@ class DjVuPage:
             error_msg="-sample error message-",
         )
         return sample_page
-
-
-@dataclass
-class BaseFile:
-    iso_date: Optional[str] = field(default=None, kw_only=True)
-    filesize: Optional[int] = field(default=None, kw_only=True)
-
-    @staticmethod
-    def get_fileinfo(filepath: str):
-        filesize = None
-        iso_date = None
-        if os.path.exists(filepath):
-            # Set file size in bytes
-            filesize = os.path.getsize(filepath)
-
-            # Get file modification time and convert to UTC ISO format with second precision
-            mtime = os.path.getmtime(filepath)
-            datetime_obj = datetime.datetime.fromtimestamp(
-                mtime, tz=datetime.timezone.utc
-            )
-            iso_date = datetime_obj.isoformat(timespec="seconds")
-        return iso_date, filesize
-
-    def set_fileinfo(self, filepath: str):
-        """
-        Set filesize and ISO date with sec prec for
-        the given filepath
-
-        Args:
-            filepath (str): Path to the file
-        """
-        self.iso_date, self.filesize = self.get_fileinfo(filepath)
-
 
 @dataclass
 class DjVu(BaseFile):
