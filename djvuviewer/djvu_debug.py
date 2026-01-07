@@ -198,6 +198,7 @@ class DjVuDebug:
 
             # Backup file - just a disabled checkbox and download link
             backup_exists = os.path.exists(self.djvu_bundle.backup_file)
+            self.create_package=not backup_exists
             with ui.row().classes("gap-4 items-center"):
                 ui.checkbox("Backup exists", value=backup_exists).props("disable")
 

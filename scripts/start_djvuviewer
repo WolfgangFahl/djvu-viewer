@@ -2,7 +2,7 @@
 # WF 2025-11-11 start djvuviewer
 # WF 2026-01-02 refactored to djvuviewer to fix https://github.com/WolfgangFahl/djvu-viewer/issues/5
 #
-# This script launches the  DjVu viewer service.
+# This script launches the DjVu viewer service.
 # It ensures only one instance runs at a time, writes log output
 # to /var/log/djvu-viewer/djvu-viewer.log
 
@@ -56,6 +56,35 @@ update() {
   pipx install -e . --force 2>&1 | tee -a "$LOG_FILE"
 }
 
+# Setup and verify remote debugging configuration
+remote_debug_setup() {
+  # Check if the debug port is already accessible
+  if timeout 1 bash -c "cat < /dev/null > /dev/tcp/localhost/$DEBUG_PORT" 2>/dev/null; then
+    echo "$(date '+%F %T') - Debug port $DEBUG_PORT is available; skipping confirmation." >>"$LOG_FILE"
+    echo "✅ Debug port $DEBUG_PORT is accessible"
+    return 0
+  fi
+
+  # Port not reachable - show setup instructions
+  cat <<EOF
+📡 Prepare Remote Debug
+  1. Start debug server on your development machine
+     e.g. Eclipse PyDev: Start Debug Server so that
+          Debug Server at port: $DEBUG_PORT
+          appears
+  2. Establish reverse SSH tunnel allowing this machine to connect
+     to your development machine:
+       ssh -R $DEBUG_PORT:localhost:$DEBUG_PORT $USER@$(hostname -f)
+EOF
+
+  read -p "Have you set up the remote debug server and SSH tunnel? (y/n): " confirm
+  if [[ "$confirm" != "y" ]]; then
+    echo "❌ Remote debug not started. Please set up the environment and rerun."
+    exit 1
+  fi
+  echo "✅ Starting djvuviewer with remote debugging..."
+}
+
 # start the djvu-viewer
 start_djvu_viewer() {
 
@@ -75,30 +104,17 @@ start_djvu_viewer() {
   echo "$(date '+%F %T') - Starting djvuviewer -s." >>"$LOG_FILE"
 
   if [[ "$REMOTE_DEBUG" == "true" ]]; then
-	   cat <<EOF
-📡 Prepare Remote Debug
-  1.  e.g. Eclipse PyDev/Start Debug server so that
-      Debug Server at port: 5678
-      appears
-  2. Establish reverse SSH tunnel allowing this machine to connect
-     to your devlopment machine
-       ssh -R $DEBUG_PORT:localhost:$DEBUG_PORT $USER@$(hostname -f)
-EOF
+    remote_debug_setup
 
-  read -p "Have you set up the remote debug server and SSH tunnel? (y/n): " confirm
-  if [[ "$confirm" != "y" ]]; then
-    echo "❌ Remote debug not started. Please set up the environment and rerun."
-    exit 1
-  fi
-  echo "✅ Starting djvuviewer with remote debugging..."
     nohup djvuviewer $options --debug \
       --debugServer "$DEBUG_SERVER" \
       --debugPort "$DEBUG_PORT" \
       --debugLocalPath "$DEBUG_LOCAL_PATH" \
       --debugRemotePath "$DEBUG_REMOTE_PATH" >>"$LOG_FILE" 2>&1 &
   else
-    nohup djvuviewer $options  >>"$LOG_FILE" 2>&1 &
+    nohup djvuviewer $options >>"$LOG_FILE" 2>&1 &
   fi
+
   PID=$!
   msg="$(date '+%F %T') - djvuviewer $options started with PID $PID log at $LOG_FILE"
   echo $msg
@@ -108,7 +124,7 @@ EOF
 # Check if configuration file exists
 check_config() {
   if [[ ! -f "$CONFIG_FILE" ]]; then
-        cat <<EOF
+    cat <<EOF
 ❌ Configuration file not found: $CONFIG_FILE
 
 Example
@@ -120,22 +136,24 @@ db_path: /var/www/mediawiki/sites/genwiki.genealogy.net/djvu/genwiki_djvu.db
 EOF
     exit 1
   fi
-
 }
 
 check_config
+
 # check command line arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
-       usage;;
+      usage
+      ;;
     -d|--debug)
       REMOTE_DEBUG="true"
       ;;
     -u|--update)
-       update
-       ;;
+      update
+      ;;
   esac
   shift
 done
+
 start_djvu_viewer
