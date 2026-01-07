@@ -4,24 +4,23 @@ Created on 2026-01-02
 @author: wf
 """
 
-from dataclasses import asdict
-from datetime import datetime
 import logging
 import os
 import time
 import traceback
+from dataclasses import asdict
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
+from tqdm import tqdm
+
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_processor import ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from lodstorage.lod import LOD
-from tqdm import tqdm
-
-from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.packager import Packager
 
 
@@ -33,10 +32,7 @@ class DjVuActions:
     and managing DjVu files and their metadata in a database.
     """
 
-    def __init__(
-        self,
-        context=DjVuContext
-    ):
+    def __init__(self, context=DjVuContext):
         """
         Initialize DjVuActions with required components.
 
@@ -49,7 +45,7 @@ class DjVuActions:
         self.config = context.config
         self.args = context.args
         self.djvu_files = context.djvu_files
-        self.dvm=context.djvu_files.dvm
+        self.dvm = context.djvu_files.dvm
         self.dproc = context.dproc
         self.package_mode = context.package_mode
 
@@ -80,77 +76,32 @@ class DjVuActions:
             fh.setFormatter(formatter)
             self.logger.addHandler(fh)
 
-    def add_page(
-        self,
-        page_lod: List[Dict[str, Any]],
-        path: str,
-        page_index: int,
-        page: Any,
-    ) -> DjVuPage:
+    def get_djvu_files(self, path: Optional[str] = None) -> Dict[str, DjVuFile]:
         """
-        Create a DjVuPage record and append it to the page list.
+        get DjVu files.
 
         Args:
-            page_lod: List to which the page dictionary is appended
-            path: Path to the DjVu file
-            page_index: Index of the page (1-based)
-            page: Page object containing metadata from the DjVu library
+            path: Optional single path for processing e.g.
+            /images/1/1e/AB1953-Gohr.djvu
 
         Returns:
-            The created DjVuPage instance
+            Dict of DjVu file paths to process
 
-        Note:
-            Files containing "gesperrtes" in their name are marked as invalid
-            as they typically represent locked/restricted content.
         """
-        try:
-            filename = page.file.name
-            # Check for restricted content marker
-            if "gesperrtes" in filename:
-                filename = "?"
-                valid = False
-            else:
-                valid = True
-        except Exception:
-            filename = "?"
-            valid = False
-
-        dpage = DjVuPage(
-            path=filename,
-            page_index=page_index,
-            valid=valid,
-            djvu_path=path,
+        paths = [path] if path else None
+        djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
+            paths=paths, file_limit=self.args.limit
         )
-        row = asdict(dpage)
-        page_lod.append(row)
-        return dpage
+        return djvu_files_by_path
 
-    def get_djvu_files(
-        self, djvu_lod: List[Dict[str, Any]], url: Optional[str] = None
-    ) -> List[str]:
+    def init_database(self):
         """
-        Extract DjVu file paths from the record list.
-
-        Args:
-            djvu_lod: List of DjVu file records
-            url: Optional single file URL for processing
-
-        Returns:
-            List of DjVu file paths to process
-
-        Note:
-            When url is provided, returns a single-item list for targeted processing.
-            Otherwise, extracts all paths from the database records.
+        initialize the database
         """
-        if url:
-            # Single-file mode for targeted processing
-            return [url]
+        # delegate
+        self.djvu_files.init_database()
 
-        # Batch mode - process all files from database
-        djvu_files = [r.get("path").replace("./", "/") for r in djvu_lod]
-        return djvu_files
-
-    def catalog_djvu(self, limit: int = 10000000) -> Tuple[List[Dict], List[Dict]]:
+    def catalog_djvu(self, limit: int = 10000000) -> List[DjVuFile]:
         """
         Catalog DjVu files by scanning and extracting metadata
 
@@ -161,13 +112,12 @@ class DjVuActions:
             limit: Maximum number of pages to process before stopping
 
         Returns:
-            A tuple of (djvu_lod, page_lod) containing the list of DjVu records
-            and page records respectively
+            List of DjVuFile objects with their pages populated
         """
         total = 0
         start_time = time.time()
-        djvu_lod = []
-        page_lod = []
+        djvu_files = []
+
         images = self.djvu_files.fetch_images(
             self.config.base_url, name="wiki", limit=limit
         )
@@ -179,28 +129,48 @@ class DjVuActions:
                 self.errors.append(Exception(f"missing {djvu_path}"))
                 continue
 
-            page_index = 0
+            pages = []
             page_count = 0
             bundled = False
 
             # Process each page in the document
             for document, page in self.dproc.yield_pages(djvu_path):
                 page_count = len(document.pages)
-                page_index += 1
-                self.add_page(page_lod, image.relpath, page_index, page)
+                page_index = len(pages) + 1
+
+                # Create DjVuPage directly
+                try:
+                    filename = page.file.name
+                    # Check for restricted content marker
+                    if "gesperrtes" in filename:
+                        filename = "?"
+                        valid = False
+                    else:
+                        valid = True
+                except Exception:
+                    filename = "?"
+                    valid = False
+
+                dpage = DjVuPage(
+                    path=filename,
+                    page_index=page_index,
+                    valid=valid,
+                    djvu_path=image.relpath,
+                )
+                pages.append(dpage)
                 bundled = document.type == 2
 
             iso_date, filesize = ImageJob.get_fileinfo(djvu_path)
-            djvu = DjVu(
+            djvu_file = DjVuFile(
                 path=image.relpath,
                 page_count=page_count,
                 bundled=bundled,
                 iso_date=iso_date,
                 filesize=filesize,
+                pages=pages,  # Attach pages directly
             )
-            djvu_row = asdict(djvu)
-            djvu_lod.append(djvu_row)
-            total += page_index
+            djvu_files.append(djvu_file)
+            total += len(pages)
 
             if total > limit:
                 break
@@ -212,7 +182,7 @@ class DjVuActions:
                 f"{index:4d} {page_count:4d} {total:7d} {pages_per_sec:7.0f} pages/s: {image.relpath}"
             )
 
-        return djvu_lod, page_lod
+        return djvu_files
 
     def show_fileinfo(self, path: str) -> int:
         """
@@ -430,88 +400,22 @@ class DjVuActions:
                     )
                     pbar.update(1)
 
-    def get_db_records(
-        self,
-        package_file: str,
-        yaml_file: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        Extract database records from a packages's YAML metadata.
-
-        Args:
-            package_file: Path to the package file
-            yaml_file: Name of the YAML file within the package
-
-        Returns:
-            List of dictionaries containing page records
-        """
-        page_lod = []
-        yaml_data = Packager.read_from_package(package_file, yaml_file).decode("utf-8")
-        djvu_file = DjVuFile.from_yaml(yaml_data)  # @UndefinedVariable
-
-        for page in djvu_file.pages:
-            page_record = asdict(page)
-            page_lod.append(page_record)
-
-        return page_lod
-
-    def store(
-        self,
-        djvu_lod: List[Dict[str, Any]],
-        page_lod: List[Dict[str, Any]],
-        sample_record_count: int = 1,
-    ) -> None:
-        """
-        Store DjVu and page records in the database.
-
-        Args:
-            djvu_lod: List of DjVu file records
-            page_lod: List of page records
-            sample_record_count: Number of sample records for schema inference
-        """
-        self.dvm.store(
-            lod=page_lod,
-            entity_name="Page",
-            primary_key="page_key",
-            with_drop=True,
-            sampleRecordCount=sample_record_count,
-        )
-        self.dvm.store(
-            lod=djvu_lod,
-            entity_name="DjVu",
-            primary_key="path",
-            with_drop=True,
-            sampleRecordCount=sample_record_count,
-        )
-
-    def init_database(self) -> None:
-        """
-        Initialize the database with sample records.
-
-        Creates the database schema using sample DjVu and page records.
-        """
-        djvu_record = asdict(DjVu.get_sample())
-        djvu_lod = [djvu_record]
-        page_record = asdict(DjVuPage.get_sample())
-        page_lod = [page_record]
-        self.store(djvu_lod, page_lod, sample_record_count=1)
-
     def update_database(
         self,
-        djvu_files: List[str],
-        djvu_by_path: Dict[str, Dict[str, Any]],
+        djvu_files_by_path: Dict[str, DjVuFile],
         max_errors: float = 1.0,
+        force_reload: bool = False,
     ) -> None:
         """
-        Update the DjVu database with metadata from processed files.
+        Update the DjVu database with complete metadata from DjVu files.
 
-        Reads metadata from package archives and updates the database records
-        with processing information and extracted page data.
+        For each DjVu file, ensures complete page data is available (loading
+        from packages or directly from files if needed) and updates the database.
 
         Args:
-            djvu_files: List of DjVu file paths to update
-            djvu_by_path: Dictionary mapping paths to DjVu records
-            max_errors: Maximum allowed error percentage before aborting update
+            djvu_files_by_path: Dictionary mapping relative paths to DjVuFile objects
+            max_errors: Maximum allowed error percentage (0-100) before aborting update
+            force_reload: If True, reload all files even if they have page data
 
         Note:
             The database update is skipped if the error percentage exceeds
@@ -519,43 +423,81 @@ class DjVuActions:
             incomplete or erroneous data.
         """
         error_count = 0
-        page_lod = []
-        djvu_lod = list(djvu_by_path.values())
+        updated_files = []
 
         with tqdm(
-            total=len(djvu_files),
-            desc="Updating the DjVu meta data database",
+            total=len(djvu_files_by_path),
+            desc="Processing DjVu files for database update",
             unit="file",
         ) as pbar:
-            for relpath in djvu_files:
+            for relpath, djvu_file in djvu_files_by_path.items():
                 try:
-                    djvu_record = djvu_by_path.get(relpath)
-                    if djvu_record is None:
-                        djvu_path = self.config.djvu_abspath(relpath)
-                        djvu_file=self.dproc.get_djvu_file(djvu_path=djvu_path)
-                        djvu_record=asdict(djvu_file)
+                    # Check if we need to load complete data
+                    if force_reload or not djvu_file.pages:
+                        djvu_file = self._load_complete_djvu_file(relpath, djvu_file)
 
-                    package_lod = self.get_db_records(package_file, prefix + ".yaml")
-                    page_lod.extend(package_lod)
+                    updated_files.append(djvu_file)
 
                 except BaseException as e:
                     self.errors.append(e)
+                    error_count += 1
                 finally:
-                    error_count = len(self.errors)
                     status_msg = "✅" if error_count == 0 else f"❌ {error_count}"
                     pbar.set_postfix_str(status_msg)
                     pbar.update(1)
 
         # Calculate error percentage and decide whether to update database
-        err_percent = error_count / len(djvu_files) * 100 if djvu_files else 0
+        total_files = len(djvu_files_by_path)
+        err_percent = (error_count / total_files * 100) if total_files > 0 else 0
 
-        if err_percent > round(max_errors, 1):
+        if err_percent > max_errors:
             print(
-                f"{err_percent:.1f}% errors ❌ > {max_errors:.1f}% limit - skipping database update"
+                f"❌ Error rate {err_percent:.1f}% exceeds {max_errors:.1f}% limit "
+                f"- skipping database update ({error_count}/{total_files} failed)"
             )
         else:
-            print(f"{err_percent:.1f}% errors ✅ < {max_errors:.1f}% limit")
-            self.store(djvu_lod, page_lod)
+            print(
+                f"✅ Error rate {err_percent:.1f}% ≤ {max_errors:.1f}% limit "
+                f"- updating database with {len(updated_files)}/{total_files} files"
+            )
+            # Use the new store() method with DjVuFile objects
+            self.store(updated_files, sample_record_count=min(10, len(updated_files)))
+
+    def load_djvufile_from_package(
+        self,
+        relpath: str,
+    ) -> DjVuFile:
+        """
+        Load complete DjVu file data from package or direct file.
+
+        Args:
+            relpath: Relative path to the DjVu file
+
+        Returns:
+            Complete DjVuFile object with all page data
+
+        Raises:
+            FileNotFoundError: If neither package nor DjVu file exists
+        """
+        # Try package first (faster, has pre-computed metadata)
+        package_file = self.config.package_abspath(relpath)
+        yaml_file = str(package_file).replace(".djvu", ".yaml")
+
+        if package_file.exists():
+            # Load from package if it exists
+            return self.load_from_package(str(package_file), yaml_file)
+
+        # Fallback to direct file processing
+        djvu_path = self.config.djvu_abspath(relpath)
+        if djvu_path.exists():
+            return self.dproc.get_djvu_file(djvu_path=djvu_path)
+
+        # Neither package nor file exists
+        raise FileNotFoundError(
+            f"Cannot load DjVu file: {relpath}\n"
+            f"  Package: {package_file} ❌\n"
+            f"  DjVu file: {djvu_path} ❌"
+        )
 
     def report_errors(self, profiler: Profiler = None) -> None:
         """
@@ -598,8 +540,8 @@ class DjVuActions:
             limit: Maximum number of pages to process
             sample_record_count: Number of sample records for schema inference
         """
-        djvu_lod, page_lod = self.catalog_djvu(limit=limit)
-        self.store(djvu_lod, page_lod, sample_record_count=sample_record_count)
+        djvu_files = self.catalog_djvu(limit=limit)
+        self.djvu_files.store(djvu_files, sample_record_count=sample_record_count)
 
     def convert_from_database(
         self, serial: bool = False, url: Optional[str] = None
@@ -611,25 +553,23 @@ class DjVuActions:
             serial: If True, use serial processing; otherwise use parallel
             url: Optional single file URL for targeted conversion
         """
-        djvu_lod = self.djvu_files.get_djvu_lod()
-        djvu_files = self.get_djvu_files(djvu_lod, url=url)
-        self.convert_djvu(djvu_files, serial=serial)
+        # Work with DjVuFile objects
+        if not url:
+            djvu_files_by_path = self.get_djvu_files()
+            djvu_paths = list(djvu_files_by_path.keys())
+        else:
+            djvu_paths = [url]
+        self.convert_djvu(djvu_paths, serial=serial)
 
     def update_from_database(
-        self, max_errors: float = 1.0, url: Optional[str] = None
+        self, max_errors: float = 1.0, path: Optional[str] = None
     ) -> None:
         """
         Update database with metadata from processed files.
 
         Args:
             max_errors: Maximum allowed error percentage before skipping update
-            url: Optional single file URL for targeted update
+            path: Optional single file path for targeted update
         """
-        djvu_lod = self.djvu_files.get_djvu_lod()
-        djvu_by_path, duplicates = LOD.getLookup(djvu_lod, "path")
-
-        if len(duplicates) > 0:
-            print(f"Warning: {len(duplicates)} duplicate path entries in DjVu table")
-
-        djvu_files = self.get_djvu_files(djvu_lod, url=url)
-        self.update_database(djvu_files, djvu_by_path, max_errors=max_errors)
+        djvu_files = self.get_djvu_files(path=path)
+        self.update_database(djvu_files, max_errors=max_errors)

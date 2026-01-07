@@ -18,7 +18,7 @@ from nicegui import background_tasks, run, ui
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.djvu_core import DjVuPage
-from djvuviewer.djvu_image import ImageJob
+from djvuviewer.djvu_image_job import ImageJob
 from djvuviewer.djvu_processor import DjVuProcessor
 
 
@@ -233,7 +233,7 @@ class DjVuDebug:
         # Add Links if config exists
         if hasattr(self, "config") and hasattr(self.config, "url_prefix"):
             base_url = f"{self.config.url_prefix}/djvu"
-            backlink=""
+            backlink = ""
             # View Link
             if self.mw_image_new.description_url:
                 backlink = (
@@ -268,10 +268,10 @@ class DjVuDebug:
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
         try:
-            self.progress_row.visible=True
+            self.progress_row.visible = True
             # Load file metadata (blocking IO)
             await run.io_bound(self.load_djvu_file)
-            self.progress_row.visible=False
+            self.progress_row.visible = False
             # Convert pages to view format
             self.view_lod = self.get_view_lod()
 

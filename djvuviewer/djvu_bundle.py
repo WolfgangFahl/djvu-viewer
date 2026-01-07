@@ -68,8 +68,8 @@ class DjVuBundle:
                 print(bundle.get_error_summary())
         """
         package_path = Path(package_file)
-        yaml_indexfile = Packager.get_indexfile(package_path)
-        bundle = cls(DjVuFile.from_package(package_path, yaml_indexfile))
+        djvu_file = DjVuFile.from_package(package_path)
+        bundle = cls(djvu_file)
 
         if with_check:
             bundle.check_package(package_file)
@@ -123,9 +123,7 @@ class DjVuBundle:
 
             # Check for YAML index file
             if not yaml_indexfile in members:
-                self._add_error(
-                    f"Expected  {yaml_indexfile} file in package"
-                )
+                self._add_error(f"Expected  {yaml_indexfile} file in package")
 
             # Create dimension mapping from metadata
             page_dimensions = {

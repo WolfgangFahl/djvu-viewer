@@ -23,7 +23,7 @@ from PIL import Image
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig, PngMode
 from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
-from djvuviewer.djvu_image import ImageJob
+from djvuviewer.djvu_image_job import ImageJob
 from djvuviewer.packager import PackageMode, Packager
 
 if sys.platform != "win32":
@@ -79,7 +79,7 @@ class DjVuProcessor:
             pngmode(str): PNG generation mode - "cli" or "pil" (default: "pil")
             clean_temp(bool): if True remove files from temp directories when tar done
         """
-        self.package_mode=package_mode
+        self.package_mode = package_mode
         self.do_package = package_mode is not None
         self.verbose = verbose
         self.debug = debug
@@ -587,7 +587,7 @@ class DjVuProcessor:
         if not self.package_mode:
             raise ValueError("Cannot wrap package: package_mode not configured")
 
-        package_mode=self.package_mode
+        package_mode = self.package_mode
         package_path = os.path.join(
             self.final_output_path, f"{Path(djvu_path).stem}.{package_mode.ext}"
         )

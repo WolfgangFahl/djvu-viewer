@@ -4,24 +4,24 @@ Created on 2025-02-24
 @author: wf
 """
 
-from argparse import Namespace
 import argparse
 import glob
 import json
 import os
 import shutil
+from argparse import Namespace
 from typing import List, Optional
 
 from basemkit.basetest import Basetest
+
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_cmd import DjVuCmd
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile, DjVuImage
-from djvuviewer.djvu_image import ImageJob
+from djvuviewer.djvu_image_job import ImageJob
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.download import Download
-
 from djvuviewer.packager import PackageMode
 
 
@@ -58,6 +58,7 @@ class TestDjVu(Basetest):
             ("/images/c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu", 3, False),
             ("/images/c/ce/Plauen-AB-1938.djvu", 2, True),
             ("/images/f/ff/AB1932-Ramrath.djvu", 2, True),
+            ("/images/1/1e/AB1953-Gohr.djvu", 2, True),
         ]
         self.test_bundles = None
         self.test_tuples_2024 = [
@@ -382,7 +383,7 @@ class TestDjVu(Basetest):
         Test the conversion with different PNG and package modes.
         """
         png_modes = ["pil", "cli"]
-        package_modes = ["tar","zip"]
+        package_modes = ["tar", "zip"]
 
         for relurl, _elen, _expected_bundled in self.test_tuples:
             base_name = os.path.splitext(os.path.basename(relurl))[0]
@@ -423,7 +424,8 @@ class TestDjVu(Basetest):
                     package_mode=PackageMode.ZIP,
                     debug=self.debug,
                     verbose=self.debug,
-                    clean_temp=False)
+                    clean_temp=False,
+                )
                 if self.debug:
                     print(f"processing {relurl}")
                 # for document, page in dproc.yield_pages(djvu_path):

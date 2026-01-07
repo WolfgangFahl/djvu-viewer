@@ -4,7 +4,6 @@ Created on 2026-01-03
 @author: wf
 """
 
-import datetime
 import logging
 import os
 from dataclasses import dataclass, field
@@ -13,11 +12,11 @@ from typing import Optional, Tuple
 import djvu
 from basemkit.profiler import Profiler
 
-from djvuviewer.djvu_core import DjVuImage
+from djvuviewer.djvu_core import BaseFile, DjVuImage
 
 
 @dataclass
-class ImageJob:
+class ImageJob(BaseFile):
     """
     Represents a processed DjVu page,
     optionally including document, page, page job, and image data.
@@ -33,9 +32,6 @@ class ImageJob:
     # flags
     verbose: bool = False
     debug: bool = False
-    # fields for database records
-    iso_date: Optional[str] = field(default=None)
-    filesize: Optional[int] = field(default=None)
     error: Optional[Exception] = field(default=None)
 
     def __post_init__(self):
@@ -55,32 +51,6 @@ class ImageJob:
         if self.pagejob:
             return self.pagejob.size
         return (0, 0)
-
-    @staticmethod
-    def get_fileinfo(filepath: str):
-        filesize = None
-        iso_date = None
-        if os.path.exists(filepath):
-            # Set file size in bytes
-            filesize = os.path.getsize(filepath)
-
-            # Get file modification time and convert to UTC ISO format with second precision
-            mtime = os.path.getmtime(filepath)
-            datetime_obj = datetime.datetime.fromtimestamp(
-                mtime, tz=datetime.timezone.utc
-            )
-            iso_date = datetime_obj.isoformat(timespec="seconds")
-        return iso_date, filesize
-
-    def set_fileinfo(self, filepath: str):
-        """
-        Set filesize and ISO date with sec prec for
-        the given filepath
-
-        Args:
-            filepath (str): Path to the file
-        """
-        self.iso_date, self.filesize = self.get_fileinfo(filepath)
 
     @staticmethod
     def get_prefix(relurl: str):

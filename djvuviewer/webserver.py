@@ -248,7 +248,9 @@ class DjVuSolution(InputWebSolution):
                 )
             backparam = f"?backlink={backlink}" if backlink else ""
             local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
-            archive_name=filename.replace(".djvu","."+self.djvu_config.package_mode)
+            archive_name = filename.replace(
+                ".djvu", "." + self.djvu_config.package_mode
+            )
             view_record["Package"] = Link.create(url=local_url, text=archive_name)
 
             debug_url = f"{config.url_prefix}/djvu/debug/{filename}"

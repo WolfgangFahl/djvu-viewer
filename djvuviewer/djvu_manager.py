@@ -10,6 +10,7 @@ from lodstorage.sql import SQLDB
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.multilang_querymanager import MultiLanguageQueryManager
 
+
 class DjVuManager:
     """
     manager for DjVu files
@@ -86,26 +87,40 @@ class DjVuManager:
         )
         profiler.time()
 
-    def migrate_to_package_fields(self, table_name: str = "djvu"):
+    def migrate_to_package_fields(
+        self, table_name: str = "djvu", field_map: dict = None
+    ):
         """
-        Migrate tar-specific fields to package-generic fields if needed.
+        Migrate fields based on a field mapping.
+
+        Args:
+            table_name: Name of the table to migrate
+            field_map: Dictionary mapping old field names to new field names.
+                       Defaults to tar_ prefix to package_ prefix migration.
         """
+        if field_map is None:
+            # Default mapping for backward compatibility of tar/zip handling
+            field_map = {
+                "relpath": "path",
+                "tar_filesize": "package_filesize",
+                "tar_iso_date": "package_iso_date",
+            }
+
         # Check if old columns exist
         cursor = self.sql_db.c.execute(f"PRAGMA table_info({table_name})")
         columns = [row[1] for row in cursor.fetchall()]
 
-        fields = ["filesize", "iso_date"]
-
         # Check if migration needed
-        if not any(f"tar_{field}" in columns for field in fields):
+        if not any(old_name in columns for old_name in field_map.keys()):
             return  # Already migrated or new database
 
-        print(f"Migrating {table_name} index table from tar to generic package ...")
+        print(f"Migrating {table_name} index table fields...")
+
         # Rename columns
-        for field in fields:
-            old_name = f"tar_{field}"
-            new_name = f"package_{field}"
+        for old_name, new_name in field_map.items():
             if old_name in columns:
-                self.sql_db.c.execute(f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}")
+                self.sql_db.c.execute(
+                    f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}"
+                )
 
         self.sql_db.c.commit()

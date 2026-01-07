@@ -4,13 +4,14 @@ Created on 2025-02-25
 @author: wf
 """
 
-from argparse import ArgumentParser, Namespace
 import argparse
 import logging
+from argparse import ArgumentParser, Namespace
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 from basemkit.profiler import Profiler
+
 from djvuviewer.djvu_actions import DjVuActions
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_context import DjVuContext
@@ -119,7 +120,7 @@ class DjVuCmd(BaseCmd):
         )
         parser.add_argument(
             "--packagemode",
-            choices=["tar", "zip","none"],
+            choices=["tar", "zip", "none"],
             default="zip",
             help="package generation mode: tar or zip (default: %(default)s)",
         )
@@ -240,7 +241,7 @@ class DjVuCmd(BaseCmd):
         Updates the DjVu database with metadata from processed files.
         """
         self.actions.update_from_database(
-            max_errors=self.args.max_errors, url=self.args.url
+            max_errors=self.args.max_errors, path=self.args.url
         )
         self.actions.report_errors(profiler=self.profiler)
 

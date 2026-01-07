@@ -19,7 +19,7 @@ class PackageMode(Enum):
 
     TAR = ("tar", "application/x-tar")
     ZIP = ("zip", "application/zip")
-    NONE = ("none",None)
+    NONE = ("none", None)
 
     def __init__(self, pkg_name, mime_type):
         self.pkg_name = pkg_name  # Use a different attribute name
@@ -65,7 +65,6 @@ class Packager:
             return PackageMode.TAR
         else:
             raise ValueError(f"Unknown package extension: {ext}")
-
 
     @classmethod
     def create_package(
@@ -130,7 +129,7 @@ class Packager:
         Returns:
             True if archive exists and is readable
         """
-        exists=False
+        exists = False
         package_path = Path(package_path)
         if package_path.is_file():
 
@@ -138,14 +137,13 @@ class Packager:
                 mode = cls.get_package_mode(package_path)
                 if mode == PackageMode.TAR:
                     with tarfile.open(package_path, "r") as _tar:
-                        exists= True
+                        exists = True
                 elif mode == PackageMode.ZIP:
                     with zipfile.ZipFile(package_path, "r") as _zipf:
-                        exists =True
+                        exists = True
             except (tarfile.TarError, zipfile.BadZipFile):
                 pass
         return exists
-
 
     @staticmethod
     def _create_tar(output_path: str, files: List[tuple]):
@@ -246,4 +244,3 @@ class Packager:
         """List all members in a zip archive."""
         with zipfile.ZipFile(zip_path, "r") as zipf:
             return zipf.namelist()
-

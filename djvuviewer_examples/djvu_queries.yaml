@@ -57,6 +57,18 @@
     ORDER BY page_count
     LIMIT {{ limit }}
 
+# Einen DjVu-Datensatz für einen path abrufen
+'djvu_for_path':
+  param_list:
+    - name: path
+      type: str
+      default_value: "/images/1/1e/AB1953-Gohr.djvu"
+  sql: |
+    SELECT
+      *
+    FROM DjVu
+    WHERE path= "{{ path }}"
+
 # Alle Bild-Datensätze mit konfigurierbarem Limit abrufen
 'all_pages':
   param_list:
@@ -78,7 +90,7 @@
       default_value: 50
     - name: djvu_path
       type: str
-      default_value: "/images/b/b3/AB1951-Suenninghausen.djvu"
+      default_value: "/images/1/1e/AB1953-Gohr.djvu"
   sql: |
     SELECT
       *

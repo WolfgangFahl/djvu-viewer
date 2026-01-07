@@ -4,6 +4,7 @@ Created on 2025-02-25
 @author: wf
 """
 
+import datetime
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,30 +52,60 @@ class DjVuPage:
     def get_sample(cls):
         """Returns a sample DjVuPage instance for testing."""
         sample_page = cls(
-            path="s_455_0001.djvu",
+            path="gohr_s108_0001.djvu",
             page_index=1,
             valid=False,
-            iso_date="2009-06-02T07:17:55+00:00",
-            filesize=66327,
-            width=2829,
-            height=4194,
-            dpi=216,
-            djvu_path="/images/b/b3/AB1951-Suenninghausen.djvu",
-            page_key="/images/b/b3/AB1951-Suenninghausen.djvu#0001",
+            iso_date="2007-09-09T08:33:15+00:00",
+            filesize=15000,
+            width=1689,
+            height=284,
+            dpi=300,
+            djvu_path="/images/1/1e/AB1953-Gohr.djvu",
+            page_key="/images/1/1e/AB1953-Gohr.djvu#0001",
             error_msg="-sample error message-",
         )
         return sample_page
 
 
 @dataclass
-class DjVu:
+class BaseFile:
+    iso_date: Optional[str] = field(default=None, kw_only=True)
+    filesize: Optional[int] = field(default=None, kw_only=True)
+
+    @staticmethod
+    def get_fileinfo(filepath: str):
+        filesize = None
+        iso_date = None
+        if os.path.exists(filepath):
+            # Set file size in bytes
+            filesize = os.path.getsize(filepath)
+
+            # Get file modification time and convert to UTC ISO format with second precision
+            mtime = os.path.getmtime(filepath)
+            datetime_obj = datetime.datetime.fromtimestamp(
+                mtime, tz=datetime.timezone.utc
+            )
+            iso_date = datetime_obj.isoformat(timespec="seconds")
+        return iso_date, filesize
+
+    def set_fileinfo(self, filepath: str):
+        """
+        Set filesize and ISO date with sec prec for
+        the given filepath
+
+        Args:
+            filepath (str): Path to the file
+        """
+        self.iso_date, self.filesize = self.get_fileinfo(filepath)
+
+
+@dataclass
+class DjVu(BaseFile):
     """Represents a DjVu main file e.g. bundled or indexed"""
 
     path: str
     page_count: int
     bundled: bool = False
-    iso_date: Optional[str] = None
-    filesize: Optional[int] = None
     package_filesize: Optional[int] = None
     package_iso_date: Optional[str] = None
     dir_pages: Optional[int] = None
@@ -83,13 +114,13 @@ class DjVu:
     def get_sample(cls):
         """Returns a sample DjVu instance for testing."""
         sample_djvu = cls(
-            path="/images/b/b3/AB1951-Suenninghausen.djvu",
-            iso_date="2009-06-02",
-            filesize=85,
-            package_filesize=0,
-            package_iso_date="2026-01-02",
-            page_count=4,
-            dir_pages=5,
+            path="/images/1/1e/AB1953-Gohr.djvu",
+            page_count=2,
+            dir_pages=1,
+            iso_date="2007-09-09T08:33:15+00:00",
+            filesize=27733,
+            package_iso_date="2025-02-28T04:59:07+00:00",
+            package_filesize=409600,
             bundled=False,
         )
         return sample_djvu
@@ -117,14 +148,21 @@ class DjVuFile(DjVu):
         return None
 
     @classmethod
-    def from_package(cls, package_path: Path, yaml_filename: str) -> "DjVuFile":
+    def from_package(cls, package_path: Path) -> "DjVuFile":
         """
         (re)-instantiate me from a YAML serialization in a package
+
+        Args:
+            package_path (Path): Path to the package
         """
-        yaml_data = Packager.read_from_package(package_path, yaml_filename).decode(
-            "utf-8"
-        )
-        djvu_file = cls.from_yaml(yaml_data)
+        djvu_file = None
+        if package_path.exists():
+            yaml_filename = f"{package_path.stem}.yaml"
+
+            yaml_data = Packager.read_from_package(package_path, yaml_filename).decode(
+                "utf-8"
+            )
+            djvu_file = cls.from_yaml(yaml_data)
         return djvu_file
 
 

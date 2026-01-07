@@ -72,7 +72,7 @@ class DjVuConfig:
                 "db_path",
                 "backup_path",
                 "log_path",
-                "package_mode"
+                "package_mode",
             ]
 
             # Check which required fields are missing

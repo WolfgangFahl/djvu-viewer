@@ -14,5 +14,9 @@ DjVu Viewer and tarball converter
 
 # Documentation
 - [DjVu catalog and Viewer](https://wiki.bitplan.com/index.php/djvu-viewer)
+
+## Model
+![Class Diagram](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/WolfgangFahl/djvu-viewer/djvuviewer_examples/djvuviewer.puml?fmt=svg&version=1)
+
 ## Help
 - [Help](https://github.com/WolfgangFahl/djvu-viewer/wiki/Help)

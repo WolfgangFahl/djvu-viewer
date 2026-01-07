@@ -7,18 +7,18 @@ Created on 2025-02-25
 
 import logging
 import mimetypes
-from pathlib import Path
 import traceback
+from pathlib import Path
 from typing import Optional, Tuple
 
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVuFile, DjVuViewPage
-from djvuviewer.image_convert import ImageConverter
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from djvuviewer.packager import Packager, PackageMode
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import DjVuFile, DjVuViewPage
+from djvuviewer.image_convert import ImageConverter
+from djvuviewer.packager import PackageMode, Packager
 
 
 class DjVuViewer:
@@ -161,24 +161,14 @@ class DjVuViewer:
             DjVuViewPage: dataclass instance with file,page and image_url
         """
         path = self.sanitize_path(path)
-        package_filename= f"{Path(path).stem}.{self.package_mode.ext}"
-        package_file = (
-            Path(self.config.package_path) / package_filename
-        )
-        yaml_file = f"{Path(path).stem}.yaml"
+        package_filename = f"{Path(path).stem}.{self.package_mode.ext}"
+        package_path = Path(self.config.package_path) / package_filename
+        djvu_file = DjVuFile.from_package(package_path)
 
-        if not package_file.exists():
-            raise HTTPException(status_code=404, detail=f"Package {package_filename} for {path} not found")
-
-        try:
-            yaml_data = Packager.read_from_package(package_file, yaml_file).decode(
-                "utf-8"
-            )
-            djvu_file = DjVuFile.from_yaml(yaml_data)  # @UndefinedVariable
-        except Exception as ex:
-            self.handle_exception(ex)
+        if not djvu_file:
             raise HTTPException(
-                status_code=500, detail=f"Error reading {yaml_file} from package"
+                status_code=404,
+                detail=f"Package {package_filename} for {path} not available",
             )
 
         page_count = len(djvu_file.pages)
