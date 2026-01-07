@@ -98,7 +98,7 @@ class DjVuDebug:
                 relpath = self.config.extract_and_clean_path(self.mw_image.url)
                 abspath = self.config.djvu_abspath(f"/images/{relpath}")
                 self.djvu_file = self.dproc.get_djvu_file(
-                    abspath, config=self.config, progressbar=self.progressbar
+                    abspath, progressbar=self.progressbar
                 )
                 self.djvu_bundle = DjVuBundle(
                     self.djvu_file, config=self.config, debug=self.context.args.debug
