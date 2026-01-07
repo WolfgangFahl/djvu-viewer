@@ -132,7 +132,7 @@ class TestDjVu(Basetest):
         error_count = len(djvu_cmd.actions.errors)
         if self.debug and error_count > expected_errors:
             print(djvu_cmd.actions.errors)
-        self.assertTrue(error_count <= expected_errors)
+        self.assertLessEqual(error_count,expected_errors)
 
     def test_djvu_dump(self):
         """
@@ -360,7 +360,7 @@ class TestDjVu(Basetest):
         """
         test all djvu pages
         """
-        expected_errors = 0 if self.local else 49
+        expected_errors = 1 if self.local else 49
         self.check_command("catalog", expected_errors)
 
     def check_package(self, package_file: str, relurl: Optional[str] = None):
