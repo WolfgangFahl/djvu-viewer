@@ -78,7 +78,7 @@ class DjVuViewer:
         """
         djvu_name, filename = file.split("/", 1)
         package_path = (
-            Path(self.config.package_path) / f"{djvu_name}{self.package_mode.ext}"
+            Path(self.config.package_path) / f"{djvu_name}.{self.package_mode.ext}"
         )
         file_content = Packager.read_from_package(package_path, filename)
         return filename, file_content

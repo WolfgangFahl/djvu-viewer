@@ -333,13 +333,13 @@ class DjVuDebug:
         """
         try:
             zip_path=self.djvu_bundle.backup_file
+            self.zip_size = self.show_fileinfo(zip_path)
             if self.create_package:
                 if os.path.exists(self.djvu_bundle.backup_file):
                     with self.content_row:
                         ui.notify(f"{self.djvu_bundle.backup_file} already exists")
                 else:
                     zip_path = self.djvu_bundle.create_backup_zip()
-                    self.zip_size = self.show_fileinfo(zip_path)
 
             bundled_path = self.djvu_bundle.convert_to_bundled()
             self.bundled_size = self.show_fileinfo(bundled_path)
