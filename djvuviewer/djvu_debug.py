@@ -297,9 +297,12 @@ class DjVuDebug:
                             self.update_bundle_state()
 
             with self.content_row:
-                # Grid
-                self.lod_grid = ListOfDictsGrid()
-                self.lod_grid.load_lod(self.view_lod)
+                if self.view_lod:
+                    # Grid
+                    self.lod_grid = ListOfDictsGrid()
+                    self.lod_grid.load_lod(self.view_lod)
+                else:
+                    ui.notify("No pages")
 
             if self.lod_grid:
                 self.lod_grid.sizeColumnsToFit()
