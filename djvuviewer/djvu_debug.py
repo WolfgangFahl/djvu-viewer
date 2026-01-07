@@ -196,7 +196,7 @@ class DjVuDebug:
             ui.label("Bundling State").classes("text-subtitle1 mb-2")
             # Bundled status - just a disabled checkbox
             ui.checkbox("Bundled", value=self.djvu_file.bundled).props("disable")
-            if self.bundled_size > 0:
+            if self.bundled_size and self.bundled_size > 0:
                 ui.label(f"Size: {self.bundled_size:,} bytes").classes("text-caption text-grey-7")
 
             # Backup file - just a disabled checkbox and download link
@@ -212,7 +212,7 @@ class DjVuDebug:
                     download_url = f"{self.config.url_prefix}/backups/{backup_rel_path}"
                     ui.link(f"⬇️{backup_rel_path}", download_url).classes("text-primary")
                     # Add size labels when available
-                    if self.zip_size > 0:
+                    if self.zip_size and self.zip_size > 0:
                         ui.label(f"{self.zip_size:,} bytes").classes("text-caption text-grey-7")
 
 
