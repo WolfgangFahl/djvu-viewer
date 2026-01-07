@@ -40,6 +40,7 @@ class DjVuConfig:
     )
     backup_path: Optional[str] = None  # Path for bundle backups
     log_path: Optional[str] = None  # Path for log files
+    cache_path: Optional[str]=None # Path for cached date e.g. mediawiki images
     container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
     new_url: Optional[str] = None

@@ -8,22 +8,23 @@ Refactored to Focus on DjVu functionality
 from argparse import Namespace
 from typing import Dict
 
+from djvuviewer.djvu_catalog import DjVuCatalog
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_context import DjVuContext
+from djvuviewer.djvu_debug import DjVuDebug
+from djvuviewer.djvu_viewer import DjVuViewer
+from djvuviewer.djvu_wikimages import DjVuImagesCache
+from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
+from djvuviewer.version import Version
 from ngwidgets.input_webserver import InputWebserver, InputWebSolution
 from ngwidgets.login import Login
+from ngwidgets.progress import TqdmProgressbar
 from ngwidgets.sso_users_solution import SsoSolution
 from ngwidgets.webserver import WebserverConfig
 from ngwidgets.widgets import Link
 from nicegui import Client, app, ui
 from starlette.responses import FileResponse, HTMLResponse
 from wikibot3rd.sso_users import Sso_Users
-
-from djvuviewer.djvu_catalog import DjVuCatalog
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_context import DjVuContext
-from djvuviewer.djvu_debug import DjVuDebug
-from djvuviewer.djvu_viewer import DjVuViewer
-from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from djvuviewer.version import Version
 
 
 class DjVuViewerWebServer(InputWebserver):
@@ -175,6 +176,8 @@ class DjVuViewerWebServer(InputWebserver):
         configure me
         """
         super().configure_run()
+        pbar = TqdmProgressbar(total=100, desc="Initializing Cache", unit="batches")
+        self.images_cache=DjVuImagesCache.from_cache(config=self.djvu_config, freshness_days=1, progressbar=pbar)
         djvu_cmd_args = Namespace(
             # From BaseCmd
             debug=self.args.debug,
