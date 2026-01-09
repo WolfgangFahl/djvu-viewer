@@ -1,5 +1,5 @@
 """
-Created on 04.01.2026
+Created on 2026-01-04
 
 @author: wf
 """
@@ -9,6 +9,7 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_files import DjVuFiles
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.packager import PackageMode
+from ngwidgets.progress import Progressbar
 
 
 class DjVuContext:
@@ -31,3 +32,22 @@ class DjVuContext:
             max_workers=self.args.max_workers,
             pngmode=self.args.pngmode,
         )
+
+    def warmup_image_cache(self,pbar:Progressbar):
+        """
+        Pre-fetch caches for both wikis with progressbar
+        """
+        self.djvu_files.fetch_images(
+            url=self.config.base_url,
+            name="wiki",
+            limit=10000,
+            progressbar=pbar
+        )
+
+        if self.config.new_url:
+            self.djvu_files.fetch_images(
+                url=self.config.new_url,
+                name="new",
+                limit=10000,
+                progressbar=pbar
+            )

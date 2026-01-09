@@ -45,6 +45,9 @@ class DjVuDebug:
         self.context = context
         self.config = context.config
         self.webserver = self.solution.webserver
+        # Get DjVuFiles from context
+        self.djvu_files = context.djvu_files
+
         self.progressbar = None
         self.page_title = page_title
         self.mw_image = None
@@ -81,25 +84,34 @@ class DjVuDebug:
 
     def load_djvu_file(self) -> tuple[bool, str]:
         """
-        Load DjVu file metadata via DjVuProcessor.
+        Load DjVu file metadata via DjVuFiles interface.
 
         Returns:
             tuple[bool, str]: (success, error_message)
         """
         try:
-            self.mw_image = self.solution.webserver.mw_client_base.fetch_image(
-                title=self.page_title
+            # Fetch image metadata from both wikis using DjVuFiles
+            wiki_images = self.djvu_files.fetch_images(
+                url=self.config.base_url,
+                name="wiki",
+                titles=[self.page_title]
             )
-            if self.solution.webserver.mw_client_new:
-                self.mw_image_new = self.solution.webserver.mw_client_new.fetch_image(
-                    title=self.page_title
+            self.mw_image_wiki = wiki_images[0] if wiki_images else None
+
+            if self.config.new_url:
+                new_images = self.djvu_files.fetch_images(
+                    url=self.config.new_url,
+                    name="new",
+                    titles=[self.page_title]
                 )
+                self.mw_image_new = new_images[0] if new_images else None
 
-            if not (self.mw_image or self.mw_image_new):
-                return False, f"Image not found in wiki: {self.page_title}"
+            if not (self.mw_image_wiki or self.mw_image_new):
+                return False, f"Image not found in any wiki: {self.page_title}"
 
-            url = self.mw_image.url if self.mw_image else self.mw_image_new.url
-            relpath = self.config.extract_and_clean_path(url)
+            # Use available image to determine path
+            active_image = self.mw_image_wiki or self.mw_image_new
+            relpath = active_image.relpath  # Already cleaned by MediaWikiImage
             abspath = self.config.djvu_abspath(f"/images/{relpath}")
 
             self.djvu_file = self.dproc.get_djvu_file(
@@ -115,6 +127,11 @@ class DjVuDebug:
             self.solution.handle_exception(ex)
             return False, error_msg
 
+        except Exception as ex:
+                error_msg = f"Error loading DjVu file: {str(ex)}"
+                self.solution.handle_exception(ex)
+                return False, error_msg
+
     def get_header_html(self) -> str:
         """Helper to generate HTML summary our DjVuFile instance."""
 
@@ -126,11 +143,16 @@ class DjVuDebug:
             return f"<strong>{label}:</strong><span{style_attr}>{value}</span>"
 
         def link_list():
-            return [
-                label_value(self.config.base_url, view_record.get("wiki", "")),
-                label_value(self.config.new_url, view_record.get("new", "")),
-                label_value("Package", view_record.get("package", "")),
-            ]
+            """
+            get the available image links
+            """
+            links = []
+            if self.mw_image_wiki:
+                links.append(label_value("Wiki", view_record.get("wiki", "")))
+            if self.mw_image_new:
+                links.append(label_value("New", view_record.get("new", "")))
+            links.append(label_value("Package", view_record.get("package", "")))
+            return links
 
         djvu_file = self.djvu_file
         view_record = {}
@@ -139,7 +161,11 @@ class DjVuDebug:
 
         if not djvu_file:
             links_html = ''.join(link_list())
-            error_html = f"<div>No DjVu file information loaded for <a href='{self.config.base_url}/Datei:{self.page_title}'>{self.page_title}</a></div>"
+            wiki_url = self.mw_image_wiki.descriptionurl if self.mw_image_wiki else (
+                self.mw_image_new.descriptionurl if self.mw_image_new else
+                f"{self.config.base_url}/File:{self.page_title}"
+            )
+            error_html = f"<div>No DjVu file information loaded for <a href='{wiki_url}'>{self.page_title}</a></div>"
             markup = f"<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'><div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>{links_html}</div>{error_html}</div>"
             return markup
 

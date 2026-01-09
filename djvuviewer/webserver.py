@@ -176,8 +176,6 @@ class DjVuViewerWebServer(InputWebserver):
         configure me
         """
         super().configure_run()
-        pbar = TqdmProgressbar(total=100, desc="Initializing Cache", unit="batches")
-        self.images_cache=DjVuImagesCache.from_cache(config=self.djvu_config, freshness_days=1, progressbar=pbar)
         djvu_cmd_args = Namespace(
             # From BaseCmd
             debug=self.args.debug,
@@ -207,15 +205,11 @@ class DjVuViewerWebServer(InputWebserver):
             dry_run=False,
         )
         self.context = DjVuContext(self.djvu_config, djvu_cmd_args)
+        pbar = TqdmProgressbar(total=100, desc="Initializing Cache", unit="batches")
+        # warm up the mediawiki images cache
+        self.context.warmup_image_cache(pbar)
         # make helper classes available
         self.djvu_viewer = DjVuViewer(app=app, config=self.djvu_config)
-        # Initialize MediaWiki clients if using API mode
-        self.mw_client_base = DjVuMediaWikiImages.get_mediawiki_images_client(
-            self.djvu_config.base_url
-        )
-        self.mw_client_new = DjVuMediaWikiImages.get_mediawiki_images_client(
-            self.djvu_config.new_url
-        )
 
 
 class DjVuSolution(InputWebSolution):

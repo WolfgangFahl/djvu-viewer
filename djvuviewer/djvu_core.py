@@ -63,8 +63,8 @@ class DjVuPage(BaseFile):
         """Post-initialization logic for DjVuPage."""
         if self.page_key is None:
             # we expect no more than 9999 pages per document in the genwiki context that is proven
-            self.page_key = f"{self.djvu_path}#{self.page_index:04d}"
-        pass
+            anchor = f"#{self.page_index:04d}" if self.page_index is not None else ""
+            self.page_key = f"{self.djvu_path}{anchor}"
 
     @property
     def png_file(self) -> str:

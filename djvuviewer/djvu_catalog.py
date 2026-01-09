@@ -5,13 +5,12 @@ Created on 2024-08-26
 2026-02-02: Added paging and page size selection.
 @author: wf
 """
-
+from dataclasses import asdict
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
 from nicegui import background_tasks, run, ui
 
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_manager import DjVuManager
 
 
 class DjVuCatalog:
@@ -40,11 +39,8 @@ class DjVuCatalog:
         self.config = config
         self.browse_wiki = browse_wiki
         self.webserver = self.solution.webserver
+        self.djvu_files = self.webserver.context.djvu_files
         self.ui_container = None
-
-        # Initialize database manager if using DB mode
-        # FIXME muda - this is in djvu_files module
-        self.dvm = DjVuManager(config=self.config) if not browse_wiki else None
 
         self.lod = []
         self.view_lod = []
@@ -58,12 +54,15 @@ class DjVuCatalog:
 
     def get_view_lod(self):
         """Convert records to view format with row numbers and links."""
-        view_lod = []
-        for i, record in enumerate(self.lod):
-            index = i + 1
-            view_record = self.get_view_record(record, index)
-            view_lod.append(view_record)
-        self.view_lod = view_lod
+        try:
+            view_lod = []
+            for i, record in enumerate(self.lod):
+                index = i + 1
+                view_record = self.get_view_record(record, index)
+                view_lod.append(view_record)
+            self.view_lod = view_lod
+        except Exception as ex:
+            self.solution.handle_exception(ex)
 
     def get_view_record(self, record: dict, index: int) -> dict:
         """Delegate to appropriate handler based on record type."""
@@ -149,29 +148,39 @@ class DjVuCatalog:
         lod = []
         try:
             if self.browse_wiki:
-                # Setup and show progress bar for API fetch
+                # Determine which wiki to fetch from
+                wiki_name = "wiki" if self.images_url == self.config.base_url else "new"
+
+                # Setup progress bar for API fetch
                 if self.progress_row:
                     self.progress_row.visible = True
                 if self.progressbar:
                     self.progressbar.total = self.limit
                     self.progressbar.reset()
-                    self.progressbar.set_description("Fetching from MediaWiki")
+                    self.progressbar.set_description(f"Fetching from {wiki_name}")
 
-                # Assuming max_images limits the fetch, might need adjustment for full catalog
-                images_client = (
-                    self.solution.webserver.mw_client_base
-                    if self.images_url == self.config.base_url
-                    else self.solution.webserver.mw_client_new
+                # Fetch via DjVuFiles with caching
+                images = self.djvu_files.fetch_images(
+                    url=self.images_url,
+                    name=wiki_name,
+                    limit=self.limit,
+                    refresh=False,  # Use cache if available
+                    progressbar=self.progressbar
                 )
-                lod = images_client.fetch_allimages(
-                    limit=self.limit, progressbar=self.progressbar
-                )
+
+                # Convert MediaWikiImage objects to dicts for compatibility
+                lod = [img.__dict__ for img in images]
             else:
-                # Fetch from SQLite Database
-                if self.dvm:
-                    lod = self.dvm.query("all_djvu",param_dict={"limit": self.limit})
+                # Fetch from SQLite Database via DjVuFiles
+                djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
+                    file_limit=self.limit
+                )
+                # Convert DjVuFile objects to dicts
+                lod = [asdict(df) for df in djvu_files_by_path.values()]
+
         except Exception as ex:
             self.solution.handle_exception(ex)
+
         self.lod = lod
 
     def configure_grid_options(self):
