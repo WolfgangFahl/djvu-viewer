@@ -107,13 +107,14 @@ class DjVuFiles:
             if file_limit is not None:  # query pages per file mode
                 if page_limit is None:
                     page_limit = 10000
-                djvu_page_records = self.dvm.query(
-                    "all_pages_for_path",
-                    param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
-                )
-                for djvu_page_record in djvu_page_records:
-                    djvu_page = DjVuPage.from_dict(djvu_page_record)  # @UndefinedVariable
-                    djvu_file.pages.append(djvu_page)
+                if page_limit>0:
+                    djvu_page_records = self.dvm.query(
+                        "all_pages_for_path",
+                        param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
+                    )
+                    for djvu_page_record in djvu_page_records:
+                        djvu_page = DjVuPage.from_dict(djvu_page_record)  # @UndefinedVariable
+                        djvu_file.pages.append(djvu_page)
         if file_limit is None:  # all mode
             for djvu_page_record in djvu_page_records:
                 djvu_page = DjVuPage.from_dict(djvu_page_record)  # @UndefinedVariable

@@ -173,7 +173,8 @@ class DjVuCatalog:
             else:
                 # Fetch from SQLite Database via DjVuFiles
                 djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
-                    file_limit=self.limit
+                    file_limit=self.limit,
+                    page_limit=0, # no pages needed for catalog
                 )
                 # Convert DjVuFile objects to dicts
                 lod = [asdict(df) for df in djvu_files_by_path.values()]
