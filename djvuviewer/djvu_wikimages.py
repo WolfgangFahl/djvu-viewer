@@ -52,9 +52,11 @@ class DjVuImagesCache:
     url: str
     images: List[MediaWikiImage] = field(default_factory=list)
     last_fetch: Optional[datetime] = None
-    _mw_client: Optional[MediaWikiImages] = field(
-        default=None, init=False, repr=False, compare=False, metadata={'exclude': True}
-    )
+
+    def __post_init__(self):
+        """Initialize transient (non-serializable) attributes."""
+        self._mw_client = None
+
 
     def is_fresh(self, freshness_days: int) -> bool:
         """
