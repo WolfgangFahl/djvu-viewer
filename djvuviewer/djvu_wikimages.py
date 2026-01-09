@@ -74,6 +74,7 @@ class DjVuImagesCache:
 
         mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(url)
         images=mw_client.fetch_allimages(limit=limit, as_objects=True,progressbar=progressbar)
-        cache = cls(images=images,url=url,name=name, last_fetch=datetime.now(),mw_client=mw_client)
+        cache = cls(images=images,url=url,name=name, last_fetch=datetime.now())
+        cache.mw_client=mw_client
         cache.save_to_json_file(cache_file)
         return cache
