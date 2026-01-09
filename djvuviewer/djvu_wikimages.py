@@ -38,28 +38,42 @@ class DjVuMediaWikiImages:
 
 @lod_storable
 class DjVuImagesCache:
+    """
+    a cache for MediaWiki images from a given url
+    """
+    name:str
+    url: str
     images: List[MediaWikiImage] = field(default_factory=list)
     last_fetch: Optional[datetime] = None
+    mw_client: Optional[MediaWikiImages] = field(default=None, init=False, repr=False, compare=False, metadata={'exclude': True})
+
+    def __post_init__(self):
+        """Restore mw_client after deserialization from cache if needed"""
+        if self.mw_client is None and self.url:
+            self.mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(self.url)
 
     @classmethod
-    def get_cache_file(cls, config: DjVuConfig, ext:str="json") -> str:
+    def get_cache_file(cls, config: DjVuConfig, name:str="wiki",ext:str="json") -> str:
         base_dir = Path(config.cache_path) if getattr(config, 'cache_path', None) else Path.home() / ".djvuviewer" / "cache"
         base_dir.mkdir(parents=True, exist_ok=True)
-        cache_file=str(base_dir / f"djvu_images.{ext}")
+        cache_file=str(base_dir / f"djvu_images_{name}.{ext}")
         return cache_file
 
     @classmethod
-    def from_cache(cls, config: DjVuConfig, freshness_days: int = 1,progressbar:Progressbar=None) -> "DjVuImagesCache":
-        cache_file, cache = cls.get_cache_file(config), None
+    def from_cache(cls, config:DjVuConfig,url:str,name:str,
+        limit:int=10000,freshness_days: int = 1,
+        progressbar:Progressbar=None) -> "DjVuImagesCache":
+        cache_file, cache = cls.get_cache_file(config,name), None
         if os.path.exists(cache_file):
             cache = cls.load_from_json_file(cache_file)
             if (datetime.now(timezone.utc) - cache.last_fetch.astimezone(timezone.utc)) < timedelta(days=freshness_days):
                 return cache
 
         if progressbar:
-            progressbar.desc = f"Fetching djvu images to be cached from .... {config.base_url}"
+            progressbar.desc = f"Fetching djvu {name} images to be cached from ... {url}"
 
-        client = DjVuMediaWikiImages.get_mediawiki_images_client(config.base_url)
-        cache = cls(images=client.fetch_allimages(limit=10000, as_objects=True,progressbar=progressbar), last_fetch=datetime.now())
+        mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(url)
+        images=mw_client.fetch_allimages(limit=limit, as_objects=True,progressbar=progressbar)
+        cache = cls(images=images,url=url,name=name, last_fetch=datetime.now(),mw_client=mw_client)
         cache.save_to_json_file(cache_file)
         return cache

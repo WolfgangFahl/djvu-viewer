@@ -10,8 +10,7 @@ from typing import Any, Dict, List, Optional
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
-from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from djvuviewer.packager import Packager
+from djvuviewer.djvu_wikimages import DjVuMediaWikiImages, DjVuImagesCache
 from djvuviewer.wiki_images import MediaWikiImage
 
 
@@ -39,6 +38,9 @@ class DjVuFiles:
         # Client instances: {name_or_url: DjVuMediaWikiImages}
         self.mw_clients: Dict[str, DjVuMediaWikiImages] = {}
 
+        # Cache instances: {name_or_url: DjVuImagesCache}
+        self.caches: Dict[str, DjVuImagesCache] = {}
+
         # silently track errors
         self.errors = []
 
@@ -47,25 +49,6 @@ class DjVuFiles:
         if self.config.db_path:
             self.dvm = DjVuManager(config=self.config)
             self.dvm.migrate_to_package_fields()
-
-    def get_client(self, url: str, name: Optional[str] = None) -> DjVuMediaWikiImages:
-        """
-        Get or create a MediaWiki client. If a 'name' is provided, the client
-        is registered under that alias for future easy access.
-
-        Args:
-            url: The MediaWiki base URL.
-            name: An optional short alias (e.g., 'prod', 'new').
-
-        Returns:
-            DjVuMediaWikiImages: The initialized client.
-        """
-        key = name if name else url
-
-        if key not in self.mw_clients:
-            self.mw_clients[key] = DjVuMediaWikiImages.get_mediawiki_images_client(url)
-
-        return self.mw_clients[key]
 
     def get_djvu_files_by_path(
         self,
@@ -143,17 +126,36 @@ class DjVuFiles:
                     djvu_file.pages.append(djvu_page)
         return self.djvu_files_by_path
 
-    def add_to_cache(self, key: str, images: List[MediaWikiImage]):
-        if key not in self.images:
-            self.images[key] = []
-        self.images[key].extend(images)
+    def add_to_cache(self, key: str, images: List[MediaWikiImage], replace: bool = False):
+        """
+        Add images to the cache, with optional replacement of existing entries.
 
-        # cache lookup map
-        if key not in self.images_by_relpath:
-            self.images_by_relpath[key] = {}
+        Args:
+            key: Cache key (usually wiki name or URL)
+            images: List of MediaWikiImage objects to add
+            replace: If True, replace existing images with same relpath.
+                    If False, append new images (may create duplicates)
+        """
+        if replace and key in self.images:
+            # Create mapping of existing images by relpath for efficient replacement
+            existing_dict = {img.relpath: img for img in self.images[key] if img.relpath}
 
+            # Update mapping with new images, replacing any with matching relpath
+            for img in images:
+                if img.relpath:
+                    existing_dict[img.relpath] = img
+
+            # Convert mapping back to list
+            self.images[key] = list(existing_dict.values())
+        else:
+            # Append mode: add new images to existing list
+            if key not in self.images:
+                self.images[key] = []
+            self.images[key].extend(images)
+
+        # Rebuild lookup mapping for efficient path-based access
         self.images_by_relpath[key] = {
-            img.relpath: img for img in images if img.relpath
+            img.relpath: img for img in self.images[key] if img.relpath
         }
 
     def fetch_images(
@@ -163,6 +165,7 @@ class DjVuFiles:
         titles: Optional[List[str]] = None,
         limit: int = 50000,
         refresh: bool = False,
+        progressbar=None,
     ) -> List[MediaWikiImage]:
         """
         Fetch images for a specific wiki. Can be called with just the name
@@ -172,35 +175,87 @@ class DjVuFiles:
             url: The MediaWiki base URL.
             name: Short alias for this wiki instance.
             titles: Optional list of specific image titles to fetch.
-                If provided, only these images are fetched instead of all images.
-
-            limit: Max images to fetch.
+                If provided, fetches detailed metadata for these images,
+                replacing any existing cache entries with the same title.
+            limit: Max images to fetch when fetching all images.
             refresh: Force API call even if cached.
+            progressbar: Optional progress bar for cache operations.
 
         Returns:
-            List[MediaWikImage]: The list of MediaWiki image metadata objects.
+            List[MediaWikiImage]: The list of MediaWiki image metadata objects.
+                If titles is specified, returns only those newly fetched images.
+                Otherwise returns all images from the cache.
+        """
+        # Use name as cache key if provided, otherwise use URL
+        key = name if name else url
+
+        # Determine cache freshness: 0 days = force refresh, 1 day = use cache if fresh
+        freshness_days = 0 if refresh else 1
+
+        # Get or create cache for this wiki
+        cache = DjVuImagesCache.from_cache(
+            config=self.config,
+            url=url,
+            name=name or key,
+            limit=limit,
+            freshness_days=freshness_days,
+            progressbar=progressbar
+        )
+
+        # Store cache for future access
+        self.caches[key] = cache
+
+        # Handle specific titles if requested
+        if titles:
+            current_images = []
+
+            # Create title-indexed mapping for O(1) replacement instead of O(n) list searches
+            images_dict = {img.title: img for img in cache.images}
+
+            # Fetch detailed metadata for each requested title
+            for title in titles:
+                img = cache.mw_client.fetch_image(title)
+                if img:
+                    current_images.append(img)
+                    # Per-title fetches typically include more detailed metadata than bulk operations
+                    images_dict[title] = img
+
+            # Update cache with merged image data
+            cache.images = list(images_dict.values())
+
+            # Update internal cache with replacement semantics
+            self.add_to_cache(key, current_images, replace=True)
+
+            # Return only the newly fetched images
+            return current_images
+
+        # No specific titles requested: add all cache images to internal cache
+        self.add_to_cache(key, cache.images, replace=False)
+
+        # Return all images from cache
+        return cache.images
+
+    def get_client(self, url: str, name: Optional[str] = None) -> DjVuMediaWikiImages:
+        """
+        Get or create a MediaWiki client for the given URL/name.
+
+        Args:
+            url: The MediaWiki base URL
+            name: Optional short alias for this wiki instance
+
+        Returns:
+            DjVuMediaWikiImages: The client instance
         """
         key = name if name else url
 
-        # Ensure client exists
-        client = self.get_client(url, name)
+        if key not in self.mw_clients:
+            self.mw_clients[key] = DjVuMediaWikiImages(
+                config=self.config,
+                url=url,
+                name=name
+            )
 
-        if not refresh and key in self.images:
-            return self.images[key]
-
-        if titles:
-            # Fetch specific images by title
-            current_images = []
-            for title in titles:
-                img = client.fetch_image(title)
-                if img:
-                    current_images.append(img)
-        else:
-            # Fetch all images
-            current_images = client.fetch_allimages(limit=limit, as_objects=True)
-
-        self.add_to_cache(key, current_images)
-        return current_images
+        return self.mw_clients[key]
 
     def lookup_djvu_file_by_path(self, path: str) -> Dict[str, DjVuFile]:
         """
@@ -241,7 +296,7 @@ class DjVuFiles:
         djvu_lod: List[Dict[str, Any]],
         page_lod: List[Dict[str, Any]],
         sample_record_count: int = 1,
-        with_drop:bool=False
+        with_drop: bool = False
     ) -> None:
         """
         Store DjVu and page records in the database.
@@ -250,6 +305,7 @@ class DjVuFiles:
             djvu_lod: List of DjVu file records
             page_lod: List of page records
             sample_record_count: Number of sample records for schema inference
+            with_drop: If True, drop existing tables before creating new ones
         """
         self.dvm.store(
             lod=page_lod,
@@ -310,21 +366,32 @@ class DjVuFiles:
         djvu_lod = [djvu_record]
         page_record = asdict(DjVuPage.get_sample())
         page_lod = [page_record]
-        self.store_lods(djvu_lod, page_lod, sample_record_count=1,with_drop=True)
+        self.store_lods(djvu_lod, page_lod, sample_record_count=1, with_drop=True)
 
     def get_diff(self, name_a: str, name_b: str) -> List[MediaWikiImage]:
         """
-        get symmetric diff
+        Get symmetric difference of images between two wikis.
+
+        Computes the set of images that exist in one wiki but not the other,
+        effectively finding images unique to each source.
+
+        Args:
+            name_a: Name/key of first wiki
+            name_b: Name/key of second wiki
+
+        Returns:
+            List of MediaWikiImage objects that exist in exactly one of the two wikis,
+            sorted by relpath
         """
         map_a = self.images_by_relpath[name_a]
         map_b = self.images_by_relpath[name_b]
 
-        # Use ^ instead of - to get ALL differences
+        # Symmetric difference: elements in either set but not in both
         diff_keys = map_a.keys() ^ map_b.keys()
 
+        # Collect image objects from whichever source contains them
         diff_objs = []
         for k in diff_keys:
-            # Grab the object from whichever list has it
             obj = map_a[k] if k in map_a else map_b[k]
             diff_objs.append(obj)
 

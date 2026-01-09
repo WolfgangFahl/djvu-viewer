@@ -23,7 +23,16 @@ class TestDjVuMediaWikiMages(Basetest):
         """
         test caching
         """
-        config = DjVuConfig.get_instance(test=True)
-        cache = DjVuImagesCache.from_cache(config)
-        self.assertGreaterEqual(len(cache.images), 3000)
-        self.assertLessEqual(len(cache.images), 5000)
+        local=not self.inPublicCI()
+        config = DjVuConfig.get_instance(test=not local)
+        limit=5000 if local else 40
+        expected=4000 if local else limit
+        for name, url,limit in [
+            ("wiki",config.base_url,limit),
+            ("new",config.new_url,limit)
+        ]:
+
+            cache = DjVuImagesCache.from_cache(config=config,url=url,name=name,limit=limit)
+            if self.debug:
+                print(f"{name}:{url} -> {len(cache.images)} with limit {limit}")
+            self.assertGreaterEqual(len(cache.images), expected)
