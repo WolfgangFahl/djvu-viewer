@@ -410,7 +410,7 @@ class DjVuBundle:
             self._add_error(msg)
             return False, msg
 
-        djvu_path = f"images/{self.djvu_file.path}"
+        djvu_path = f"/images{self.djvu_file.path}"
         full_path = self.config.djvu_abspath(djvu_path)
 
         if not os.path.exists(full_path):
