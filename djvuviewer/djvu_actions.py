@@ -446,7 +446,10 @@ class DjVuActions:
             for relpath, djvu_file in djvu_files_by_path.items():
                 try:
                     # get the actual file path
-                    djvu_path = self.config.djvu_abspath(relpath)
+                    # but consider https://github.com/WolfgangFahl/djvu-viewer/issues/33
+                    # where there might be Datei:AB1938 Kreis-Beckum Inhaltsverz.djvu
+                    # with a blank and relpath /c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu
+                    djvu_path = self.config.djvu_abspath(relpath,fix_spaces=True)
                     djvu_file.set_fileinfo(djvu_path)
                     updated_files.append(djvu_file)
 
