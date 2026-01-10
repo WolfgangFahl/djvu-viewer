@@ -113,6 +113,14 @@ class DjVuManager:
                 "filename": "TEXT"
             }
 
+        # Check if table exists
+        cursor = self.sql_db.c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,)
+        )
+        if not cursor.fetchone():
+            return  # Table doesn't exist yet, nothing to migrate
+
         # Check existing columns
         cursor = self.sql_db.c.execute(f"PRAGMA table_info({table_name})")
         columns = [row[1] for row in cursor.fetchall()]
