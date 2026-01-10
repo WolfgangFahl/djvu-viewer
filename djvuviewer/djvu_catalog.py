@@ -5,7 +5,9 @@ Created on 2024-08-26
 2026-02-02: Added paging and page size selection.
 @author: wf
 """
+
 from dataclasses import asdict
+
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
 from nicegui import background_tasks, run, ui
@@ -91,7 +93,7 @@ class DjVuCatalog:
 
         raw_name = record.get("title", "")
         filename = raw_name.replace("File:", "").replace("Datei:", "")
-        self.solution.add_links(view_record, filename)
+        self.djvu_files.add_links(view_record, filename)
         view_record["size"] = record.get("size")
         view_record["pages"] = record.get("pagecount")
         view_record["timestamp"] = record.get("timestamp")
@@ -122,7 +124,7 @@ class DjVuCatalog:
                 filename = val.split("/")[-1]
             else:
                 filename = val
-        self.solution.add_links(view_record, filename)
+        self.djvu_files.add_links(view_record, filename)
         view_record["filesize"] = record.get("filesize")
         view_record["pages"] = record.get("page_count")
         view_record["date"] = record.get("iso_date")
@@ -165,7 +167,7 @@ class DjVuCatalog:
                     name=wiki_name,
                     limit=self.limit,
                     refresh=False,  # Use cache if available
-                    progressbar=self.progressbar
+                    progressbar=self.progressbar,
                 )
 
                 # Convert MediaWikiImage objects to dicts for compatibility
@@ -174,7 +176,7 @@ class DjVuCatalog:
                 # Fetch from SQLite Database via DjVuFiles
                 djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
                     file_limit=self.limit,
-                    page_limit=0, # no pages needed for catalog
+                    page_limit=0,  # no pages needed for catalog
                 )
                 # Convert DjVuFile objects to dicts
                 lod = [asdict(df) for df in djvu_files_by_path.values()]

@@ -4,15 +4,17 @@ Created on 2025-02-25
 @author: wf
 """
 
-from dataclasses import dataclass, field
 import datetime
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
-from basemkit.yamlable import lod_storable
-from djvuviewer.packager import Packager
 import numpy
+from basemkit.yamlable import lod_storable
+
+from djvuviewer.packager import Packager
+
 
 @dataclass
 class BaseFile:
@@ -44,6 +46,7 @@ class BaseFile:
             filepath (str): Path to the file
         """
         self.iso_date, self.filesize = self.get_fileinfo(filepath)
+
 
 @lod_storable
 class DjVuPage(BaseFile):
@@ -92,6 +95,7 @@ class DjVuPage(BaseFile):
             error_msg="-sample error message-",
         )
         return sample_page
+
 
 @dataclass
 class DjVu(BaseFile):

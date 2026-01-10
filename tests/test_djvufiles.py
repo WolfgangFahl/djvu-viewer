@@ -58,7 +58,7 @@ class TestDjVuFiles(Basetest):
         Test fetching djvu image files from index database
         """
         if not self.inPublicCI():
-            file_limit = 6 # 12 per second
+            file_limit = 6  # 12 per second
             djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
                 file_limit=file_limit, page_limit=100
             )

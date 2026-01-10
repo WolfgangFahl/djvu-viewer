@@ -3,16 +3,18 @@ Created on 2026-01-02
 
 @author: wf
 """
+
+import os
 from dataclasses import field
 from datetime import datetime, timedelta, timezone
-import os
 from pathlib import Path
 from typing import List, Optional
 
 from basemkit.yamlable import lod_storable
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.wiki_images import MediaWikiImages, MediaWikiImage
 from ngwidgets.progress import Progressbar
+
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.wiki_images import MediaWikiImage, MediaWikiImages
 
 
 class DjVuMediaWikiImages:
@@ -48,6 +50,7 @@ class DjVuImagesCache:
     """
     Cache for MediaWiki images from a given url.
     """
+
     name: str
     url: str
     images: List[MediaWikiImage] = field(default_factory=list)
@@ -56,7 +59,6 @@ class DjVuImagesCache:
     def __post_init__(self):
         """Initialize transient (non-serializable) attributes."""
         self._mw_client = None
-
 
     def is_fresh(self, freshness_days: int) -> bool:
         """
@@ -84,7 +86,9 @@ class DjVuImagesCache:
         return self._mw_client
 
     @classmethod
-    def get_cache_file(cls, config: DjVuConfig, name: str = "wiki", ext: str = "json") -> str:
+    def get_cache_file(
+        cls, config: DjVuConfig, name: str = "wiki", ext: str = "json"
+    ) -> str:
         """
         Get the cache file path for the given config and name.
 
@@ -98,7 +102,7 @@ class DjVuImagesCache:
         """
         base_dir = (
             Path(config.cache_path)
-            if getattr(config, 'cache_path', None)
+            if getattr(config, "cache_path", None)
             else Path.home() / ".djvuviewer" / "cache"
         )
         base_dir.mkdir(parents=True, exist_ok=True)
@@ -139,16 +143,17 @@ class DjVuImagesCache:
 
         # Cache missing or stale - fetch fresh data
         if progressbar:
-            progressbar.desc = f"Fetching djvu {name} images to be cached from ... {url}"
+            progressbar.desc = (
+                f"Fetching djvu {name} images to be cached from ... {url}"
+            )
 
         mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(url)
-        images = mw_client.fetch_allimages(limit=limit, as_objects=True, progressbar=progressbar)
+        images = mw_client.fetch_allimages(
+            limit=limit, as_objects=True, progressbar=progressbar
+        )
 
         cache = cls(
-            images=images,
-            url=url,
-            name=name,
-            last_fetch=datetime.now(timezone.utc)
+            images=images, url=url, name=name, last_fetch=datetime.now(timezone.utc)
         )
         cache._mw_client = mw_client
         cache.save_to_json_file(cache_file)

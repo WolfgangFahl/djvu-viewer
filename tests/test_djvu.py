@@ -132,7 +132,7 @@ class TestDjVu(Basetest):
         error_count = len(djvu_cmd.actions.errors)
         if self.debug and error_count > expected_errors:
             print(djvu_cmd.actions.errors)
-        self.assertLessEqual(error_count,expected_errors)
+        self.assertLessEqual(error_count, expected_errors)
 
     def test_djvu_dump(self):
         """
@@ -328,13 +328,13 @@ class TestDjVu(Basetest):
         """
         query_params = {
             "all_pages": {"limit": 50},
-            "all_pages_for_path": {"djvu_path":"/images/1/1e/AB1953-Gohr.djvu","limit":50},
+            "all_pages_for_path": {
+                "djvu_path": "/images/1/1e/AB1953-Gohr.djvu",
+                "limit": 50,
+            },
             "all_djvu": {"limit": 50},
-            "djvu_for_path": {"path":"/images/1/1e/AB1953-Gohr.djvu"},
-            "pages_of_djvu":
-                {
-                    "djvu_path": "/images/f/ff/AB1932-Ramrath.djvu "
-                },
+            "djvu_for_path": {"path": "/images/1/1e/AB1953-Gohr.djvu"},
+            "pages_of_djvu": {"djvu_path": "/images/f/ff/AB1932-Ramrath.djvu "},
         }
         djvm = DjVuManager(config=self.config)
         djvm.sql_db.debug = self.debug
@@ -401,7 +401,7 @@ class TestDjVu(Basetest):
                         args.force = True
                         args.pngmode = pngmode
                         args.package_mode = package_mode
-                        self.config.package_mode=package_mode
+                        self.config.package_mode = package_mode
                         self.check_command("convert", args=args)
 
                         # Verify tar file was created and contains expected content
@@ -465,4 +465,4 @@ class TestDjVu(Basetest):
         if self.local:
             self.assertEqual(lod, [{"files": 4288, "pages": 1006670}])
         else:
-            self.assertEqual(lod, [{"files": 5, "pages":11}])
+            self.assertEqual(lod, [{"files": 5, "pages": 11}])

@@ -6,16 +6,8 @@ Refactored to Focus on DjVu functionality
 """
 
 from argparse import Namespace
-from typing import Dict
+from typing import Any, Dict
 
-from djvuviewer.djvu_catalog import DjVuCatalog
-from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_context import DjVuContext
-from djvuviewer.djvu_debug import DjVuDebug
-from djvuviewer.djvu_viewer import DjVuViewer
-from djvuviewer.djvu_wikimages import DjVuImagesCache
-from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from djvuviewer.version import Version
 from ngwidgets.input_webserver import InputWebserver, InputWebSolution
 from ngwidgets.login import Login
 from ngwidgets.progress import TqdmProgressbar
@@ -25,6 +17,13 @@ from ngwidgets.widgets import Link
 from nicegui import Client, app, ui
 from starlette.responses import FileResponse, HTMLResponse
 from wikibot3rd.sso_users import Sso_Users
+
+from djvuviewer.djvu_catalog import DjVuCatalog
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_context import DjVuContext
+from djvuviewer.djvu_debug import DjVuDebug
+from djvuviewer.djvu_viewer import DjVuViewer
+from djvuviewer.version import Version
 
 
 class DjVuViewerWebServer(InputWebserver):
@@ -227,31 +226,6 @@ class DjVuSolution(InputWebSolution):
         """
         super().__init__(webserver, client)
         self.djvu_config = webserver.djvu_config
-
-    def add_links(self, view_record: Dict[str, any], filename: str):
-        """
-        Add the DjVu links.
-        """
-        config = self.djvu_config
-        if filename:
-            wiki_url = self.djvu_config.wiki_fileurl(filename)
-            view_record["wiki"] = Link.create(url=wiki_url, text=filename)
-
-            if config.new_url:
-                new_url = self.djvu_config.wiki_fileurl(filename, new=True)
-                view_record["new"] = Link.create(url=new_url, text=filename)
-                backlink = self.djvu_config.wiki_fileurl(
-                    filename, new=True, quoted=True
-                )
-            backparam = f"?backlink={backlink}" if backlink else ""
-            local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
-            archive_name = filename.replace(
-                ".djvu", "." + self.djvu_config.package_mode
-            )
-            view_record["Package"] = Link.create(url=local_url, text=archive_name)
-
-            debug_url = f"{config.url_prefix}/djvu/debug/{filename}"
-            view_record["debug"] = Link.create(url=debug_url, text="🔍")
 
     def configure_menu(self):
         """

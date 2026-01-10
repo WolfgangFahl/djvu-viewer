@@ -3,6 +3,7 @@ Created on 2026-01-02
 
 @author: wf
 """
+
 import logging
 from dataclasses import field
 from datetime import datetime
@@ -14,17 +15,22 @@ from ngwidgets.progress import Progressbar
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.version import Version
+
 logger = logging.getLogger(__name__)
+
 
 @lod_storable
 class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
+
     url: str
     mime: str
     size: int
-    page_id: int=-1 # if negative the page might be deleted or redirected of fetched via allimages
+    page_id: int = (
+        -1
+    )  # if negative the page might be deleted or redirected of fetched via allimages
     user: Optional[str] = None
     timestamp: Optional[str] = None
     description_url: Optional[str] = None
@@ -104,7 +110,7 @@ class MediaWikiImages:
         else:
             self.aiprop = tuple(aiprop)
 
-    def parse_image_response(self,data:Dict,title:str)->MediaWikiImage:
+    def parse_image_response(self, data: Dict, title: str) -> MediaWikiImage:
         """Parse API response dict to MediaWikiImage object."""
         pages = data.get("query", {}).get("pages", {})
         logger.info(f"API Response for title '{title}':")
@@ -119,7 +125,6 @@ class MediaWikiImages:
                 info_dict["page_id"] = page_id
                 mw_image = MediaWikiImage.from_dict(info_dict)
         return mw_image
-
 
     def fetch_image(self, title: str) -> Optional[MediaWikiImage]:
         """
@@ -142,7 +147,7 @@ class MediaWikiImages:
         }
 
         data = self._make_request(params)
-        mw_image=self.parse_image_response(data,title)
+        mw_image = self.parse_image_response(data, title)
         return mw_image
 
     def fetch_allimages(

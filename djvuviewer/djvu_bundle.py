@@ -3,12 +3,13 @@ Created on 2026-01-03
 
 @author: wf
 """
+
 import logging
-import sqlite3
 import os
 import re
 import shlex
 import shutil
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -23,7 +24,9 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.image_convert import ImageConverter
 from djvuviewer.packager import Packager
+
 logger = logging.getLogger(__name__)
+
 
 class DjVuBundle:
     """
@@ -402,7 +405,7 @@ class DjVuBundle:
         Returns:
             tuple[bool, str]: (success, message)
         """
-        if not hasattr(self.config, 'db_path') or not self.config.db_path:
+        if not hasattr(self.config, "db_path") or not self.config.db_path:
             msg = "No database path configured"
             self._add_error(msg)
             return False, msg
@@ -422,7 +425,7 @@ class DjVuBundle:
                 cursor = conn.cursor()
                 cursor.execute(
                     "UPDATE DjVu SET bundled = 1, filesize = ? WHERE path = ?",
-                    (actual_size, djvu_path)
+                    (actual_size, djvu_path),
                 )
                 conn.commit()
 
@@ -439,7 +442,7 @@ class DjVuBundle:
             self._add_error(msg)
             return False, msg
 
-    def generate_bundling_script(self,update_index_db:bool=False) -> str:
+    def generate_bundling_script(self, update_index_db: bool = False) -> str:
         """
         Generate a complete bash script for the bundling process.
 
@@ -557,21 +560,26 @@ class DjVuBundle:
         # Add database update if enabled
         if update_index_db:
 
-            script_lines.extend([
-                "# Update database",
-                "",
-                "# Get actual file size",
-                'FILESIZE=$(stat -f%z "$FULL_PATH" 2>/dev/null || stat -c%s "$FULL_PATH" 2>/dev/null)',
-                "",
-                "# Update SQLite database",
-                'sqlite3 "$DB_PATH" "UPDATE DjVu SET bundled = 1, filesize = $FILESIZE WHERE path = '"'"'$DJVU_PATH'"'"';"',
-                "",
-                'echo "Database updated: bundled=1, filesize=$FILESIZE for $DJVU_PATH"',
-                "",
-            ])
+            script_lines.extend(
+                [
+                    "# Update database",
+                    "",
+                    "# Get actual file size",
+                    'FILESIZE=$(stat -f%z "$FULL_PATH" 2>/dev/null || stat -c%s "$FULL_PATH" 2>/dev/null)',
+                    "",
+                    "# Update SQLite database",
+                    'sqlite3 "$DB_PATH" "UPDATE DjVu SET bundled = 1, filesize = $FILESIZE WHERE path = '
+                    "'"
+                    "$DJVU_PATH"
+                    "'"
+                    ';"',
+                    "",
+                    'echo "Database updated: bundled=1, filesize=$FILESIZE for $DJVU_PATH"',
+                    "",
+                ]
+            )
 
-
-        script="\n".join(script_lines) + "\n"
+        script = "\n".join(script_lines) + "\n"
         return script
 
     def convert_to_bundled(self, output_path: str = None) -> str:

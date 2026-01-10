@@ -93,12 +93,10 @@ class DjVuActions:
                 file_limit=self.args.limit
             )
         else:
-            djvu_path=url
+            djvu_path = url
             full_path = self.config.djvu_abspath(djvu_path)
-            djvu_file=djvu_file = self.dproc.get_djvu_file(full_path)
-            djvu_files_by_path = {
-                djvu_path:djvu_file
-            }
+            djvu_file = djvu_file = self.dproc.get_djvu_file(full_path)
+            djvu_files_by_path = {djvu_path: djvu_file}
             pass
         return djvu_files_by_path
 
@@ -165,7 +163,7 @@ class DjVuActions:
                     valid=valid,
                     djvu_path=image.relpath,
                 )
-                pagefile_path=os.path.join(os.path.dirname(djvu_path),filename)
+                pagefile_path = os.path.join(os.path.dirname(djvu_path), filename)
                 dpage.set_fileinfo(pagefile_path)
                 pages.append(dpage)
                 bundled = document.type == 2
@@ -472,7 +470,9 @@ class DjVuActions:
             )
             # Use the new store() method with DjVuFile objects
             if updated_files:
-                self.djvu_files.store(updated_files, sample_record_count=min(10, len(updated_files)))
+                self.djvu_files.store(
+                    updated_files, sample_record_count=min(10, len(updated_files))
+                )
 
     def report_errors(self, profiler: Profiler = None) -> None:
         """

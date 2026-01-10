@@ -92,17 +92,13 @@ class DjVuDebug:
         try:
             # Fetch image metadata from both wikis using DjVuFiles
             wiki_images = self.djvu_files.fetch_images(
-                url=self.config.base_url,
-                name="wiki",
-                titles=[self.page_title]
+                url=self.config.base_url, name="wiki", titles=[self.page_title]
             )
             self.mw_image_wiki = wiki_images[0] if wiki_images else None
 
             if self.config.new_url:
                 new_images = self.djvu_files.fetch_images(
-                    url=self.config.new_url,
-                    name="new",
-                    titles=[self.page_title]
+                    url=self.config.new_url, name="new", titles=[self.page_title]
                 )
                 self.mw_image_new = new_images[0] if new_images else None
 
@@ -128,9 +124,9 @@ class DjVuDebug:
             return False, error_msg
 
         except Exception as ex:
-                error_msg = f"Error loading DjVu file: {str(ex)}"
-                self.solution.handle_exception(ex)
-                return False, error_msg
+            error_msg = f"Error loading DjVu file: {str(ex)}"
+            self.solution.handle_exception(ex)
+            return False, error_msg
 
     def get_header_html(self) -> str:
         """Helper to generate HTML summary our DjVuFile instance."""
@@ -157,13 +153,18 @@ class DjVuDebug:
         djvu_file = self.djvu_file
         view_record = {}
         filename = self.page_title
-        self.solution.add_links(view_record, filename)
+        self.djvu_files.add_links(view_record, filename)
 
         if not djvu_file:
-            links_html = ''.join(link_list())
-            wiki_url = self.mw_image_wiki.descriptionurl if self.mw_image_wiki else (
-                self.mw_image_new.descriptionurl if self.mw_image_new else
-                f"{self.config.base_url}/File:{self.page_title}"
+            links_html = "".join(link_list())
+            wiki_url = (
+                self.mw_image_wiki.descriptionurl
+                if self.mw_image_wiki
+                else (
+                    self.mw_image_new.descriptionurl
+                    if self.mw_image_new
+                    else f"{self.config.base_url}/File:{self.page_title}"
+                )
             )
             error_html = f"<div>No DjVu file information loaded for <a href='{wiki_url}'>{self.page_title}</a></div>"
             markup = f"<div style='border: 1px solid #ddd; padding: 10px; border-radius: 4px; min-width: 300px;'><div style='display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 0.9em;'>{links_html}</div>{error_html}</div>"
@@ -236,11 +237,13 @@ class DjVuDebug:
             # Bundled status - just a disabled checkbox
             ui.checkbox("Bundled", value=self.djvu_file.bundled).props("disable")
             if self.bundled_size and self.bundled_size > 0:
-                ui.label(f"Size: {self.bundled_size:,} bytes").classes("text-caption text-grey-7")
+                ui.label(f"Size: {self.bundled_size:,} bytes").classes(
+                    "text-caption text-grey-7"
+                )
 
             # Backup file - just a disabled checkbox and download link
             backup_exists = os.path.exists(self.djvu_bundle.backup_file)
-            self.create_package=not backup_exists
+            self.create_package = not backup_exists
             with ui.row().classes("gap-4 items-center"):
                 ui.checkbox("Backup exists", value=backup_exists).props("disable")
 
@@ -252,12 +255,15 @@ class DjVuDebug:
                     ui.link(f"⬇️{backup_rel_path}", download_url).classes("text-primary")
                     # Add size labels when available
                     if self.zip_size and self.zip_size > 0:
-                        ui.label(f"{self.zip_size:,} bytes").classes("text-caption text-grey-7")
-
+                        ui.label(f"{self.zip_size:,} bytes").classes(
+                            "text-caption text-grey-7"
+                        )
 
             with ui.expansion("Bundling script", icon="code"):
                 # Script
-                script = self.djvu_bundle.generate_bundling_script(update_index_db=self.update_index_db)
+                script = self.djvu_bundle.generate_bundling_script(
+                    update_index_db=self.update_index_db
+                )
                 ui.code(script, language="bash").classes("w-full text-xs")
 
     def create_page_record(self, djvu_path: str, page: DjVuPage) -> dict:
@@ -390,7 +396,7 @@ class DjVuDebug:
         run the bundle activities in background
         """
         try:
-            zip_path=self.djvu_bundle.backup_file
+            zip_path = self.djvu_bundle.backup_file
             self.zip_size = self.show_fileinfo(zip_path)
             if self.create_package:
                 if os.path.exists(self.djvu_bundle.backup_file):

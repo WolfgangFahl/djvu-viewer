@@ -10,8 +10,10 @@ from typing import Any, Dict, List, Optional
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
-from djvuviewer.djvu_wikimages import DjVuMediaWikiImages, DjVuImagesCache
+from djvuviewer.djvu_wikimages import DjVuImagesCache, DjVuMediaWikiImages
 from djvuviewer.wiki_images import MediaWikiImage
+from lodstorage.lod import LOD
+from ngwidgets.widgets import Link
 
 
 class DjVuFiles:
@@ -35,6 +37,9 @@ class DjVuFiles:
         # cache for images by relative key
         self.images_by_relpath: Dict[str, Dict[str, MediaWikiImage]] = {}
 
+        # cache for images by filename
+        self.images_by_filename: Dict[str, Dict[str, MediaWikiImage]] = {}
+
         # Client instances: {name_or_url: DjVuMediaWikiImages}
         self.mw_clients: Dict[str, DjVuMediaWikiImages] = {}
 
@@ -49,6 +54,53 @@ class DjVuFiles:
         if self.config.db_path:
             self.dvm = DjVuManager(config=self.config)
             self.dvm.migrate_to_package_fields()
+
+    def add_link(
+        self, view_record: Dict[str, Any], filename: str, new: bool = False
+    ) -> None:
+        """
+        Add a wiki link to the view record.
+
+        Creates a link to a DjVu file on a MediaWiki instance. The link color
+        indicates availability: blue if the image exists in the cache, red otherwise.
+
+        Args:
+            view_record: Dictionary to store the generated link
+            filename: Name of the DjVu file
+            new: If True, creates link for 'new' wiki, otherwise for main 'wiki'
+        """
+        name = "new" if new else "wiki"
+        url = self.config.wiki_fileurl(filename, new=new)
+        images_by_filename = self.images_by_filename.get(name)
+        link_style = Link.red
+        if images_by_filename and filename in images_by_filename:
+            # if available in cache
+            link_style = Link.blue
+        link = Link.create(url=url, text=filename, style=link_style)
+        view_record[name] = link
+
+    def add_links(self, view_record: Dict[str, any], filename: str):
+        """
+        Add the DjVu links.
+        """
+        config = self.djvu_config
+        if filename:
+            self.add_link(view_record, filename, new=False)
+
+            if config.new_url:
+                self.add_link(view_record, filename, new=True)
+                backlink = self.djvu_config.wiki_fileurl(
+                    filename, new=True, quoted=True
+                )
+            backparam = f"?backlink={backlink}" if backlink else ""
+            local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
+            archive_name = filename.replace(
+                ".djvu", "." + self.djvu_config.package_mode
+            )
+            view_record["Package"] = Link.create(url=local_url, text=archive_name)
+
+            debug_url = f"{config.url_prefix}/djvu/debug/{filename}"
+            view_record["debug"] = Link.create(url=debug_url, text="🔍")
 
     def get_djvu_files_by_path(
         self,
@@ -107,7 +159,7 @@ class DjVuFiles:
             if file_limit is not None:  # query pages per file mode
                 if page_limit is None:
                     page_limit = 10000
-                if page_limit>0:
+                if page_limit > 0:
                     djvu_page_records = self.dvm.query(
                         "all_pages_for_path",
                         param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
@@ -127,37 +179,63 @@ class DjVuFiles:
                     djvu_file.pages.append(djvu_page)
         return self.djvu_files_by_path
 
-    def add_to_cache(self, key: str, images: List[MediaWikiImage], replace: bool = False):
+    def add_to_cache(
+        self, key: str, images: List[MediaWikiImage], replace: bool = False
+    ):
         """
         Add images to the cache, with optional replacement of existing entries.
+        Automatically updates relpath and filename lookups using LOD.
 
         Args:
             key: Cache key (usually wiki name or URL)
             images: List of MediaWikiImage objects to add
             replace: If True, replace existing images with same relpath.
-                    If False, append new images (may create duplicates)
+                    If False, append new images.
         """
-        if replace and key in self.images:
-            # Create mapping of existing images by relpath for efficient replacement
-            existing_dict = {img.relpath: img for img in self.images[key] if img.relpath}
+        # Ensure list exists
+        if key not in self.images:
+            self.images[key] = []
 
-            # Update mapping with new images, replacing any with matching relpath
+        if replace and self.images[key]:
+            # Merge strategy implies we need a temporary map to handle overwrites
+            # 1. Map existing images by relpath
+            existing_map = {
+                img.relpath: img for img in self.images[key] if hasattr(img, "relpath") and img.relpath
+            }
+
+            # 2. Update map with new images (this performs the replacement)
             for img in images:
-                if img.relpath:
-                    existing_dict[img.relpath] = img
+                if hasattr(img, "relpath") and img.relpath:
+                    existing_map[img.relpath] = img
+                else:
+                    # If image has no relpath, we can't key it, so just append
+                    self.images[key].append(img)
 
-            # Convert mapping back to list
-            self.images[key] = list(existing_dict.values())
+            # 3. Write back values
+            self.images[key] = list(existing_map.values())
         else:
-            # Append mode: add new images to existing list
-            if key not in self.images:
-                self.images[key] = []
+            # Append mode
             self.images[key].extend(images)
 
-        # Rebuild lookup mapping for efficient path-based access
-        self.images_by_relpath[key] = {
-            img.relpath: img for img in self.images[key] if img.relpath
-        }
+        # Rebuild all lookups (relpath and filename) securely
+        self.refresh_lookups(key)
+
+    def refresh_lookups(self, key: str):
+        """
+        Rebuild auxiliary indices (relpath, filename) for a specific cache key
+        using the generic LOD lookup generator.
+        """
+        if key not in self.images:
+            return
+
+        img_list = self.images[key]
+
+        # 1. Primary Lookup: Relpath
+        # generic getLookup returns (lookup_dict, list_of_duplicates). We only need the dict.
+        self.images_by_relpath[key], _ = LOD.getLookup(img_list, "relpath")
+
+        # 2. Secondary Lookup: Filename (New requirement)
+        self.images_by_filename[key], _ = LOD.getLookup(img_list, "filename")
 
     def fetch_images(
         self,
@@ -200,7 +278,7 @@ class DjVuFiles:
             name=name or key,
             limit=limit,
             freshness_days=freshness_days,
-            progressbar=progressbar
+            progressbar=progressbar,
         )
 
         # Store cache for future access
@@ -251,9 +329,7 @@ class DjVuFiles:
 
         if key not in self.mw_clients:
             self.mw_clients[key] = DjVuMediaWikiImages(
-                config=self.config,
-                url=url,
-                name=name
+                config=self.config, url=url, name=name
             )
 
         return self.mw_clients[key]
@@ -297,7 +373,7 @@ class DjVuFiles:
         djvu_lod: List[Dict[str, Any]],
         page_lod: List[Dict[str, Any]],
         sample_record_count: int = 1,
-        with_drop: bool = False
+        with_drop: bool = False,
     ) -> None:
         """
         Store DjVu and page records in the database.
