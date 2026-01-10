@@ -115,7 +115,7 @@ class DjVuManager:
 
         # Check if table exists
         cursor = self.sql_db.c.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name)=LOWER(?)",
             (table_name,)
         )
         if not cursor.fetchone():
@@ -148,4 +148,4 @@ class DjVuManager:
                     f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"
                 )
 
-        self.sql_db.c.commit()
+        self.sql_db.commit()
