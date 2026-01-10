@@ -73,7 +73,7 @@ class ImageJob(BaseFile):
         return prefix
 
     @property
-    def filename(self) -> str:
+    def decoded_filename(self) -> str:
         try:
             # Attempt to safely decode the file name
             filename = self.page.file.name.encode("utf-8", errors="replace").decode(

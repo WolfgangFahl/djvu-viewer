@@ -533,7 +533,7 @@ class DjVuProcessor:
                     filesize=image_job.filesize,
                     page_index=image_job.page_index,
                     djvu_path=image_job.relurl,
-                    path=image_job.filename,
+                    path=image_job.decoded_filename,
                 )
                 # Determine if we need to render to a buffer
                 if not self.pngmode == PngMode.CLI:

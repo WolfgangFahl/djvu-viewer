@@ -239,7 +239,6 @@ class DjVuActions:
                 url = DjVuConfig.djvu_relpath(url)
 
             djvu_path = self.config.djvu_abspath(url)
-            relpath = DjVuConfig.djvu_relpath(djvu_path)
 
             if not os.path.exists(djvu_path):
                 raise FileNotFoundError(f"File not found: {djvu_path}")
