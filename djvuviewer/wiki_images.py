@@ -230,6 +230,164 @@ class MediaWikiImages:
 
         return results
 
+    def build_size_filter(
+        self,
+        min_size: Optional[int] = None,
+        max_size: Optional[int] = None
+    ) -> str:
+        """
+        Build a CirrusSearch filesize filter string.
+
+        Args:
+            min_size: Minimum file size in kilo bytes
+            max_size: Maximum file size in kilo bytes
+
+        Returns:
+            CirrusSearch filter string (e.g., " filesize:1000..5000")
+        """
+        if min_size and max_size:
+            return f" filesize:{min_size}..{max_size}"
+        elif min_size:
+            return f" filesize:>{min_size}"
+        elif max_size:
+            return f" filesize:<{max_size}"
+        return ""
+
+    def fetch_titles_by_cirrus(
+        self,
+        search_query: str,
+        limit: int = 50,
+        per_request: int = 50
+    ) -> List[str]:
+        """
+        Get file titles using CirrusSearch.
+
+        Args:
+            search_query: CirrusSearch query (e.g., "filemime:image/vnd.djvu")
+            limit: Maximum number of titles to return
+            per_request: Results per API call
+
+        Returns:
+            List of file titles
+        """
+        titles = []
+        remaining = limit
+        continue_params = {}
+
+        while remaining > 0:
+            params = {
+                'action': 'query',
+                'list': 'search',
+                'srsearch': search_query,
+                'srnamespace': 6,  # File namespace
+                'srlimit': min(per_request, remaining),
+                'format': 'json'
+            }
+            params.update(continue_params)
+
+            data = self._make_request(params)
+
+            results = data.get('query', {}).get('search', [])
+            if not results:
+                break
+
+            titles.extend([r['title'] for r in results])
+            remaining -= len(results)
+
+            if remaining > 0 and data.get('continue'):
+                continue_params = data['continue']
+            else:
+                break
+
+        return titles
+
+    def fetch_images_by_titles(
+        self,
+        titles: List[str],
+        progressbar: Optional[Progressbar] = None
+    ) -> List[MediaWikiImage]:
+        """
+        Fetch full image details for a list of titles.
+
+        Args:
+            titles: List of file titles (e.g., ["File:Example.jpg"])
+            progressbar: Optional progress bar
+
+        Returns:
+            List of MediaWikiImage objects with full details
+        """
+        images = []
+
+        # Fetch in batches (API limit: 50 titles per request)
+        for i in range(0, len(titles), 50):
+            batch = titles[i:i+50]
+            params = {
+                'action': 'query',
+                'titles': '|'.join(batch),
+                'prop': 'imageinfo',
+                'iiprop': '|'.join(self.aiprop),
+                'format': 'json'
+            }
+
+            data = self._make_request(params)
+            pages = data.get('query', {}).get('pages', {})
+
+            for page_id, page_data in pages.items():
+                imageinfo = page_data.get('imageinfo', [])
+                if imageinfo:
+                    # Merge page title into the image info dict to match 'allimages' structure
+                    info_dict = imageinfo[0].copy()
+                    info_dict['title'] = page_data.get('title')
+                    info_dict['page_id'] = page_id
+                    images.append(MediaWikiImage.from_dict(info_dict))
+
+            if progressbar:
+                progressbar.update(len(batch))
+
+        return images
+
+    def fetch_by_cirrus_search(
+        self,
+        search_query: str,
+        limit: int = 50,
+        per_request: int = 50,
+        min_size_kb: Optional[int] = None,
+        max_size_kb: Optional[int] = None,
+        progressbar: Optional[Progressbar] = None,
+    ) -> List[MediaWikiImage]:
+        """
+        Search for files using CirrusSearch, then fetch full image details.
+
+        Args:
+            search_query: CirrusSearch query (e.g., "filemime:image/vnd.djvu")
+            limit: Maximum number of results
+            per_request: Results per API call
+            min_size_kb: Minimum file size in kilo bytes (optional)
+            max_size_kb: Maximum file size in kilo bytes (optional)
+            progressbar: Optional progress bar
+
+        Returns:
+            List of MediaWikiImage objects with full details
+        """
+        # Build size filter and append to query
+        size_filter = self.build_size_filter(min_size_kb, max_size_kb)
+        full_query = search_query + size_filter
+
+        # Step 1: Get titles via CirrusSearch
+        titles = self.fetch_titles_by_cirrus(
+            search_query=full_query,
+            limit=limit,
+            per_request=per_request
+        )
+
+        # Step 2: Fetch full image details
+        images = self.fetch_images_by_titles(
+            titles=titles,
+            progressbar=progressbar
+        )
+
+        return images[:limit]
+
     def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Helper to execute the request and handle basic errors.

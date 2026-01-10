@@ -3,14 +3,14 @@ Created on 2026-01-05
 
 @author: wf
 """
-
-import json
+from collections import Counter
 from dataclasses import asdict
+import json
 
 from basemkit.basetest import Basetest
-
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_files import DjVuFiles
+from djvuviewer.wiki_images import MediaWikiImages
 
 
 class TestDjVuFiles(Basetest):
@@ -99,3 +99,32 @@ class TestDjVuFiles(Basetest):
             self.show_images(images)
         except RuntimeError as error:
             self.assertTrue("Miser" in str(error))
+
+    def test_wikimedia_commons_cirrus(self):
+        """
+        Test fetching DjVu files from Wikimedia Commons using CirrusSearch
+        """
+
+        api_url = "https://commons.wikimedia.org/w/api.php"
+        mime_types = ("image/vnd.djvu", "image/x-djvu")
+
+        for mime_type in mime_types:
+            if self.debug:
+                print(f"\n{mime_type}:")
+            client = MediaWikiImages(api_url=api_url, mime_types=[mime_type])
+            search_query = f"filemime:{mime_type}"
+            images = client.fetch_by_cirrus_search(search_query, limit=50,max_size_kb=10)
+
+            # Create pagecount histogram
+            pagecount_histogram = Counter()
+            for image in images:
+                if image.pagecount is not None:
+                    pagecount_histogram[image.pagecount] += 1
+            if self.debug:
+                print(pagecount_histogram.most_common(10))
+            for image in images:
+                if image.pagecount is not None and image.pagecount>1:
+                    if self.debug:
+                        print(json.dumps(asdict(image),indent=2))
+
+
