@@ -89,15 +89,16 @@ class DjVuManager:
         profiler.time()
 
     def migrate_to_package_fields(
-        self, table_name: str = "djvu", field_map: dict = None
+        self, table_name: str = "djvu", field_map: dict = None, new_columns: dict = None
     ):
         """
-        Migrate fields based on a field mapping.
+        Migrate fields based on a field mapping and add new columns.
 
         Args:
             table_name: Name of the table to migrate
             field_map: Dictionary mapping old field names to new field names.
                        Defaults to tar_ prefix to package_ prefix migration.
+            new_columns: Dictionary of new columns to add {column_name: sql_type}
         """
         if field_map is None:
             # Default mapping for backward compatibility of tar/zip handling
@@ -107,13 +108,21 @@ class DjVuManager:
                 "tar_iso_date": "package_iso_date",
             }
 
-        # Check if old columns exist
+        if new_columns is None:
+            new_columns = {
+                "filename": "TEXT"
+            }
+
+        # Check existing columns
         cursor = self.sql_db.c.execute(f"PRAGMA table_info({table_name})")
         columns = [row[1] for row in cursor.fetchall()]
 
         # Check if migration needed
-        if not any(old_name in columns for old_name in field_map.keys()):
-            return  # Already migrated or new database
+        needs_rename = any(old_name in columns for old_name in field_map.keys())
+        needs_new_columns = any(col_name not in columns for col_name in new_columns.keys())
+
+        if not needs_rename and not needs_new_columns:
+            return  # Already migrated
 
         print(f"Migrating {table_name} index table fields...")
 
@@ -122,6 +131,13 @@ class DjVuManager:
             if old_name in columns:
                 self.sql_db.c.execute(
                     f"ALTER TABLE {table_name} RENAME COLUMN {old_name} TO {new_name}"
+                )
+
+        # Add new columns
+        for col_name, col_type in new_columns.items():
+            if col_name not in columns:
+                self.sql_db.c.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}"
                 )
 
         self.sql_db.c.commit()

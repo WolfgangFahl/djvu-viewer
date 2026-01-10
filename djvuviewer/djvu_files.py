@@ -13,6 +13,7 @@ from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache, DjVuMediaWikiImages
 from djvuviewer.wiki_images import MediaWikiImage
 from lodstorage.lod import LOD
+from ngwidgets.progress import Progressbar
 from ngwidgets.widgets import Link
 
 
@@ -107,6 +108,7 @@ class DjVuFiles:
         paths: Optional[List[str]] = None,
         file_limit: int = None,
         page_limit: int = None,
+        progressbar: Progressbar = None,
     ) -> Dict[str, DjVuFile]:
         """
         Retrieve all DjVu file and page records from the database
@@ -117,6 +119,7 @@ class DjVuFiles:
             paths: Optional list of specific paths to fetch. If None, fetches all files.
             file_limit: Maximum number of files to fetch (when paths is None)
             page_limit: Maximum number of pages per file
+            progressbar: Optional Progressbar instance
 
         Returns:
             Dict mapping paths to DjVuFile objects
@@ -167,6 +170,9 @@ class DjVuFiles:
                     for djvu_page_record in djvu_page_records:
                         djvu_page = DjVuPage.from_dict(djvu_page_record)  # @UndefinedVariable
                         djvu_file.pages.append(djvu_page)
+            if progressbar:
+                progressbar.update(1)
+
         if file_limit is None:  # all mode
             for djvu_page_record in djvu_page_records:
                 djvu_page = DjVuPage.from_dict(djvu_page_record)  # @UndefinedVariable
@@ -371,7 +377,7 @@ class DjVuFiles:
     def store_lods(
         self,
         djvu_lod: List[Dict[str, Any]],
-        page_lod: List[Dict[str, Any]],
+        page_lod: Optional[List[Dict[str, Any]]]=None,
         sample_record_count: int = 1,
         with_drop: bool = False,
     ) -> None:
@@ -380,17 +386,18 @@ class DjVuFiles:
 
         Args:
             djvu_lod: List of DjVu file records
-            page_lod: List of page records
+            page_lod: List of page records - if None do not store
             sample_record_count: Number of sample records for schema inference
             with_drop: If True, drop existing tables before creating new ones
         """
-        self.dvm.store(
-            lod=page_lod,
-            entity_name="Page",
-            primary_key="page_key",
-            with_drop=with_drop,
-            sampleRecordCount=sample_record_count,
-        )
+        if page_lod:
+            self.dvm.store(
+                lod=page_lod,
+                entity_name="Page",
+                primary_key="page_key",
+                with_drop=with_drop,
+                sampleRecordCount=sample_record_count,
+            )
         self.dvm.store(
             lod=djvu_lod,
             entity_name="DjVu",

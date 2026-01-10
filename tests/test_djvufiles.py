@@ -6,6 +6,7 @@ Created on 2026-01-05
 from collections import Counter
 from dataclasses import asdict
 import json
+import re
 
 from basemkit.basetest import Basetest
 from djvuviewer.djvu_config import DjVuConfig
@@ -28,6 +29,9 @@ class TestDjVuFiles(Basetest):
         self.limit = 10
 
     def get_images(self):
+        """
+        get the images
+        """
         self.wiki_images = self.djvu_files.fetch_images(
             self.config.base_url, "wiki", limit=self.limit
         )
@@ -127,4 +131,30 @@ class TestDjVuFiles(Basetest):
                     if self.debug:
                         print(json.dumps(asdict(image),indent=2))
 
+    def get_color(self, name: str, view_record: dict) -> str:
+        """Extract color value from the style attribute of the named link in view_record"""
+        style = view_record.get(name, "")
+        match = re.search(r"color:\s*([^;]+)", style)
+        return match.group(1).strip() if match else ""
 
+    def test_add_links(self):
+        """
+        Test that add_links creates blue links for cached images
+        """
+        if not self.inPublicCI():
+            self.get_images()
+            filenames = ["Net-G1819 071.djvu"]
+            for filename in filenames:
+                view_record = {}
+                self.djvu_files.add_links(view_record, filename)
+
+                wiki_color = self.get_color("wiki", view_record)
+                new_color = self.get_color("new", view_record)
+
+                if self.debug:
+                    print(f"\nColors for {filename}:")
+                    print(f"  wiki: {wiki_color}")
+                    print(f"  new: {new_color}")
+
+                self.assertEqual("blue", wiki_color,"wiki")
+                self.assertEqual("blue", new_color,"new")

@@ -18,8 +18,15 @@ from djvuviewer.packager import Packager
 
 @dataclass
 class BaseFile:
+    filename: Optional[str] = field(default=None, kw_only=True)
     iso_date: Optional[str] = field(default=None, kw_only=True)
     filesize: Optional[int] = field(default=None, kw_only=True)
+
+    @property
+    def exists(self) -> bool:
+        """Check if file metadata is populated"""
+        avail = self.filesize is not None and self.filesize>0
+        return avail
 
     @staticmethod
     def get_fileinfo(filepath: str):
@@ -39,12 +46,13 @@ class BaseFile:
 
     def set_fileinfo(self, filepath: str):
         """
-        Set filesize and ISO date with sec prec for
+        Set base filename and filesize and ISO date with sec prec for
         the given filepath
 
         Args:
             filepath (str): Path to the file
         """
+        self.filename = os.path.basename(filepath)
         self.iso_date, self.filesize = self.get_fileinfo(filepath)
 
 

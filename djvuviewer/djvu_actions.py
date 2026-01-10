@@ -4,24 +4,22 @@ Created on 2026-01-02
 @author: wf
 """
 
+from datetime import datetime
 import logging
 import os
 import time
 import traceback
-from dataclasses import asdict
-from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
-from tqdm import tqdm
-
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_processor import ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
-from djvuviewer.packager import Packager
+from ngwidgets.progress import TqdmProgressbar
+from tqdm import tqdm
 
 
 class DjVuActions:
@@ -76,7 +74,7 @@ class DjVuActions:
             fh.setFormatter(formatter)
             self.logger.addHandler(fh)
 
-    def get_djvu_files(self, url: Optional[str] = None) -> Dict[str, DjVuFile]:
+    def get_djvu_files(self, url: Optional[str] = None, page_limit: int = None) -> Dict[str, DjVuFile]:
         """
         get DjVu files.
 
@@ -89,8 +87,16 @@ class DjVuActions:
 
         """
         if url is None:
+            total_files = self.args.limit if self.args.limit else 10000
+            progressbar = TqdmProgressbar(
+                total=total_files,
+                desc="Loading DjVu files",
+                unit="files"
+            )
             djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
-                file_limit=self.args.limit
+                file_limit=self.args.limit,
+                page_limit=page_limit,
+                progressbar=progressbar
             )
         else:
             djvu_path = url
@@ -440,10 +446,9 @@ class DjVuActions:
         ) as pbar:
             for relpath, djvu_file in djvu_files_by_path.items():
                 try:
-                    # Check if we need to load complete data
-                    if force_reload or not djvu_file.pages:
-                        djvu_file = self._load_complete_djvu_file(relpath, djvu_file)
-
+                    # get the actual file path
+                    djvu_path = self.config.djvu_abspath(relpath)
+                    djvu_file.set_fileinfo(djvu_path)
                     updated_files.append(djvu_file)
 
                 except BaseException as e:
@@ -546,5 +551,5 @@ class DjVuActions:
             max_errors: Maximum allowed error percentage before skipping update
             url: Optional single file path for targeted update
         """
-        djvu_files = self.get_djvu_files(url=url)
+        djvu_files = self.get_djvu_files(url=url,page_limit=0)
         self.update_database(djvu_files, max_errors=max_errors)

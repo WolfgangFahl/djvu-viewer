@@ -81,8 +81,8 @@ class DjVuCmd(BaseCmd):
         parser.add_argument(
             "--limit",
             type=int,
-            default=10000000,
-            help="Maximum number of pages to process (default: %(default)s)",
+            default=5000,
+            help="Maximum number of files to process (default: %(default)s)",
         )
         parser.add_argument(
             "--limit_gb",
