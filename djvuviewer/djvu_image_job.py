@@ -94,5 +94,5 @@ class ImageJob(BaseFile):
 
     @property
     def filepath(self) -> str:
-        filepath = os.path.join(self.dirname, self.filename)
+        filepath = os.path.join(self.dirname, self.decoded_filename)
         return filepath
