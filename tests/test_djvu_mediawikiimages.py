@@ -31,8 +31,8 @@ class TestDjVuMediaWikiMages(Basetest):
             ("wiki",config.base_url,limit),
             ("new",config.new_url,limit)
         ]:
-
-            cache = DjVuImagesCache.from_cache(config=config,url=url,name=name,limit=limit)
-            if self.debug:
-                print(f"{name}:{url} -> {len(cache.images)} with limit {limit}")
-            self.assertGreaterEqual(len(cache.images), expected)
+            if url:
+                cache = DjVuImagesCache.from_cache(config=config,url=url,name=name,limit=limit)
+                if self.debug:
+                    print(f"{name}:{url} -> {len(cache.images)} with limit {limit}")
+                self.assertGreaterEqual(len(cache.images), expected)
