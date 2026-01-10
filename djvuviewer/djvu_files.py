@@ -83,19 +83,19 @@ class DjVuFiles:
         """
         Add the DjVu links.
         """
-        config = self.djvu_config
+        config = self.config
         if filename:
             self.add_link(view_record, filename, new=False)
 
             if config.new_url:
                 self.add_link(view_record, filename, new=True)
-                backlink = self.djvu_config.wiki_fileurl(
+                backlink = self.config.wiki_fileurl(
                     filename, new=True, quoted=True
                 )
             backparam = f"?backlink={backlink}" if backlink else ""
             local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
             archive_name = filename.replace(
-                ".djvu", "." + self.djvu_config.package_mode
+                ".djvu", "." + self.config.package_mode
             )
             view_record["Package"] = Link.create(url=local_url, text=archive_name)
 
