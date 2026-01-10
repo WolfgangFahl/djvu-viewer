@@ -82,9 +82,15 @@ class DjVuFiles:
         url = self.config.wiki_fileurl(filename, new=new)
         images_by_filename = self.images_by_filename.get(name)
         link_style = Link.red
-        if images_by_filename and filename in images_by_filename:
-            # if available in cache
-            link_style = Link.blue
+        # if available in cache
+        if images_by_filename:
+            if filename in images_by_filename:
+                link_style = Link.blue
+            elif "_" in filename:
+                spaced_filename=filename.replace("_"," ")
+                if spaced_filename in images_by_filename:
+                    filename=spaced_filename
+                    link_style = Link.blue
         link = Link.create(url=url, text=filename, style=link_style)
         view_record[name] = link
 

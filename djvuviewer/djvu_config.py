@@ -122,27 +122,16 @@ class DjVuConfig:
             wiki_url = urllib.parse.quote(wiki_url)
         return wiki_url
 
-    def djvu_abspath(self, path: str, fix_spaces: bool = True) -> str:
+    def djvu_abspath(self, path: str) -> str:
         """Get absolute DjVu path by prepending images_path to relative path.
 
         Args:
             path: Relative path to DjVu file
-            fix_spaces: If True and file not found, try replacing underscores with spaces
 
         Returns:
             Absolute path to DjVu file
         """
         djvu_path = self.images_path + DjVuConfig.djvu_relpath(path)
-
-        if fix_spaces and not os.path.exists(djvu_path):
-            filename = os.path.basename(djvu_path)
-            if '_' in filename:
-                spaced_filename = filename.replace('_', ' ')
-                dirname = os.path.dirname(djvu_path)
-                spaced_path = os.path.join(dirname, spaced_filename)
-                if os.path.exists(spaced_path):
-                    djvu_path=spaced_path
-
         return djvu_path
 
     def extract_and_clean_path(self, url: str) -> str:
