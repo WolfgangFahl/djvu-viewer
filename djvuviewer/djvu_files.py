@@ -5,6 +5,7 @@ Created on 2026-01-05
 """
 
 from dataclasses import asdict
+import os
 from typing import Any, Dict, List, Optional
 
 from djvuviewer.djvu_config import DjVuConfig
@@ -53,8 +54,15 @@ class DjVuFiles:
         self.lod = None
         # SQL db based
         if self.config.db_path:
+            empty=False
+            # Remove broken 0-byte database file if it exists
+            if os.path.exists(self.config.db_path):
+                if os.path.getsize(self.config.db_path) == 0:
+                    os.remove(self.config.db_path)
+                    empty=True
             self.dvm = DjVuManager(config=self.config)
-            self.dvm.migrate_to_package_fields()
+            if not empty:
+                self.dvm.migrate_to_package_fields()
 
     def add_link(
         self, view_record: Dict[str, Any], filename: str, new: bool = False
