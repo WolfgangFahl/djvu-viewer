@@ -18,7 +18,7 @@ from nicegui import Client, app, ui
 from starlette.responses import FileResponse, HTMLResponse
 from wikibot3rd.sso_users import Sso_Users
 
-from djvuviewer.djvu_catalog import DjVuCatalog
+from djvuviewer.djvu_catalog import DjVuCatalog, WikiImageBrowser
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.djvu_debug import DjVuDebug
@@ -260,21 +260,20 @@ class DjVuSolution(InputWebSolution):
 
         await self.setup_content_div(show)
 
-    async def djvu_modal_catalog(self, browse_wiki: bool = False):
-        """Show the DjVu Catalog page"""
-
+    async def djvu_catalog(self):
         def show():
             self.djvu_catalog_view = DjVuCatalog(
                 self,
-                config=self.webserver.djvu_config,
-                browse_wiki=browse_wiki,
-            )
+                config=self.webserver.djvu_config)
             self.djvu_catalog_view.setup_ui()
 
         await self.setup_content_div(show)
 
-    async def djvu_catalog(self):
-        await self.djvu_modal_catalog(browse_wiki=False)
-
     async def djvu_browse(self):
-        await self.djvu_modal_catalog(browse_wiki=True)
+        def show():
+            self.djvu_catalog_view =WikiImageBrowser(
+                self,
+                config=self.webserver.djvu_config)
+            self.djvu_catalog_view.setup_ui()
+
+        await self.setup_content_div(show)
