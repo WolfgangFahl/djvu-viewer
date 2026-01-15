@@ -1,18 +1,20 @@
 """
 Created on 2024-08-26
 
-2026-02-02: Refactored to support dual-mode browsing (Database vs MediaWiki API).
-2026-02-02: Added paging and page size selection.
+2026-01-02: Refactored to support dual-mode browsing (Database vs MediaWiki API).
+2026-01-02: Added paging and page size selection.
+2026-01-15: use GridView base class
+
 @author: wf
 """
 from dataclasses import asdict
 from djvuviewer.djvu_config import DjVuConfig
-from ngwidgets.lod_grid import ListOfDictsGrid, GridConfig
-from ngwidgets.progress import NiceguiProgressbar
-from nicegui import background_tasks, run, ui
-from typing import Any, Dict, List
+from nicegui import ui
 
-class BaseCatalog:
+from djvuviewer.grid_view import GridView
+
+
+class BaseCatalog(GridView):
     """
     UI for browsing a catalog of images
     """
@@ -21,52 +23,37 @@ class BaseCatalog:
         solution,
         config: DjVuConfig,
         title: str,
-        limit: int=5000
+        limit: int = 5000
     ):
         """
-        Initialize the DjVu catalog view.
+        Initialize the catalog view.
 
         Args:
             solution: The solution instance
-            config: Configuration object containing connection and mode details
+            config: Configuration object
+            title: Catalog title
+            limit: Maximum records to load
         """
-        self.solution = solution
-        self.progress_row = None
-        self.progressbar = None
+        # Initialize GridView with configuration
+        super().__init__(
+            solution=solution,
+            search_cols=None,  # Auto-detect from first record
+        )
+
         self.config = config
-        self.title=title
-        self.limit=limit
-
-        self.webserver = self.solution.webserver
+        self.title = title
+        self.limit = limit
         self.djvu_files = self.webserver.context.djvu_files
-        self.ui_container = None
-        self.show_todo=False
-
-        self.lod = []
-        self.multiselect = False
-        self.view_lod = []
-        self.lod_grid = None
-        self.load_task = None
-        self.header_row = None
-        self.grid_row = None
-        self.timeout = 10.0
-        self.limit_options = [15, 30, 50, 100, 500, 1500, 5000]
+        self.show_todo = False
         self.images_url = self.config.base_url
 
-    def authenticated(self) -> bool:
-        """
-        check authentication
-        """
-        allow = self.solution.webserver.authenticated()
-        return allow
+        # Setup UI (inherited method)
+        self.setup_ui()
 
-    def setup_refresh_button(self):
-        self.refresh_button = ui.button(
-            icon="refresh",
-            on_click=self.on_refresh,
-        ).tooltip("Refresh catalog")
+        # Initial load using background task runner
+        self.run_background_task(self.load_lod)
 
-    def get_view_lod(self):
+    def to_view_lod(self):
         """Convert records to view format with row numbers and links."""
         try:
             view_lod = []
@@ -78,131 +65,33 @@ class BaseCatalog:
         except Exception as ex:
             self.solution.handle_exception(ex)
 
-    def get_grid_config(self)->GridConfig:
+    def load_lod(self):
         """
-        get the ListOfDicts Grid Configuration
+        Load catalog data from source.
+        This is called by run_background_task() automatically.
+        Override in subclasses to implement specific data loading.
         """
-        self.multiselect=self.authenticated()
-        grid_config = GridConfig(
-            key_col="#",
-            multiselect=self.multiselect,
-            with_buttons=self.multiselect
-        )
-        return grid_config
+        raise NotImplementedError("load_lod must be implemented by subclass")
 
-    def setup_lod_grid(self, view_lod: List[Dict[str, Any]], source_hint: str)->ListOfDictsGrid:
+    def get_view_record(self, record: dict, index: int) -> dict:
         """
-        setup the catalog grid
+        Convert a data record to view format.
+        Must be implemented by subclasses.
+
+        Args:
+            record: Source data record
+            index: Row number
+
+        Returns:
+            Formatted view record
         """
-        grid_config=self.get_grid_config()
-        with self.grid_row:
-            self.lod_grid = ListOfDictsGrid(lod=view_lod, config=grid_config)
-            self.lod_grid.ag_grid.style("height: 85%; width: 100%;")
-        self.post_lod_grid_setup(source_hint)
+        raise NotImplementedError("get_view_record must be implemented by subclass")
 
-        self.lod_grid.ag_grid.options["pagination"] = True
-        self.lod_grid.ag_grid.options["paginationPageSize"] = 15
-        self.lod_grid.ag_grid.options["paginationPageSizeSelector"] = (
-            self.limit_options
-        )
-        self.lod_grid.load_lod(self.view_lod)
-        if self.multiselect:
-            self.lod_grid.set_checkbox_selection("#")
-        self.lod_grid.sizeColumnsToFit()
-
-    def setup_ui(self):
-        """
-        Set up the user interface components for the DjVu catalog.
-        """
-        self.ui_container = self.solution.container
-        with self.ui_container:
-            self.setup_header_row()
-            with ui.row() as self.progress_row:
-                self.progressbar = NiceguiProgressbar(
-                    total=1,  # Will be updated by get_djvu_file
-                    desc="Loading DjVu Images",
-                    unit="pages",
-                )
-
-            # Grid row for displaying results
-            self.grid_row = ui.column().classes("w-full").style(
-                    "height: calc(100vh - 80px);"  # full height - progress bar
-            )
-
-        # Initial load
-        self.reload_catalog()
-
-    def reload_catalog(self):
-        self.load_task = background_tasks.create(self.load_catalog())
-
-    def on_refresh(self):
-        """
-        Handle refresh button click.
-        """
-
-        def cancel_running():
-            if self.load_task:
-                self.load_task.cancel()
-
-        # Show loading spinner
-        if self.grid_row:
-            self.grid_row.clear()
-            with self.grid_row:
-                ui.spinner()
-            self.grid_row.update()
-
-        # Cancel any running task
-        cancel_running()
-
-        ui.timer(self.timeout, lambda: cancel_running(), once=True)
-
-        self.reload_catalog()
-
-    async def load_catalog(self):
-        """
-        Load the catalog data and display it in the grid.
-        """
-        try:
-            # Fetch data
-            await run.io_bound(self.get_query_lod)
-
-            if not self.lod:
-                with self.solution.container:
-                    ui.notify("No DjVu files found")
-                return
-
-            # Convert to view format with links
-            await run.io_bound(self.get_view_lod)
-
-            if self.grid_row and self.view_lod:
-                # Clear and update grid and header
-                self.grid_row.clear()
-                record_count = len(self.view_lod)
-                source_hint=f"{record_count} records from {self.title}"
-                self.setup_lod_grid(view_lod=self.view_lod,source_hint=source_hint)
-
-            with self.solution.container:
-                self.grid_row.update()
-
-        except Exception as ex:
-            self.solution.handle_exception(ex)
-        finally:
-            with self.solution.container:
-                if self.progress_row:
-                    self.progress_row.visible = False
-
-    def setup_header_row(self):
-        """Setup header row components. Override in subclasses."""
-        pass
-
-    def post_lod_grid_setup(self, source_hint: str):
-        """Post-processing after grid setup. Override in subclasses."""
-        pass
 
 class DjVuCatalog(BaseCatalog):
     """
     UI for browsing and querying the DjVu document catalog.
-    Supports fetching records from a local SQLite DB or a remote MediaWiki API.
+    Supports fetching records from a local SQLite DB.
     """
     def __init__(
         self,
@@ -216,21 +105,16 @@ class DjVuCatalog(BaseCatalog):
             solution: The solution instance
             config: Configuration object containing connection and mode details
         """
-        super().__init__(solution=solution,config=config,title="DjVu Index Database")
-        self.multiselect=False
+        super().__init__(solution=solution, config=config, title="DjVu Index Database")
 
-    def setup_header_row(self):
-        # we will use the load grid button row
-        pass
+    def setup_custom_header_items(self):
+        """Add DjVu-specific header items (todo checkbox)."""
+        show_todo_checkbox = ui.checkbox("show todo").bind_value(self, "show_todo")
+        show_todo_checkbox.on('click', lambda: self.on_refresh())
 
-    def post_lod_grid_setup(self,source_hint:str):
-        with self.lod_grid.button_row:
-            # Header row with title and refresh button
-            ui.label(f"{source_hint}").classes("text-caption")
-            self.setup_refresh_button()
-            show_todo_checkbox = ui.checkbox("show todo").bind_value(self, "show_todo")
-            show_todo_checkbox.on('click', lambda: self.on_refresh())
-
+    def get_source_hint(self) -> str:
+        """Provide source hint for DjVu catalog."""
+        return f"{len(self.view_lod)} records from {self.title}"
 
     def get_view_record(self, record: dict, index: int) -> dict:
         """
@@ -269,10 +153,10 @@ class DjVuCatalog(BaseCatalog):
 
         return view_record
 
-    def get_query_lod(self):
+    def load_lod(self):
         """
-        Fetch DjVu catalog data from index db
-        sets self.lod: List of dictionaries containing DjVu file records
+        Fetch DjVu catalog data from index db.
+        Sets self.lod: List of dictionaries containing DjVu file records
         """
         lod = []
         try:
@@ -283,20 +167,20 @@ class DjVuCatalog(BaseCatalog):
             )
             # Convert DjVuFile objects to dicts
             for df in djvu_files_by_path.values():
-                do_add=True
+                do_add = True
                 if self.show_todo:
-                    do_add=not df.bundled and df.filesize is not None
-                    pass
+                    do_add = not df.bundled and df.filesize is not None
                 if do_add:
                     lod.append(asdict(df))
 
         except Exception as ex:
             self.solution.handle_exception(ex)
-        self.lod=lod
+        self.lod = lod
+
 
 class WikiImageBrowser(BaseCatalog):
     """
-    browser for wiki images
+    Browser for wiki images via MediaWiki API.
     """
     def __init__(
         self,
@@ -304,40 +188,38 @@ class WikiImageBrowser(BaseCatalog):
         config: DjVuConfig,
     ):
         """
-        Initialize the DjVu catalog view.
+        Initialize the wiki image browser view.
 
         Args:
             solution: The solution instance
             config: Configuration object containing connection and mode details
         """
-        super().__init__(solution=solution,config=config,title="MediaWiki API")
+        super().__init__(solution=solution, config=config, title="MediaWiki API")
 
-    def setup_header_row(self):
-        """
-        setup the given header row
-        """
-        with ui.row() as self.header_row:
-            self.setup_refresh_button()
-            self.setup_url_selector( )
-
-    def post_lod_grid_setup(self,source_hint:str):
-        pass
-
-    def setup_url_selector(self):
-        # Url Selector
+    def setup_custom_header_items(self):
+        """Add WikiImage-specific header items (url and limit selectors)."""
+        # URL Selector
         url_options = [self.config.base_url]
         if self.config.new_url:
             url_options.append(self.config.new_url)
         ui.select(
-            options=url_options, label="wiki", on_change=self.on_refresh
+            options=url_options,
+            label="wiki",
+            on_change=lambda: self.on_refresh()
         ).classes("w-64").bind_value(self, "images_url")
+
         # Limit Selector
         ui.select(
             options=self.limit_options,
             value=self.limit,
             label="Limit",
             on_change=lambda e: self.update_limit(e.value),
-        ).classes("w-16")
+        ).classes("w-32")
+
+    def get_source_hint(self) -> str:
+        """Provide source hint for wiki images."""
+        wiki_name = "wiki" if self.images_url == self.config.base_url else "new"
+        return f"{len(self.view_lod)} records from {wiki_name}"
 
     def get_view_record(self, record: dict, index: int) -> dict:
         """
@@ -351,8 +233,7 @@ class WikiImageBrowser(BaseCatalog):
             - user: "MLCarl3"
             - width: 4175
             - height: 5014
-            - url: "https://wiki.genealogy.net/images//3/3b/..."
-            - descriptionurl, mime, ns
+            - url: full image URL
         """
         view_record = {"#": index}
 
@@ -368,11 +249,10 @@ class WikiImageBrowser(BaseCatalog):
 
         return view_record
 
-    def get_query_lod(self):
+    def load_lod(self):
         """
-        Fetch DjVu catalog data based via API
-
-        sets self.lod: List of dictionaries containing DjVu file records
+        Fetch DjVu catalog data via MediaWiki API.
+        Sets self.lod: List of dictionaries containing DjVu file records
         """
         lod = []
         try:
@@ -394,16 +274,16 @@ class WikiImageBrowser(BaseCatalog):
                 limit=self.limit,
                 refresh=False,  # Use cache if available
                 progressbar=self.progressbar,
-                )
+            )
 
             # Convert MediaWikiImage objects to dicts for compatibility
-            lod = []
             for img in images:
                 lod.append(asdict(img))
+
         except Exception as ex:
             self.solution.handle_exception(ex)
 
-        self.lod=lod
+        self.lod = lod
 
     def update_limit(self, new_limit: int):
         """Update the fetch limit and refresh catalog."""
