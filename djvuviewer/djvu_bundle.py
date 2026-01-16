@@ -444,10 +444,8 @@ class DjVuBundle:
 
     def generate_bundling_script(self, update_index_db: bool = False) -> str:
         """
-        Generate a complete bash script for the bundling process.
-
-        Returns:
-            The bash script as a string
+        Generate an idempotent bash script for bundling.
+        Each step is a function that can be safely retried.
         """
         djvu_path = self.djvu_file.path
         full_path = self.config.djvu_abspath(djvu_path)
@@ -456,130 +454,168 @@ class DjVuBundle:
         basename = os.path.basename(djvu_path)
         stem = os.path.splitext(basename)[0]
 
-        # Get part files
         part_files = self.get_part_filenames()
-
-        # Define paths
-        backup_file = os.path.join(self.config.backup_path, f"{stem}.zip")
+        backup_file = self.backup_file
         bundled_file = os.path.join(djvu_dir, f"{stem}_bundled.djvu")
-        db_path = self.config.db_path
 
-        # Build script content
-        script_lines = [
-            "#!/bin/bash",
-            "# DjVu bundling script",
-            f"# Generated for: {djvu_path}",
-            f"# Date: {datetime.now().isoformat()}",
-            "",
-            "set -e  # Exit on error",
-            "",
-            "# Define variables",
-            f"DJVU_PATH={shlex.quote(djvu_path)}",
-            f"DJVU_DIR={shlex.quote(djvu_dir)}",
-            f"FULL_PATH={shlex.quote(full_path)}",
-            f"DB_PATH='{shlex.quote(db_path)}'",
-            f"BASENAME={shlex.quote(basename)}",
-            f"BACKUP_FILE={shlex.quote(backup_file)}",
-            f"BUNDLED_FILE={shlex.quote(bundled_file)}",
-            "",
-            "# Step 1: Create backup ZIP",
-            f'cd "$DJVU_DIR"',
-            f"echo 'Creating backup ZIP...'",
-            f'zip -j "$BACKUP_FILE" "$BASENAME" \\',
-        ]
+        # Build part files for zip command
+        part_files_zip = " \\\n        ".join(shlex.quote(pf) for pf in part_files)
 
-        # Add part files to zip command
-        for i, part_file in enumerate(part_files):
-            is_last = i == len(part_files) - 1
-            line = f"  {shlex.quote(part_file)}"
-            if not is_last:
-                line += " \\"
-            script_lines.append(line)
-
-        script_lines.extend(
-            [
-                "",
-                "# Step 2: Save original timestamps",
-                'ORIG_ATIME=$(stat -c %X "$FULL_PATH")',
-                'ORIG_MTIME=$(stat -c %Y "$FULL_PATH")',
-                "echo 'Saved original timestamps'",
-                "",
-                "# Step 3: Verify backup was created",  # Changed from Step 2
-                'if [ ! -f "$BACKUP_FILE" ]; then',
-                "  echo 'Error: Backup ZIP not created'",
-                "  exit 1",
-                "fi",
-                "echo 'Backup created: '$BACKUP_FILE",
-                "",
-                "# Step 4: Convert to bundled format",  # Changed from Step 3
-                "echo 'Converting to bundled format...'",
-                'djvmcvt -b "$FULL_PATH" "$BUNDLED_FILE"',
-                "",
-                "# Step 5: Verify bundled file was created",  # Changed from Step 4
-                'if [ ! -f "$BUNDLED_FILE" ]; then',
-                "  echo 'Error: Bundled file not created'",
-                "  exit 1",
-                "fi",
-                "echo 'Bundled file created: '$BUNDLED_FILE",
-                "",
-                "# Step 6: Sleep for CIFS sync (if needed)",  # Changed from Step 5
-                "sleep 1",
-                "",
-                "# Step 7: Remove original files",  # Changed from Step 6
-                "echo 'Removing original files...'",
-                f'rm -f "$DJVU_PATH"',
-            ]
+        # Build part removal commands
+        part_removals = "\n    ".join(
+            f'rm -f {shlex.quote(os.path.join(djvu_dir, pf))}'
+            for pf in part_files
         )
 
-        # Add removal of part files
-        for part_file in part_files:
-            script_lines.append(
-                f"rm -f {shlex.quote(os.path.join(djvu_dir, part_file))}"
-            )
-
-        script_lines.extend(
-            [
-                "",
-                "# Step 8: Move bundled file to original location",  # Changed from Step 7
-                "echo 'Moving bundled file to original location...'",
-                'mv "$BUNDLED_FILE" "$DJVU_PATH"',
-                "",
-                "# Step 9: Restore original timestamps",  # NEW STEP
-                "echo 'Restoring original timestamps...'",
-                'touch -a -d "@$ORIG_ATIME" "$DJVU_PATH"',
-                'touch -m -d "@$ORIG_MTIME" "$DJVU_PATH"',
-                "",
-                "echo 'Bundling complete!'",
-                f"echo 'Backup saved at: '$BACKUP_FILE",
-            ]
-        )
         docker_cmd = self.get_docker_cmd()
-        if docker_cmd:
-            script_lines.extend([docker_cmd])
+        docker_step = f'    refresh_mediawiki\n' if docker_cmd else ''
 
-        # Add database update if enabled
+        # Database update function
+        db_func = ""
+        db_call = ""
         if update_index_db:
+            db_func = f"""
+    update_database() {{
+        [ -f "$FULL_PATH" ] || error "Missing file for DB update"
+        log "Updating database..."
+        FILESIZE=$(stat -f%z "$FULL_PATH" 2>/dev/null || stat -c%s "$FULL_PATH")
+        sqlite3 "{self.config.db_path}" "UPDATE DjVu SET bundled=1, filesize=$FILESIZE WHERE path='$DJVU_PATH';"
+        log "DB updated: bundled=1, size=$FILESIZE"
+    }}
+    """
+            db_call = "    update_database\n"
 
-            script_lines.extend(
-                [
-                    "# Update database",
-                    "",
-                    "# Get actual file size",
-                    'FILESIZE=$(stat -f%z "$FULL_PATH" 2>/dev/null || stat -c%s "$FULL_PATH" 2>/dev/null)',
-                    "",
-                    "# Update SQLite database",
-                    'sqlite3 "$DB_PATH" "UPDATE DjVu SET bundled = 1, filesize = $FILESIZE WHERE path = '
-                    "'"
-                    "$DJVU_PATH"
-                    "'"
-                    ';"',
-                    "",
-                    'echo "Database updated: bundled=1, filesize=$FILESIZE for $DJVU_PATH"',
-                    "",
-                ]
-            )
+        mediawiki_func = ""
+        if docker_cmd:
+            mediawiki_func = f"""
+    refresh_mediawiki() {{
+        log "Refreshing MediaWiki..."
+        {docker_cmd}
+        log "✓ MediaWiki refreshed"
+    }}
+    """
 
-        script = "\n".join(script_lines) + "\n"
+        script = f"""#!/bin/bash
+# DjVu Bundling Script - {djvu_path}
+# Generated: {datetime.now().isoformat()}
+# IDEMPOTENT: Safe to re-run if any step fails
+
+set -e
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+DJVU_PATH={shlex.quote(djvu_path)}
+FULL_PATH={shlex.quote(full_path)}
+DJVU_DIR={shlex.quote(djvu_dir)}
+BACKUP_FILE={shlex.quote(backup_file)}
+BUNDLED_FILE={shlex.quote(bundled_file)}
+TIMESTAMP_FILE="$DJVU_DIR/.{stem}_timestamps"
+
+# ============================================================================
+# UTILITIES
+# ============================================================================
+
+log() {{ echo "[$(date '+%H:%M:%S')] $1"; }}
+error() {{ echo "[ERROR] $1" >&2; exit 1; }}
+
+# ============================================================================
+# STEPS (Each is idempotent)
+# ============================================================================
+
+backup_original() {{
+    [ -f "$BACKUP_FILE" ] && {{ log "Backup exists, skipping"; return 0; }}
+
+    log "Creating backup..."
+    [ -f "$FULL_PATH" ] || error "Source file missing"
+
+    cd "$DJVU_DIR"
+    zip -j "$BACKUP_FILE" {shlex.quote(basename)} \\
+        {part_files_zip}
+
+    [ -f "$BACKUP_FILE" ] || error "Backup creation failed"
+    log "✓ Backup: $BACKUP_FILE"
+}}
+
+save_timestamps() {{
+    [ -f "$TIMESTAMP_FILE" ] && {{ log "Timestamps saved, skipping"; return 0; }}
+
+    log "Saving timestamps..."
+    stat -c "%X %Y" "$FULL_PATH" > "$TIMESTAMP_FILE" 2>/dev/null || \\
+        stat -f "%a %m" "$FULL_PATH" > "$TIMESTAMP_FILE"
+    log "✓ Timestamps saved"
+}}
+
+bundle_djvu() {{
+    [ -f "$BUNDLED_FILE" ] && {{ log "Already bundled, skipping"; return 0; }}
+
+    log "Converting to bundled format..."
+    [ -f "$FULL_PATH" ] || error "Source file missing"
+
+    djvmcvt -b "$FULL_PATH" "$BUNDLED_FILE"
+    [ -f "$BUNDLED_FILE" ] || error "Bundling failed"
+    log "✓ Created: $BUNDLED_FILE"
+}}
+
+cleanup_originals() {{
+    [ ! -f "$FULL_PATH" ] && {{ log "Originals removed, skipping"; return 0; }}
+
+    log "Removing originals..."
+    [ -f "$BACKUP_FILE" ] || error "No backup, cannot remove originals"
+    [ -f "$BUNDLED_FILE" ] || error "No bundled file, cannot remove originals"
+
+    rm -f "$FULL_PATH"
+    {part_removals}
+    log "✓ Originals removed"
+}}
+
+finalize_bundled() {{
+    [ -f "$FULL_PATH" ] && [ ! -f "$BUNDLED_FILE" ] && {{
+        log "Already in place, skipping"
+        return 0
+    }}
+
+    log "Moving bundled file..."
+    [ -f "$BUNDLED_FILE" ] || error "Bundled file missing"
+
+    mv "$BUNDLED_FILE" "$FULL_PATH"
+    sync; sleep 1
+    log "✓ Moved to: $FULL_PATH"
+}}
+
+restore_timestamps() {{
+    [ ! -f "$TIMESTAMP_FILE" ] && {{ log "No timestamps to restore"; return 0; }}
+
+    log "Restoring timestamps..."
+    read ATIME MTIME < "$TIMESTAMP_FILE"
+    touch -a -d "@$ATIME" "$FULL_PATH"
+    touch -m -d "@$MTIME" "$FULL_PATH"
+    rm -f "$TIMESTAMP_FILE"
+    log "✓ Timestamps restored"
+}}
+
+{mediawiki_func}{db_func}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+main() {{
+    log "Starting bundling: $DJVU_PATH"
+
+    backup_original
+    save_timestamps
+    bundle_djvu
+    cleanup_originals
+    finalize_bundled
+    restore_timestamps
+{docker_step}{db_call}
+    log "✅ COMPLETE: $DJVU_PATH"
+}}
+
+main "$@"
+"""
         return script
 
     def convert_to_bundled(self, output_path: str = None) -> str:
