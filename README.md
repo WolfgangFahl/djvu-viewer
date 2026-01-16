@@ -18,5 +18,17 @@ DjVu Viewer and tarball converter
 ## Model
 ![Class Diagram](http://www.plantuml.com/plantuml/proxy?src=https://raw.githubusercontent.com/WolfgangFahl/djvu-viewer/refs/heads/main/djvuviewer_examples/djvuviewer.puml?fmt=svg&version=1)
 
+## Conversion of unbundled to bundled example
+
+[![DJVU Viewer Conversion Demo](https://github.com/user-attachments/assets/50f76abd-0374-4604-a154-a96e43593d30)](https://github.com/WolfgangFahl/djvu-viewer/releases/download/v0.7.0/djvuviewer-ProvinzRheinland1888.mp4)
+
+*Click to watch the demo video showing the viewer navigating through "Provinz Rheinland 1888"*
+see also 
+- https://wiki.genealogy.net/index.php?title=Datei:Provinz_Rheinland_1888.djvu&page=23
+- https://genwiki39.genealogy.net/index.php?title=Datei%3AProvinz_Rheinland_1888.djvu&page=23
+
+ 
+
+
 ## Help
 - [Help](https://github.com/WolfgangFahl/djvu-viewer/wiki/Help)
