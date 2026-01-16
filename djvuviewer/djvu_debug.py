@@ -93,9 +93,9 @@ class DjVuDebug:
             """
             links = []
             # Fixed: Access through djvu_bundle with null check
-            if self.djvu_bundle and self.djvu_bundle.mw_image_wiki:
+            if self.djvu_bundle and self.djvu_bundle.image_wiki:
                 links.append(label_value("Wiki", view_record.get("wiki", "")))
-            if self.djvu_bundle and self.djvu_bundle.mw_image_new:
+            if self.djvu_bundle and self.djvu_bundle.image_new:
                 links.append(label_value("New", view_record.get("new", "")))
             links.append(label_value("Package", view_record.get("package", "")))
             return links
@@ -108,11 +108,10 @@ class DjVuDebug:
         if not djvu_file:
             links_html = "".join(link_list())
             wiki_url = None
-            if self.djvu_bundle:
-                if self.djvu_bundle.mw_image_wiki:
-                    wiki_url = self.djvu_bundle.mw_image_wiki.descriptionurl
-                elif self.djvu_bundle.mw_image_new:
-                    wiki_url = self.djvu_bundle.mw_image_new.descriptionurl
+            if self.djvu_bundle and self.djvu_bundle.image_wiki:
+                wiki_url = self.djvu_bundle.descriptionurl_wiki
+            elif self.djvu_bundle and self.djvu_bundle.image_new:
+                wiki_url = self.djvu_bundle.descriptionurl_new
 
             if not wiki_url:
                 wiki_url = f"{self.config.base_url}/File:{self.page_title}"
