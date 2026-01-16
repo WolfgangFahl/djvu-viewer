@@ -16,7 +16,7 @@ import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from basemkit.shell import Shell
 
@@ -34,7 +34,11 @@ class DjVuBundle:
     """
 
     def __init__(
-        self, djvu_file: DjVuFile, config: DjVuConfig = None, debug: bool = False
+        self,
+        djvu_file: DjVuFile,
+        config: DjVuConfig = None,
+        debug: bool = False,
+        mw_images: Optional[Dict[str, 'MediaWikiImage']] = None,
     ):
         """
         Initialize DjVuBundle with a DjVuFile instance.
@@ -43,15 +47,30 @@ class DjVuBundle:
             djvu_file: The DjVuFile metadata
             config: configuration
             debug: if True
+            mw_images: Optional dict of MediaWiki images keyed by wiki name
         """
+
         self.djvu_file = djvu_file
         if config is None:
             config = DjVuConfig.get_instance()
         self.config = config
         self.debug = debug
+        self.mw_images: Dict[str, 'MediaWikiImage'] = mw_images or {}
         self.errors: List[str] = []
         self.shell = Shell()
         self.djvu_dump_log = None
+
+    @property
+    def image_wiki(self) -> Optional['MediaWikiImage']:
+        """Get image from main wiki."""
+        image_wiki=self.mw_images.get('wiki')
+        return image_wiki
+
+    @property
+    def image_new(self) -> Optional['MediaWikiImage']:
+        """Get image from new wiki."""
+        image_new=self.mw_images.get('new')
+        return image_new
 
     @classmethod
     def from_package(cls, package_file: str, with_check: bool = True) -> "DjVuBundle":

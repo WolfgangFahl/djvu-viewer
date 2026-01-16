@@ -12,7 +12,7 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_files import DjVuFiles
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.packager import PackageMode
-
+from djvuviewer.djvu_bundle import DjVuBundle
 
 class DjVuContext:
     """
@@ -47,3 +47,54 @@ class DjVuContext:
             self.djvu_files.fetch_images(
                 url=self.config.new_url, name="new", limit=10000, progressbar=pbar
             )
+
+    def load_djvu_file(self, page_title: str, progressbar=None) -> DjVuBundle:
+        """
+        Load DjVu file metadata via DjVuFiles interface.
+
+        Args:
+            page_title: The page title to load
+            progressbar: Optional progressbar for feedback
+
+        Returns:
+            DjVuBundle: Bundle with loaded images and DjVu file data
+
+        Raises:
+            ValueError: If image not found in any wiki
+            Exception: For other loading errors
+        """
+        # Fetch image metadata from wikis using DjVuFiles
+        mw_images = {}
+
+        wiki_images = self.djvu_files.fetch_images(
+            url=self.config.base_url, name="wiki", titles=[page_title]
+        )
+        if wiki_images:
+            mw_images['wiki'] = wiki_images[0]
+
+        if self.config.new_url:
+            new_images = self.djvu_files.fetch_images(
+                url=self.config.new_url, name="new", titles=[page_title]
+            )
+            if new_images:
+                mw_images['new'] = new_images[0]
+
+        if not mw_images:
+            raise ValueError(f"Image not found in any wiki: {page_title}")
+
+        # Use first available image to determine path
+        active_image = next(iter(mw_images.values()))
+        relpath = active_image.relpath
+        abspath = self.config.djvu_abspath(f"/images/{relpath}")
+
+        djvu_file = self.dproc.get_djvu_file(abspath, progressbar=progressbar)
+
+        # Create bundle with MediaWiki metadata
+        djvu_bundle = DjVuBundle(
+            djvu_file,
+            config=self.config,
+            debug=self.args.debug,
+            mw_images=mw_images
+        )
+
+        return djvu_bundle

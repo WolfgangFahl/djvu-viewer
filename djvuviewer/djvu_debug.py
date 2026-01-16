@@ -50,8 +50,6 @@ class DjVuDebug:
 
         self.progressbar = None
         self.page_title = page_title
-        self.mw_image = None
-        self.mw_image_new = None
         self.djvu_file = None
         self.djvu_bundle = None
         self.total_pages = 0
@@ -71,9 +69,6 @@ class DjVuDebug:
         self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
         self.bundle_state_container = None
-        self.dproc = DjVuProcessor(
-            verbose=self.solution.debug, debug=self.solution.debug
-        )
 
     def authenticated(self) -> bool:
         """
@@ -81,52 +76,6 @@ class DjVuDebug:
         """
         allow = self.solution.webserver.authenticated()
         return allow
-
-    def load_djvu_file(self) -> tuple[bool, str]:
-        """
-        Load DjVu file metadata via DjVuFiles interface.
-
-        Returns:
-            tuple[bool, str]: (success, error_message)
-        """
-        try:
-            # Fetch image metadata from both wikis using DjVuFiles
-            wiki_images = self.djvu_files.fetch_images(
-                url=self.config.base_url, name="wiki", titles=[self.page_title]
-            )
-            self.mw_image_wiki = wiki_images[0] if wiki_images else None
-
-            if self.config.new_url:
-                new_images = self.djvu_files.fetch_images(
-                    url=self.config.new_url, name="new", titles=[self.page_title]
-                )
-                self.mw_image_new = new_images[0] if new_images else None
-
-            if not (self.mw_image_wiki or self.mw_image_new):
-                return False, f"Image not found in any wiki: {self.page_title}"
-
-            # Use available image to determine path
-            active_image = self.mw_image_wiki or self.mw_image_new
-            relpath = active_image.relpath  # Already cleaned by MediaWikiImage
-            abspath = self.config.djvu_abspath(f"/images/{relpath}")
-
-            self.djvu_file = self.dproc.get_djvu_file(
-                abspath, progressbar=self.progressbar
-            )
-            self.djvu_bundle = DjVuBundle(
-                self.djvu_file, config=self.config, debug=self.context.args.debug
-            )
-            return True, ""
-
-        except Exception as ex:
-            error_msg = f"Error loading DjVu file: {str(ex)}"
-            self.solution.handle_exception(ex)
-            return False, error_msg
-
-        except Exception as ex:
-            error_msg = f"Error loading DjVu file: {str(ex)}"
-            self.solution.handle_exception(ex)
-            return False, error_msg
 
     def get_header_html(self) -> str:
         """Helper to generate HTML summary our DjVuFile instance."""
@@ -327,9 +276,17 @@ class DjVuDebug:
 
             self.progress_row.visible = True
             # Load file metadata (blocking IO)
-            success, error_msg = await run.io_bound(self.load_djvu_file)
+            try:
+                self.djvu_bundle = await run.io_bound(
+                    self.context.load_djvu_file,
+                    self.page_title,
+                    self.progressbar
+                )
 
-            if not success:
+                # Extract djvu_file for convenience
+                self.djvu_file = self.djvu_bundle.djvu_file
+            except Exception as e:
+                error_msg = str(e)
                 self.content_row.clear()
                 with self.content_row:
                     ui.notify(error_msg, type="negative")
