@@ -24,7 +24,6 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.image_convert import ImageConverter
 from djvuviewer.packager import Packager
-from cairosvg.image import image
 
 logger = logging.getLogger(__name__)
 
