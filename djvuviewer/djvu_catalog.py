@@ -128,7 +128,9 @@ class DjVuCatalog(BaseCatalog):
             - bundled: bool
             - package_filesize, package_iso_date, dir_pages (optional)
         """
+        # make sure we can lookup later
         view_record = {"#": index}
+        record["#"]=index
 
         filename = None
         if "path" in record:
@@ -236,6 +238,7 @@ class WikiImageBrowser(BaseCatalog):
             - url: full image URL
         """
         view_record = {"#": index}
+        record["#"]=index
 
         raw_name = record.get("title", "")
         filename = raw_name.replace("File:", "").replace("Datei:", "")

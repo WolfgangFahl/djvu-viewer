@@ -95,6 +95,7 @@ class GridView(View):
         # UI containers
         self.ui_container = None
         self.header_row = None
+        self.header_setup= False
         self.grid_row = None
         self.source_info_label = None
 
@@ -117,9 +118,6 @@ class GridView(View):
         # Create grid row for the actual grid
         if not self.grid_row:
             self.grid_row = ui.row().classes("w-full fit")
-            # Initial spinner - will be replaced after first load
-            with self.grid_row:
-                ui.spinner("dots", size="lg")
 
     def setup_header(self, source_hint: str = ""):
         """
@@ -129,6 +127,11 @@ class GridView(View):
         Args:
             source_hint: Description of data source (e.g., "100 records from Database")
         """
+        if self.header_setup:
+            if source_hint:
+                self.source_info_label.set_text(source_hint)
+
+            return
         if not self.header_row:
             return
 
@@ -148,6 +151,7 @@ class GridView(View):
             # Source info label
             if source_hint:
                 self.source_info_label = ui.label(source_hint).classes("text-caption text-gray-600")
+            self.header_setup=True
 
     def setup_custom_header_items(self):
         """
@@ -180,15 +184,16 @@ class GridView(View):
             search_lower = self.search_text.strip().lower()
             matched_keys = []
             columns = (
-                self.search_cols or list(self.view_lod[0].keys())
-                if self.view_lod
+                # all first record columns if no search_cold are specified
+                self.search_cols or list(self.lod[0].keys())
+                if self.lod
                 else []
             )
             for row in self.lod:
                 for col in columns:
                     val = row.get(col)
                     if isinstance(val, str) and search_lower in val.lower():
-                        key_value = row.get(self.key_col)
+                        key_value = row.get(self.grid_config.key_col)
                         matched_keys.append(key_value)
                         break  # Move to next row after first match
             msg = f"search {self.search_text} → {len(matched_keys)} matches"
@@ -239,20 +244,22 @@ class GridView(View):
         """
         Render the view_lod into a ListOfDictsGrid.
         """
+
         if not self.grid_row:
             return
+        try:
+            grid_config = self.get_grid_config()
+            self.grid_config=grid_config
 
-        grid_config = self.get_grid_config()
-
-        # Clear grid row and render grid
-        self.grid_row.clear()
-        with self.grid_row:
-            self.grid = ListOfDictsGrid(lod=self.view_lod, config=grid_config)
-            self.grid.ag_grid.options["pagination"] = True
-            self.grid.ag_grid.options["paginationPageSize"] = 15
-            self.grid.ag_grid.options["paginationPageSizeSelector"] = self.limit_options
-            if grid_config.multiselect:
-                self.grid.set_checkbox_selection(grid_config.key_col)
+            with self.grid_row:
+                self.grid = ListOfDictsGrid(lod=self.view_lod, config=grid_config)
+                self.grid.ag_grid.options["pagination"] = True
+                self.grid.ag_grid.options["paginationPageSize"] = 15
+                self.grid.ag_grid.options["paginationPageSizeSelector"] = self.limit_options
+                if grid_config.multiselect:
+                    self.grid.set_checkbox_selection(grid_config.key_col)
+        except Exception as ex:
+            self.solution.handle_exception(ex)
 
     def load_lod(self):
         """
@@ -270,6 +277,13 @@ class GridView(View):
         """
         return f"{len(self.view_lod)} records"
 
+    def clear_grid_row(self):
+        """
+        clear the grid row
+        """
+        self.grid_row.clear()
+        self.grid=None
+
     def on_refresh(self) -> None:
         """
         Handle refresh button click.
@@ -277,7 +291,7 @@ class GridView(View):
         """
         # Show loading spinner
         if self.grid_row:
-            self.grid_row.clear()
+            self.clear_grid_row()
             with self.grid_row:
                 ui.spinner("dots", size="lg")
             self.grid_row.update()
@@ -345,17 +359,11 @@ class GridView(View):
             # Setup header with source info
             source_hint = self.get_source_hint()
             self.setup_header(source_hint)
-
-            # Render or update grid
-            if self.grid:
-                # Grid exists, just reload data
-                self.grid.load_lod(self.view_lod)
-                if self.grid.config.autoHeight:
-                    self.grid.sizeColumnsToFit()
-                self.grid.update()
-            else:
-                # First time render
-                await self.render_grid()
+            # Clear grid row - removing potential progress spinner
+            # and render grid
+            self.clear_grid_row()
+            # First time render
+            await self.render_grid()
 
             # Update container if exists
             if self.ui_container:
