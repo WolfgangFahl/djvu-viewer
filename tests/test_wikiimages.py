@@ -42,7 +42,7 @@ class TestMediaWikiImages(Basetest):
             print(image)
             print(json.dumps(image_dict, indent=2))
         expected = {
-            "url": "https://wiki.genealogy.net/images//0/0c/AB1938_Heessen-Geschi.djvu",
+            "url": "https://wiki.genealogy.net/images/0/0c/AB1938_Heessen-Geschi.djvu",
             "mime": "image/vnd.djvu",
             "size": 161771,
             "user": "KlausErdmann",
