@@ -24,6 +24,7 @@ from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.image_convert import ImageConverter
 from djvuviewer.packager import Packager
+from cairosvg.image import image
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,24 @@ class DjVuBundle:
         """Get image from new wiki."""
         image_new=self.mw_images.get('new')
         return image_new
+
+    @property
+    def description_url_wiki(self) -> Optional[str]:
+        """Get description URL from main wiki image."""
+        file_url = self.image_wiki.descriptionurl if self.image_wiki else None
+        return file_url
+
+    @property
+    def description_url_new(self) -> Optional[str]:
+        """Get description URL from new wiki image."""
+        file_url = self.image_new.descriptionurl if self.image_new else None
+        return file_url
+
+    @property
+    def description_url(self) -> Optional[str]:
+        """Get the first available description URL (wiki or new)."""
+        file_url = self.description_url_wiki or self.description_url_new
+        return file_url
 
     @classmethod
     def from_package(cls, package_file: str, with_check: bool = True) -> "DjVuBundle":
