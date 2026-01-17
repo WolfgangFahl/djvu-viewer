@@ -170,7 +170,8 @@ class TestDjVu(Basetest):
             zip_filesize = self.show_fileinfo(zip_path)
 
             # Convert to bundled format
-            bundled_path = djvu_bundle.convert_to_bundled()
+            djvu_bundle.convert_to_bundled()
+            bundled_path=djvu_bundle.bundled_file_path
             bundle_filesize = self.show_fileinfo(bundled_path)
 
             # Calculate and validate size ratio
