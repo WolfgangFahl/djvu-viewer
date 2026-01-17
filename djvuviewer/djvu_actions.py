@@ -18,6 +18,7 @@ from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_processor import ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
+from djvuviewer.wiki_images import MediaWikiImage
 from ngwidgets.progress import TqdmProgressbar
 from tqdm import tqdm
 
@@ -99,10 +100,8 @@ class DjVuActions:
                 progressbar=progressbar
             )
         else:
-            djvu_path = url
-            full_path = self.config.djvu_abspath(djvu_path)
-            djvu_file = djvu_file = self.dproc.get_djvu_file(full_path)
-            djvu_files_by_path = {djvu_path: djvu_file}
+            djvu_file = self.dproc.get_djvu_file(url=url,config=self.config)
+            djvu_files_by_path = {djvu_file.path: djvu_file}
             pass
         return djvu_files_by_path
 
@@ -135,10 +134,10 @@ class DjVuActions:
         )
 
         for index, image in enumerate(images, start=1):
-            djvu_path = self.config.djvu_abspath(image.relpath)
+            full_path = self.config.full_path(image.relpath)
 
-            if not djvu_path or not os.path.exists(djvu_path):
-                self.errors.append(Exception(f"missing {djvu_path}"))
+            if not full_path or not os.path.exists(full_path):
+                self.errors.append(Exception(f"missing {full_path}"))
                 continue
 
             pages = []
@@ -146,7 +145,7 @@ class DjVuActions:
             bundled = False
 
             # Process each page in the document
-            for document, page in self.dproc.yield_pages(djvu_path):
+            for document, page in self.dproc.yield_pages(full_path):
                 page_count = len(document.pages)
                 page_index = len(pages) + 1
 
@@ -169,12 +168,12 @@ class DjVuActions:
                     valid=valid,
                     djvu_path=image.relpath,
                 )
-                pagefile_path = os.path.join(os.path.dirname(djvu_path), filename)
+                pagefile_path = os.path.join(os.path.dirname(full_path), filename)
                 dpage.set_fileinfo(pagefile_path)
                 pages.append(dpage)
                 bundled = document.type == 2
 
-            iso_date, filesize = ImageJob.get_fileinfo(djvu_path)
+            iso_date, filesize = ImageJob.get_fileinfo(full_path)
             djvu_file = DjVuFile(
                 path=image.relpath,
                 page_count=page_count,
@@ -236,17 +235,16 @@ class DjVuActions:
                 )
                 image = mw_client.fetch_image(f"File:{url}")
                 url = image.url
-                url = DjVuConfig.djvu_relpath(url)
+            relpath=MediaWikiImage.relpath_of_url(url)
+            full_path = self.config.full_path(relpath)
 
-            djvu_path = self.config.djvu_abspath(url)
-
-            if not os.path.exists(djvu_path):
-                raise FileNotFoundError(f"File not found: {djvu_path}")
+            if not os.path.exists(full_path):
+                raise FileNotFoundError(f"File not found: {full_path}")
 
             # Show original file info
-            original_size = self.show_fileinfo(djvu_path)
+            _original_size = self.show_fileinfo(full_path)
 
-            djvu_file = self.dproc.get_djvu_file(djvu_path)
+            djvu_file = self.dproc.get_djvu_file(url=url,config=self.config)
             djvu_bundle = DjVuBundle(djvu_file, config=self.config, debug=self.debug)
 
             # If only generating script, return it
@@ -273,7 +271,7 @@ class DjVuActions:
                 print(f"Finalizing bundling...")
             djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=sleep)
 
-            if not djvu_bundle.is_valid():
+            if djvu_bundle.error_count>0:
                 self.errors.extend(djvu_bundle.errors)
                 error_msg = f"Bundling failed with {len(djvu_bundle.errors)} errors"
                 if self.verbose:
@@ -353,7 +351,8 @@ class DjVuActions:
             page_count = 0
             for path in djvu_files:
                 try:
-                    djvu_path = self.config.djvu_abspath(path)
+                    relpath=MediaWikiImage.relpath_of_url(path)
+                    full_path=self.config.full_path(relpath)
                     djvu_file = None
                     prefix = ImageJob.get_prefix(path)
                     package_file = os.path.join(
@@ -366,7 +365,7 @@ class DjVuActions:
 
                     # Process all pages in the document
                     for image_job in process_func(
-                        djvu_path,
+                        full_path,
                         relurl=path,
                         save_png=True,
                         output_path=self.output_path,
@@ -400,7 +399,7 @@ class DjVuActions:
 
                     # Create package after YAML is saved
                     if self.dproc.do_package:
-                        self.dproc.wrap_as_package(djvu_path)
+                        self.dproc.wrap_as_package(full_path)
 
                 except BaseException as e:
                     self.errors.append(e)
@@ -449,8 +448,8 @@ class DjVuActions:
                     # but consider https://github.com/WolfgangFahl/djvu-viewer/issues/33
                     # where there might be Datei:AB1938 Kreis-Beckum Inhaltsverz.djvu
                     # with a blank and relpath /c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu
-                    djvu_path = self.config.djvu_abspath(relpath)
-                    djvu_file.set_fileinfo(djvu_path)
+                    full_path = self.config.full_path(relpath)
+                    djvu_file.set_fileinfo(full_path)
                     updated_files.append(djvu_file)
 
                 except BaseException as e:

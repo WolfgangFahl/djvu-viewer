@@ -183,8 +183,14 @@ class DjVuDebug:
         self.bundle_state_container.clear()
         with self.bundle_state_container:
             ui.label("Bundling State").classes("text-subtitle1 mb-2")
-            # Bundled status - just a disabled checkbox
-            ui.checkbox("Bundled", value=self.djvu_file.bundled).props("disable")
+            # Bundled Three-state display: ❌ Not bundled | ⚠️ Incomplete | ✅ Bundled
+            if self.djvu_bundle.has_incomplete_bundling:
+                ui.label("⚠️ Incomplete - retry bundling").classes("text-warning")
+                self.bundling_enabled = True  # Allow retry
+            elif self.djvu_file.bundled:
+                ui.label("✅ Bundled").classes("text-positive")
+            else:
+                ui.label("❌ Not bundled").classes("text-grey-7")
             if self.bundled_size and self.bundled_size > 0:
                 ui.label(f"Size: {self.bundled_size:,} bytes").classes(
                     "text-caption text-grey-7"
@@ -349,6 +355,31 @@ class DjVuDebug:
             ui.notify(f"{path} ({filesize}) {iso_date}")
         return filesize
 
+    def show_bundling_errors(self,title:str)->bool:
+        """
+        show bundling errors
+        Returns:
+            bool: true if there are errors
+        """
+        error_count=self.djvu_bundle.error_count
+        has_errors=error_count>0
+        if has_errors:
+            with self.content_row:
+                ui.label(f"❌ {title}: {error_count} error(s) found").classes(
+                    "text-h6 text-negative"
+                )
+
+                # Show errors in an expansion panel
+                with ui.expansion(
+                    f"Error Details ({error_count})",
+                    icon="error"
+                ).classes("w-full"):
+                    for i, error in enumerate(self.djvu_bundle.errors, 1):
+                        with ui.card().classes("w-full bg-red-50"):
+                            ui.label(f"{i}. {error}").classes("text-negative")
+
+        return has_errors
+
     async def bundle(self):
         """
         run the bundle activities in background
@@ -362,11 +393,18 @@ class DjVuDebug:
                         ui.notify(f"{self.djvu_bundle.backup_file} already exists")
                 else:
                     zip_path = self.djvu_bundle.create_backup_zip()
+                    if self.show_bundling_errors("backup zip"):
+                        return
 
             bundled_path = self.djvu_bundle.convert_to_bundled()
             self.bundled_size = self.show_fileinfo(bundled_path)
+            if self.show_bundling_errors("djvu bundling"):
+                return
 
             self.djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=True)
+            if self.show_bundling_errors("replace unbundled with bundled"):
+                return
+
             docker_cmd = self.djvu_bundle.get_docker_cmd()
             if docker_cmd and self.update_wiki:
                 result = self.djvu_bundle.shell.run(docker_cmd)

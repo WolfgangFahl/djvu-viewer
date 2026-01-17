@@ -4,27 +4,28 @@ Created on 2025-02-25
 @author: wf
 """
 
+from concurrent.futures import Future, ThreadPoolExecutor
 import gc
 import logging
 import os
+from pathlib import Path
 import shutil
 import sys
 import tempfile
-from concurrent.futures import Future, ThreadPoolExecutor
-from pathlib import Path
 from typing import Generator, List, Optional
 
-import djvu.decode
-import numpy
-from basemkit.shell import Shell
-from ngwidgets.profiler import Profiler
 from PIL import Image
-
+from basemkit.shell import Shell
+import djvu.decode
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig, PngMode
 from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
 from djvuviewer.djvu_image_job import ImageJob
 from djvuviewer.packager import PackageMode, Packager
+from djvuviewer.wiki_images import MediaWikiImage
+from ngwidgets.profiler import Profiler
+import numpy
+
 
 if sys.platform != "win32":
     import resource
@@ -302,7 +303,8 @@ class DjVuProcessor:
 
     def get_djvu_file(
         self,
-        full_path: str,
+        url: str,
+        config:DjVuConfig,
         progressbar: Optional["Progressbar"] = None,
     ) -> DjVuFile:
         """
@@ -313,7 +315,7 @@ class DjVuProcessor:
         the pixel data of the images.
 
         Args:
-            full_path (str): The file system path to the .djvu file.
+            url (str): The url or file system path to the .djvu file.
             config(DjVuConfig): the config to use for path handling
             progressbar (Optional[Progressbar]): Optional progress bar to track processing
 
@@ -321,7 +323,8 @@ class DjVuProcessor:
             DjVuFile: The structured representation of the DjVu file.
         """
         # get the relative path
-        relpath = DjVuConfig.djvu_relpath(full_path)
+        relpath = MediaWikiImage.relpath_of_url(url)
+        full_path=config.full_path(relpath)
 
         # 1. Get container file metadata
         self.ensure_file_exists(full_path)

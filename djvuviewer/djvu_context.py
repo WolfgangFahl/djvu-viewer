@@ -84,10 +84,7 @@ class DjVuContext:
 
         # Use first available image to determine path
         active_image = next(iter(mw_images.values()))
-        relpath = active_image.relpath
-        abspath = self.config.djvu_abspath(f"/images/{relpath}")
-
-        djvu_file = self.dproc.get_djvu_file(abspath, progressbar=progressbar)
+        djvu_file = self.dproc.get_djvu_file(url=active_image.url,config=self.config,progressbar=progressbar)
 
         # Create bundle with MediaWiki metadata
         djvu_bundle = DjVuBundle(

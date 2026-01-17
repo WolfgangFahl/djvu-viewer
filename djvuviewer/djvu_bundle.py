@@ -27,7 +27,6 @@ from djvuviewer.packager import Packager
 
 logger = logging.getLogger(__name__)
 
-
 class DjVuBundle:
     """
     DjVu bundle handling with validation and error collection.
@@ -49,16 +48,43 @@ class DjVuBundle:
             debug: if True
             mw_images: Optional dict of MediaWiki images keyed by wiki name
         """
-
         self.djvu_file = djvu_file
         if config is None:
             config = DjVuConfig.get_instance()
+        self.full_path=f"{config.images_path}/images/{djvu_file.path}"
+        self.djvu_dir = os.path.dirname(self.full_path)
+        self.basename = os.path.basename(djvu_file.path)
+        self.stem = os.path.splitext(self.basename)[0]
         self.config = config
         self.debug = debug
         self.mw_images: Dict[str, 'MediaWikiImage'] = mw_images or {}
         self.errors: List[str] = []
         self.shell = Shell()
         self.djvu_dump_log = None
+
+    @property
+    def error_count(self) -> int:
+        """Check if the bundle has errors."""
+        error_count=len(self.errors)
+        return error_count
+
+    @property
+    def bundled_file_path(self) -> str:
+        bundled_file_path=os.path.join(self.djvu_dir, f"{self.stem}_bundled.djvu")
+        return bundled_file_path
+
+    @property
+    def backup_file(self) -> str:
+        # Create backup ZIP path
+        backup_file = os.path.join(self.config.backup_path, f"{self.stem}.zip")
+        return backup_file
+
+    @property
+    def has_incomplete_bundling(self) -> bool:
+        """Check if bundling was interrupted (both files exist)."""
+        incomplete=(os.path.exists(self.full_path) and
+                os.path.exists(self.bundled_file_path))
+        return incomplete
 
     @property
     def image_wiki(self) -> Optional['MediaWikiImage']:
@@ -104,7 +130,7 @@ class DjVuBundle:
 
         Example:
             bundle = DjVuBundle.from_package("document.zip")
-            if not bundle.is_valid():
+            if bundle.error_count>0:
                 print(bundle.get_error_summary())
         """
         package_path = Path(package_file)
@@ -219,7 +245,7 @@ class DjVuBundle:
         # done
         pass
 
-    def get_part_filenames(self) -> List[str]:
+    def get_part_filenames_from_dump(self) -> List[str]:
         """
         get a list of my part file names
         """
@@ -240,19 +266,16 @@ class DjVuBundle:
         Returns:
             djvudump output string (empty on error)
         """
-        djvu_path = self.djvu_file.path
-        full_path = self.config.djvu_abspath(djvu_path)
-
-        if not os.path.exists(full_path):
-            self._add_error(f"File not found: {full_path}")
-            return ""
-
-        cmd = f"djvudump {shlex.quote(full_path)}"
-        result = self.run_cmd(cmd, "djvudump failed")
-
-        if result.returncode == 0:
-            self.djvu_dump_log = result.stdout
-        return self.djvu_dump_log
+        output=""
+        if not os.path.exists(self.full_path):
+            self._add_error(f"File not found: {self.full_path}")
+        else:
+            cmd = f"djvudump {shlex.quote(self.full_path)}"
+            result = self.run_cmd(cmd, "djvudump failed")
+            if result.returncode == 0:
+                output = result.stdout
+        self.djvu_dump_log=output
+        return output
 
     def finalize_bundling(self, zip_path: str, bundled_path: str, sleep: float = 1.0):
         """
@@ -263,9 +286,6 @@ class DjVuBundle:
             zip_path: Path to the backup ZIP file (for verification)
             bundled_path: Path to the new bundled DjVu file
         """
-        djvu_path = self.djvu_file.path
-        full_path = self.config.djvu_abspath(djvu_path)
-
         # Verify backup ZIP exists before proceeding
         if not os.path.exists(zip_path):
             self._add_error(f"Backup ZIP not found: {zip_path}")
@@ -276,14 +296,14 @@ class DjVuBundle:
             self._add_error(f"Bundled file not found: {bundled_path}")
             return
 
-        # Get directory of original file
-        djvu_dir = os.path.dirname(full_path)
-
         # Get list of component files to remove
-        part_files = self.get_part_filenames()
+        if self.has_incomplete_bundling:
+            part_files=[]
+        else:
+            part_files = self.get_part_filenames_from_dump()
 
         try:
-            original_stat = os.stat(full_path)
+            original_stat = os.stat(self.full_path)
             original_atime = original_stat.st_atime
             original_mtime = original_stat.st_mtime
             if self.debug:
@@ -292,57 +312,37 @@ class DjVuBundle:
                 )
 
             # Remove component parts
+            # only if original state is still available
             for part_file in part_files:
-                part_path = os.path.join(djvu_dir, part_file)
+                part_path = os.path.join(self.djvu_dir, part_file)
                 if os.path.exists(part_path):
                     os.remove(part_path)
                     if self.debug:
                         print(f"Removed component: {part_path}")
 
-            # Before attempting finalization
-            if not os.path.exists(bundled_path):
-                self._add_error(f"Bundled file missing: {bundled_path}")
-                return
-
-            if not os.access(djvu_dir, os.W_OK):
+            if not os.access(self.djvu_dir, os.W_OK):
                 self._add_error(
-                    f"No write permission in directory: {djvu_dir}\n"
-                    f"Try: sudo chmod g+w {djvu_dir}"
+                    f"No write permission in directory: {self.djvu_dir}\n"
+                    f"Try: sudo chmod g+w {self.djvu_dir}"
                 )
                 return
 
             if self.debug:
-                print(f"trying to\nmv {bundled_path} {djvu_path}")
-            if self.move_file(bundled_path, full_path):
+                print(f"trying to\nmv {bundled_path} {self.full_path}")
+            if self.move_file(bundled_path, self.full_path):
                 # Restore original timestamps
                 os.sync()
                 print(f"Sleeping {sleep} secs")
                 time.sleep(sleep)
-                os.utime(full_path, (original_atime, original_mtime))
+                os.utime(self.full_path, (original_atime, original_mtime))
                 if self.debug:
-                    print(f"Restored timestamps to {djvu_path}")
+                    print(f"Restored timestamps to {self.full_path}")
 
             # Update the DjVuFile object to reflect it's now bundled
             self.djvu_file.bundled = True
 
         except Exception as e:
             self._add_error(f"Error during finalization: {e}")
-
-    @property
-    def basename(self) -> str:
-        djvu_path = self.djvu_file.path
-
-        # Get base filename without extension
-        basename = os.path.basename(djvu_path)
-        return basename
-
-    @property
-    def backup_file(self) -> str:
-        stem = os.path.splitext(self.basename)[0]
-
-        # Create backup ZIP path
-        backup_file = os.path.join(self.config.backup_path, f"{stem}.zip")
-        return backup_file
 
     def create_backup_zip(self) -> str:
         """
@@ -354,23 +354,19 @@ class DjVuBundle:
         if self.djvu_file.bundled:
             raise ValueError(f"File {self.djvu_file.path} is already bundled")
 
-        djvu_path = self.djvu_file.path
-        full_path = self.config.djvu_abspath(djvu_path)
-
         backup_file = self.backup_file
 
         # Get list of page files
         part_files = self.get_part_filenames()
-        djvu_dir = os.path.dirname(full_path)
 
         # Create ZIP archive
         with zipfile.ZipFile(backup_file, "w", zipfile.ZIP_DEFLATED) as zipf:
             # Add main index file
-            zipf.write(full_path, self.basename)
+            zipf.write(self.full_path, self.basename)
 
             # Add each page file
             for part_file in part_files:
-                part_path = os.path.join(djvu_dir, part_file)
+                part_path = os.path.join(self.djvu_dir, part_file)
                 if os.path.exists(part_path):
                     zipf.write(part_path, part_file)
                 else:
@@ -447,17 +443,14 @@ class DjVuBundle:
             self._add_error(msg)
             return False, msg
 
-        djvu_path = f"/images{self.djvu_file.path}"
-        full_path = self.config.djvu_abspath(djvu_path)
-
-        if not os.path.exists(full_path):
-            msg = f"File not found for DB update: {full_path}"
+        if not os.path.exists(self.full_path):
+            msg = f"File not found for DB update: {self.full_path}"
             self._add_error(msg)
             return False, msg
 
         try:
-            actual_size = os.path.getsize(full_path)
-
+            actual_size = os.path.getsize(self.full_path)
+            djvu_path=self.djvu_file.path
             with sqlite3.connect(self.config.db_path, timeout=10.0) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
@@ -484,23 +477,17 @@ class DjVuBundle:
         Generate an idempotent bash script for bundling.
         Each step is a function that can be safely retried.
         """
-        djvu_path = self.djvu_file.path
-        full_path = self.config.djvu_abspath(djvu_path)
-
-        djvu_dir = os.path.dirname(full_path)
-        basename = os.path.basename(djvu_path)
-        stem = os.path.splitext(basename)[0]
-
         part_files = self.get_part_filenames()
         backup_file = self.backup_file
-        bundled_file = os.path.join(djvu_dir, f"{stem}_bundled.djvu")
+        bundled_file =self.bundled_file_path
+        djvu_path=self.djvu_file.path
 
         # Build part files for zip command
         part_files_zip = " \\\n        ".join(shlex.quote(pf) for pf in part_files)
 
         # Build part removal commands
         part_removals = "\n    ".join(
-            f'rm -f {shlex.quote(os.path.join(djvu_dir, pf))}'
+            f'rm -f {shlex.quote(os.path.join(self.djvu_dir, pf))}'
             for pf in part_files
         )
 
@@ -544,11 +531,11 @@ set -e
 # ============================================================================
 
 DJVU_PATH={shlex.quote(djvu_path)}
-FULL_PATH={shlex.quote(full_path)}
-DJVU_DIR={shlex.quote(djvu_dir)}
+FULL_PATH={shlex.quote(self.full_path)}
+DJVU_DIR={shlex.quote(self.djvu_dir)}
 BACKUP_FILE={shlex.quote(backup_file)}
 BUNDLED_FILE={shlex.quote(bundled_file)}
-TIMESTAMP_FILE="$DJVU_DIR/.{stem}_timestamps"
+TIMESTAMP_FILE="$DJVU_DIR/.{self.stem}_timestamps"
 
 # ============================================================================
 # UTILITIES
@@ -568,7 +555,7 @@ backup_original() {{
     [ -f "$FULL_PATH" ] || error "Source file missing"
 
     cd "$DJVU_DIR"
-    zip -j "$BACKUP_FILE" {shlex.quote(basename)} \\
+    zip -j "$BACKUP_FILE" {shlex.quote(self.basename)} \\
         {part_files_zip}
 
     [ -f "$BACKUP_FILE" ] || error "Backup creation failed"
@@ -662,16 +649,10 @@ main "$@"
         Returns:
             Path to bundled file
         """
-        djvu_path = self.djvu_file.path
-        full_path = self.config.djvu_abspath(djvu_path)
-
         if output_path is None:
-            dirname = os.path.dirname(full_path)
-            basename = os.path.basename(djvu_path)
-            stem = os.path.splitext(basename)[0]
-            output_path = os.path.join(dirname, f"{stem}_bundled.djvu")
+            output_path = self.bundled_file_path
 
-        cmd = f"djvmcvt -b {shlex.quote(full_path)} {shlex.quote(output_path)}"
+        cmd = f"djvmcvt -b {shlex.quote(self.full_path)} {shlex.quote(output_path)}"
         self.run_cmd(cmd, "Failed to bundle DjVu file")
 
         if not os.path.exists(output_path):
@@ -755,10 +736,6 @@ main "$@"
             # Clean up
             if os.path.exists(tmp_ppm_path):
                 os.remove(tmp_ppm_path)
-
-    def is_valid(self) -> bool:
-        """Check if the bundle has no errors."""
-        return len(self.errors) == 0
 
     def get_error_summary(self) -> str:
         """Get a formatted summary of all errors."""

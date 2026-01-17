@@ -6,7 +6,6 @@ Created on 2026-01-01
 
 import os
 import pathlib
-import re
 import urllib.parse
 from enum import Enum
 from typing import Optional
@@ -89,28 +88,6 @@ class DjVuConfig:
             if self.container_name is None:
                 self.container_name = "genwiki39-mw"
 
-    @classmethod
-    def djvu_relpath(cls, path: str) -> str:
-        """Convert path to wiki image-relative format by removing './' and '/images/'."""
-
-        # Look for 'images/' anywhere in the path and extract everything after it
-        match = re.search(r"images/(.*)", path)
-
-        if match:
-            # Extract the part after 'images/' and prepend '/'
-            cleaned_path = "/" + match.group(1)
-        else:
-            # No 'images/' found - just handle './' prefix
-            if path.startswith("./"):
-                cleaned_path = "/" + path[2:]
-            else:
-                cleaned_path = path
-
-        # Remove duplicate slashes
-        cleaned_path = re.sub(r"/+", "/", cleaned_path)
-
-        return cleaned_path
-
     def wiki_fileurl(
         self, filename: str, new: bool = False, quoted: bool = False
     ) -> str:
@@ -122,32 +99,17 @@ class DjVuConfig:
             wiki_url = urllib.parse.quote(wiki_url)
         return wiki_url
 
-    def djvu_abspath(self, path: str) -> str:
-        """Get absolute DjVu path by prepending images_path to relative path.
+    def full_path(self, relpath: str) -> str:
+        """Get full DjVu path by prepending images_path to relative path.
 
         Args:
             path: Relative path to DjVu file
 
         Returns:
-            Absolute path to DjVu file
+            Absolute filesytem path to DjVu file
         """
-        djvu_path = self.images_path + DjVuConfig.djvu_relpath(path)
-        return djvu_path
-
-    def extract_and_clean_path(self, url: str) -> str:
-        """
-        URL decode, extract path from /images, and remove duplicate slashes.
-
-        Args:
-            url (str): The URL to process
-
-        Returns:
-            str: The cleaned path starting from /images
-        """
-        # URL decode
-        decoded_url = urllib.parse.unquote(url)
-        relpath = DjVuConfig.djvu_relpath(decoded_url)
-        return relpath
+        full_path=f"{self.images_path}{relpath}"
+        return full_path
 
     @classmethod
     def get_config_file_path(cls) -> str:

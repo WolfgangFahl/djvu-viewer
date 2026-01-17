@@ -4,16 +4,15 @@ Created on 2025-02-24
 @author: wf
 """
 
+from argparse import Namespace
 import argparse
 import glob
 import json
 import os
 import shutil
-from argparse import Namespace
 from typing import List, Optional
 
 from basemkit.basetest import Basetest
-
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_cmd import DjVuCmd
 from djvuviewer.djvu_config import DjVuConfig
@@ -23,6 +22,7 @@ from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.download import Download
 from djvuviewer.packager import PackageMode
+from djvuviewer.wiki_images import MediaWikiImage
 
 
 class TestDjVu(Basetest):
@@ -79,7 +79,7 @@ class TestDjVu(Basetest):
             for relurl, _elen, expected_bundled in self.test_tuples:
                 if not expected_bundled:
                     full_path = self.get_djvu(relurl)
-                    rel_path = DjVuConfig.djvu_relpath(full_path)
+                    rel_path = MediaWikiImage.relpath_of_url(full_path)
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
                     djvu_file = self.dproc.get_djvu_file(full_path)
@@ -237,7 +237,7 @@ class TestDjVu(Basetest):
         ]
 
         for input_path, expected, description in test_cases:
-            result = DjVuConfig.djvu_relpath(input_path)
+            result = MediaWikiImage.relpath_of_url(input_path)
             if self.debug:
                 print(f"\n{description}")
                 print(f"  Input:    {input_path}")
@@ -259,16 +259,16 @@ class TestDjVu(Basetest):
         """
         get the djvu file for the relative url
         """
-        djvu_path = self.config.djvu_abspath(relurl)
+        full_path = self.config.full_path(relurl)
         url = self.config.base_url + relurl
         if not self.local and with_download:
             try:
-                Download.download(url, djvu_path)
+                Download.download(url, full_path)
             except Exception as _ex:
-                print(f"invalid {djvu_path}")
+                print(f"invalid {full_path}")
                 return None
-        self.assertTrue(os.path.isfile(djvu_path), djvu_path)
-        return djvu_path
+        self.assertTrue(os.path.isfile(full_path), full_path)
+        return full_path
 
     def test_djvu_files(self):
         """
@@ -277,7 +277,7 @@ class TestDjVu(Basetest):
 
         for relurl, elen, expected_bundled in self.test_tuples:
             djvu_path = self.get_djvu(relurl)
-            rel_path = DjVuConfig.djvu_relpath(djvu_path)
+            rel_path = MediaWikiImage.relpath_of_url(djvu_path)
             if self.debug:
                 print(f"getting DjVuFile for {rel_path}")
             djvu_file = self.dproc.get_djvu_file(djvu_path)
@@ -378,7 +378,7 @@ class TestDjVu(Basetest):
             bundle.check_package(package_file, relurl=relurl)
 
         self.assertTrue(
-            bundle.is_valid(),
+            bundle.error_count==0,
             f"package validation failed for {relurl or package_file}:\n{bundle.get_error_summary()}",
         )
 

@@ -3,7 +3,7 @@ Created on 2026-01-02
 
 @author: wf
 """
-
+import re
 import logging
 from dataclasses import field
 from datetime import datetime
@@ -13,7 +13,6 @@ import requests
 from basemkit.yamlable import lod_storable
 from ngwidgets.progress import Progressbar
 
-from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.version import Version
 
 logger = logging.getLogger(__name__)
@@ -24,7 +23,6 @@ class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
-
     url: str
     mime: str
     size: int
@@ -47,7 +45,7 @@ class MediaWikiImage:
 
     def __post_init__(self):
         if self.url:
-            self.relpath = DjVuConfig.djvu_relpath(self.url)
+            self.relpath = MediaWikiImage.relpath_of_url(self.url)
         if self.title:
             # Split on colon and take everything after the last colon
             # This handles cases like "Project:File:Example.jpg" or "File talk:Example.jpg"
@@ -60,6 +58,28 @@ class MediaWikiImage:
         ts_str = self.timestamp.replace("Z", "+00:00")
         ts_dt = datetime.fromisoformat(ts_str)
         return ts_dt
+
+    @classmethod
+    def relpath_of_url(cls, url: str) -> str:
+        """retrieve wiki image-relative path from url by removing './' and '/images/'."""
+        path=url
+        # Look for 'images/' anywhere in the path and extract everything after it
+        match = re.search(r"images/(.*)", path)
+
+        if match:
+            # Extract the part after 'images/' and prepend '/'
+            cleaned_path = "/" + match.group(1)
+        else:
+            # No 'images/' found - just handle './' prefix
+            if path.startswith("./"):
+                cleaned_path = "/" + path[2:]
+            else:
+                cleaned_path = path
+
+        # Remove duplicate slashes
+        cleaned_path = re.sub(r"/+", "/", cleaned_path)
+
+        return cleaned_path
 
 
 class MediaWikiImages:
