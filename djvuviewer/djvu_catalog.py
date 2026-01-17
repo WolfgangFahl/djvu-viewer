@@ -204,22 +204,23 @@ class DjVuCatalog(BaseCatalog):
         bundle all selected files
         """
         # callbacks
-        def on_error(msg: str):
+        def notify(msg:str,type="info"):
             with self.grid_row:
-                ui.notify(f"❌ {filename}: {msg}", type="negative")
+                ui.notify(msg,type=type)
+        def on_error(msg: str):
+            notify(f"❌ {filename}: {msg}", type="negative")
 
         def on_progress(msg: str):
-            with self.grid_row:
-                ui.notify(f"ℹ️ {filename}: {msg}", type="info")
+            notify(f"ℹ️ {filename}: {msg}", type="info")
+
         try:
             filenames_to_bundle=self.get_selected_filenames()
             if not filenames_to_bundle:
-                ui.notify("Nothing to bundle", type="warning")
+                notify("Nothing to bundle", type="warning")
                 return
             # Confirm before proceeding
             total = len(filenames_to_bundle)
-            with self.grid_row:
-                ui.notify(f"Starting bundling process for {total} file(s)", type="info")
+            notify(f"Starting bundling process for {total} file(s)", type="info")
 
             # Show progress
             self.show_progress_bar()
@@ -245,7 +246,7 @@ class DjVuCatalog(BaseCatalog):
 
                     # Check if already bundled
                     if djvu_bundle.djvu_file.bundled and not djvu_bundle.has_incomplete_bundling:
-                        ui.notify(f"⏭️ Skipping {filename} (already bundled)", type="info")
+                        notify(f"⏭️ Skipping {filename} (already bundled)", type="info")
                         if self.progressbar:
                             self.progressbar.update(1)
                         continue
@@ -266,8 +267,7 @@ class DjVuCatalog(BaseCatalog):
                         error_count += 1
                         msg=f"❌ Failed to bundle {filename}"
                         msg_type="negative"
-                    with self.grid_row:
-                        ui.notify(msg,type=msg_type)
+                    notify(msg,type=msg_type)
 
                     if self.progressbar:
                         self.progressbar.update(1)
@@ -275,20 +275,18 @@ class DjVuCatalog(BaseCatalog):
                 except Exception as ex:
                     error_count += 1
                     error_msg = f"Error bundling {filename}: {str(ex)}"
-                    with self.grid_row:
-                        ui.notify(error_msg, type="negative")
+                    notify(error_msg, type="negative")
                     self.solution.handle_exception(ex)
 
             # Final summary
-            with self.grid_row:
-                ui.notify(
-                    f"Bundling complete: {success_count} succeeded, {error_count} failed",
-                    type="positive" if error_count == 0 else "warning"
-                )
+            notify(
+                f"Bundling complete: {success_count} succeeded, {error_count} failed",
+                type="positive" if error_count == 0 else "warning"
+            )
 
         except Exception as ex:
             self.solution.handle_exception(ex)
-            ui.notify(f"Error during bundling: {str(ex)}", type="negative")
+            notify(f"Error during bundling: {str(ex)}", type="negative")
         finally:
             self.hide_progress_bar()
 
@@ -301,7 +299,8 @@ class DjVuCatalog(BaseCatalog):
             self.selected_rows = await self.grid.get_selected_rows()
 
             if not self.selected_rows:
-                ui.notify("No rows selected for bundling", type="warning")
+                with self.grid_row:
+                    ui.notify("No rows selected for bundling", type="warning")
                 return
             self.run_background_task(self.bundle_selected)
         except Exception as ex:
