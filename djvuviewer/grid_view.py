@@ -84,9 +84,7 @@ class GridView(View):
         self.search_text = ""
 
         # Background task management
-        self.task_runner: Optional[TaskRunner] = None
-        self.load_task = None
-        self.task_timeout = 30.0
+        self.task_runner = Optional[TaskRunner]=None
 
         # Progress bar
         self.progress_row = None
@@ -343,7 +341,7 @@ class GridView(View):
                 progress=self.progressbar
             )
         else:
-            task_runner = TaskRunner(timeout=self.task_timeout)
+            task_runner = TaskRunner(timeout=self.config.timeout)
         return task_runner
 
     async def update_view(self) -> None:

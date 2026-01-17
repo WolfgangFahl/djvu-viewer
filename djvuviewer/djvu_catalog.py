@@ -106,9 +106,15 @@ class DjVuCatalog(BaseCatalog):
             config: Configuration object containing connection and mode details
         """
         super().__init__(solution=solution, config=config, title="DjVu Index Database")
+        self.context=self.webserver.context
 
     def setup_custom_header_items(self):
         """Add DjVu-specific header items (todo checkbox)."""
+        if self.authenticated():
+            self.bundle_button = ui.button(
+                icon="archive",
+                on_click=self.on_bundle,
+            ).tooltip("bundle the selected DjVu files")
         show_todo_checkbox = ui.checkbox("show todo").bind_value(self, "show_todo")
         show_todo_checkbox.on('click', lambda: self.on_refresh())
 
@@ -178,6 +184,127 @@ class DjVuCatalog(BaseCatalog):
         except Exception as ex:
             self.solution.handle_exception(ex)
         self.lod = lod
+
+    def bundle_selected(self):
+        try:
+            # Extract paths from selected rows
+            paths_to_bundle = []
+            for row in self.selected_rows:
+                # Get the original record from lod using the row index
+                index = row.get("#")
+                if index and 1 <= index <= len(self.lod):
+                    record = self.lod[index - 1]
+                    path = record.get("path")
+                    if path:
+                        paths_to_bundle.append(path)
+
+            if not paths_to_bundle:
+                ui.notify("No valid paths found in selected rows", type="warning")
+                return
+
+            # Confirm before proceeding
+            total = len(paths_to_bundle)
+            ui.notify(f"Starting bundling process for {total} file(s)", type="info")
+
+            # Show progress
+            if self.progress_row:
+                self.progress_row.visible = True
+            if self.progressbar:
+                self.progressbar.total = total
+                self.progressbar.reset()
+                self.progressbar.set_description("Bundling files")
+
+            # Bundle each file
+            success_count = 0
+            error_count = 0
+
+            for i, path in enumerate(paths_to_bundle, 1):
+                try:
+                    # Extract filename from path
+                    filename = path.split("/")[-1] if "/" in path else path
+
+                    if self.progressbar:
+                        self.progressbar.set_description(f"Bundling {i}/{total}: {filename}")
+
+                    # Load the DjVu file bundle
+                    djvu_bundle = self.context.load_djvu_file(
+                        filename, # page title
+                        progress=None  # No progress bar for individual files
+                    )
+
+                    # Check if already bundled
+                    if djvu_bundle.djvu_file.bundled and not djvu_bundle.has_incomplete_bundling:
+                        ui.notify(f"⏭️ Skipping {filename} (already bundled)", type="info")
+                        if self.progressbar:
+                            self.progressbar.update(1)
+                        continue
+
+                    # Bundle the file
+                    def on_error(msg: str):
+                        with self.grid_row:
+                            ui.notify(f"❌ {filename}: {msg}", type="negative")
+
+                    def on_progress(msg: str):
+                        with self.grid_row:
+                            ui.notify(f"ℹ️ {filename}: {msg}", type="info")
+
+                    success = djvu_bundle.bundle(
+                        create_backup=self.config.package_mode is not None,
+                        update_wiki=True,
+                        update_index_db=True,
+                        on_progress=on_progress,
+                        on_error=on_error,
+                    )
+
+                    if success:
+                        success_count += 1
+                        ui.notify(f"✅ Successfully bundled {filename}", type="positive")
+                    else:
+                        error_count += 1
+                        ui.notify(f"❌ Failed to bundle {filename}", type="negative")
+
+                    if self.progressbar:
+                        self.progressbar.update(1)
+
+                except Exception as ex:
+                    error_count += 1
+                    error_msg = f"Error bundling {path}: {str(ex)}"
+                    ui.notify(error_msg, type="negative")
+                    self.solution.handle_exception(ex)
+
+            # Final summary
+            ui.notify(
+                f"Bundling complete: {success_count} succeeded, {error_count} failed",
+                type="positive" if error_count == 0 else "warning"
+            )
+
+            # Refresh the catalog to show updated bundling status
+            await self.on_refresh()
+
+        except Exception as ex:
+            self.solution.handle_exception(ex)
+            ui.notify(f"Error during bundling: {str(ex)}", type="negative")
+        finally:
+            # Hide progress
+            if self.progress_row:
+                self.progress_row.visible = False
+
+
+    async def on_bundle(self):
+        """
+        Handle bundle click - bundle all selected DjVu files.
+        """
+        try:
+            # Get selected rows from the grid
+            self.selected_rows = await self.lod_grid.get_selected_rows()
+
+            if not self.selected_rows:
+                ui.notify("No rows selected for bundling", type="warning")
+                return
+            self.run_background_task(self.bundle_selected)
+        except Exception as ex:
+            self.solution.handle_exception(ex)
+
 
 
 class WikiImageBrowser(BaseCatalog):
