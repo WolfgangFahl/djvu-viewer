@@ -63,6 +63,7 @@ class DjVuDebug:
         self.update_index_db = True
         self.update_wiki = True
         self.create_package = False
+        self.use_sudo = False
         self.package_type = self.config.package_mode
         self.bundling_enabled = False
 
@@ -385,6 +386,7 @@ class DjVuDebug:
         run the bundle activities in background
         """
         try:
+            self.djvu_bundle.use_sudo=self.use_sudo
             zip_path = self.djvu_bundle.backup_file
             self.zip_size = self.show_fileinfo(zip_path)
             if self.create_package:
@@ -474,6 +476,8 @@ class DjVuDebug:
             ui.radio(["zip", "tar"]).props("inline").bind_value(
                 self, "package_type"
             ).bind_enabled_from(self, "bundling_enabled")
+            # use sudo
+            ui.checkbox("sudo").bind_value(self, "use_sudo")
             ui.checkbox("update wiki").bind_value(
                 self, "update_wiki"
             ).bind_enabled_from(self, "bundling_enabled")

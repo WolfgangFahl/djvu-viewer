@@ -36,6 +36,7 @@ class DjVuBundle:
         self,
         djvu_file: DjVuFile,
         config: DjVuConfig = None,
+        use_sudo: bool = False,
         debug: bool = False,
         mw_images: Optional[Dict[str, 'MediaWikiImage']] = None,
     ):
@@ -45,7 +46,8 @@ class DjVuBundle:
         Args:
             djvu_file: The DjVuFile metadata
             config: configuration
-            debug: if True
+            use_sudo: if True, use sudo for file operations
+            debug: if True output debug info where appropriate
             mw_images: Optional dict of MediaWiki images keyed by wiki name
         """
         self.djvu_file = djvu_file
@@ -56,6 +58,7 @@ class DjVuBundle:
         self.basename = os.path.basename(djvu_file.path)
         self.stem = os.path.splitext(self.basename)[0]
         self.config = config
+        self.use_sudo = use_sudo
         self.debug = debug
         self.mw_images: Dict[str, 'MediaWikiImage'] = mw_images or {}
         self.errors: List[str] = []
@@ -288,76 +291,44 @@ class DjVuBundle:
         self.djvu_dump_log=output
         return output
 
-    def finalize_bundling(self, zip_path: str, bundled_path: str, sleep: float = 1.0):
+    def finalize_bundling(self, zip_path: str, bundled_path: str):
         """
-        Finalize bundling by removing the original main file and
-        all zipped component files then move the bundled_path file to the original.
+        Finalize bundling: remove originals, move bundled file to final location.
 
         Args:
-            zip_path: Path to the backup ZIP file (for verification)
-            bundled_path: Path to the new bundled DjVu file
+            zip_path: Backup ZIP (must exist)
+            bundled_path: New bundled DjVu file
         """
-        # Verify backup ZIP exists before proceeding
-        if not os.path.exists(zip_path):
+        # Validate prerequisites
+        if not Path(zip_path).exists():
             self._add_error(f"Backup ZIP not found: {zip_path}")
             return
 
-        # Verify bundled file exists
-        if not os.path.exists(bundled_path):
+        if not Path(bundled_path).exists():
             self._add_error(f"Bundled file not found: {bundled_path}")
             return
 
-        # Get list of component files to remove
+        # Get component files to remove
         part_files = self.get_part_filenames()
 
         try:
-            original_stat = os.stat(self.full_path)
-            original_atime = original_stat.st_atime
-            original_mtime = original_stat.st_mtime
-            if self.debug:
-                print(
-                    f"Preserving timestamps - atime: {original_atime}, mtime: {original_mtime}"
-                )
-
-            # Remove component parts
-            # only if original state is still available
+            # Remove component parts (only safe because backup exists)
             for part_file in part_files:
-                part_path = os.path.join(self.djvu_dir, part_file)
-                if os.path.exists(part_path):
-                    os.remove(part_path)
+                part_path = Path(self.djvu_dir) / part_file
+                if part_path.exists():
+                    part_path.unlink()
                     if self.debug:
-                        print(f"Removed component: {part_path}")
+                        print(f"Removed: {part_file}")
 
-            if not os.access(self.djvu_dir, os.W_OK):
-                self._add_error(
-                    f"No write permission in directory: {self.djvu_dir}\n"
-                    f"Try: sudo chmod g+w {self.djvu_dir}"
-                )
-                return
-
-            if not os.access(self.full_path, os.W_OK):
-                cmd = f"sudo chmod g+w {shlex.quote(self.full_path)}"
-                result=self.run_cmd(cmd, f"Failed to chmod g+w {self.full_path}")
-                if result.returncode!=0:
-                    return
-
-
-            if self.debug:
-                print(f"trying to\nmv {bundled_path} {self.full_path}")
-            if self.move_file(bundled_path, self.full_path):
-                # Restore original timestamps
-                os.sync()
-                print(f"Sleeping {sleep} secs")
-                time.sleep(sleep)
-                os.utime(self.full_path, (original_atime, original_mtime))
+            # Move bundled file to final location
+            # handles ALL permission and timestamp logic
+            if self.safe_move(bundled_path, self.full_path):
+                self.djvu_file.bundled = True
                 if self.debug:
-                    print(f"Restored timestamps to {self.full_path}")
-
-            # Update the DjVuFile object to reflect it's now bundled
-            self.djvu_file.bundled = True
+                    print(f"✓ Finalized: {self.full_path}")
 
         except Exception as e:
-            self._add_error(f"Error during finalization: {e}")
+            self._add_error(f"Finalization error: {e}")
 
     def create_backup_zip(self) -> str:
         """
@@ -401,38 +372,126 @@ class DjVuBundle:
 
         return result
 
-    def move_file(self, src: str, dst: str) -> bool:
-        """Move file using copy+delete pattern for better reliability"""
-        try:
-            # First copy the file
-            shutil.copy2(src, dst)  # copy2 preserves metadata
-            if self.debug:
-                print(f"Copied: {src} → {dst}")
+    def set_timestamps(self, path: str, timestamps: tuple) -> None:
+        """
+        Set file timestamps with cross-platform sudo fallback.
 
-            # Then remove the source
-            os.remove(src)
+        Uses os.utime() first, falls back to platform-specific touch commands.
+        """
+        atime, mtime = timestamps
+        dest_path = Path(path)
+
+        try:
+            os.utime(dest_path, (atime, mtime))
+            return
+        except (OSError, PermissionError) as e:
+            if not self.use_sudo:
+                if self.debug:
+                    print(f"Warning: Could not restore timestamps: {e}")
+                return
+
+            # Sudo fallback - use platform-agnostic format (no fractional seconds)
+            atime_dt = datetime.fromtimestamp(atime)
+            mtime_dt = datetime.fromtimestamp(mtime)
+
+            # Format: YYMMDDhhmm (works on both GNU and BSD touch)
+            atime_fmt = atime_dt.strftime('%Y%m%d%H%M')
+            mtime_fmt = mtime_dt.strftime('%Y%m%d%H%M')
+
+            # Set times separately (more reliable than combined -t)
+            self.run_cmd(
+                f"sudo touch -a -t {atime_fmt} {shlex.quote(path)}",
+                "Warning: Failed to restore access time"
+            )
+            self.run_cmd(
+                f"sudo touch -m -t {mtime_fmt} {shlex.quote(path)}",
+                "Warning: Failed to restore modification time"
+            )
+
+    def safe_move(self, source: str, dest: str, preserve_times: bool = True) -> bool:
+        """
+        Move file with timestamp preservation and permission handling.
+
+        Handles:
+        - Standard filesystems and CIFS mounts
+        - Permission issues (sudo when configured)
+        - Atomic timestamp preservation
+
+        Args:
+            source: Source file path
+            dest: Destination file path
+            preserve_times: Preserve timestamps (default: True)
+
+        Returns:
+            True on success, False on failure (errors logged)
+        """
+        source_path = Path(source)
+        dest_path = Path(dest)
+
+        if not source_path.exists():
+            self._add_error(f"Source not found: {source}")
+            return False
+
+        try:
+            # Capture timestamps before move
+            timestamps = None
+            if preserve_times:
+                stat_info = source_path.stat()
+                timestamps = (stat_info.st_atime, stat_info.st_mtime)
+
+            # Ensure write permission on destination directory
+            dest_dir = dest_path.parent
+            if not os.access(dest_dir, os.W_OK):
+                if self.use_sudo:
+                    result = self.run_cmd(
+                        f"sudo chmod g+w {shlex.quote(str(dest_dir))}",
+                        f"Failed to set write permission on {dest_dir}"
+                    )
+                    if result.returncode != 0:
+                        return False
+                else:
+                    self._add_error(f"No write permission: {dest_dir}")
+                    return False
+
+            # If destination exists, ensure we can overwrite it
+            if dest_path.exists() and not os.access(dest_path, os.W_OK):
+                if self.use_sudo:
+                    result = self.run_cmd(
+                        f"sudo chmod g+w {shlex.quote(dest)}",
+                        f"Failed to set write permission on {dest}"
+                    )
+                    if result.returncode != 0:
+                        return False
+                else:
+                    self._add_error(f"No write permission: {dest}")
+                    return False
+
+            # Perform the move
+            if self.use_sudo:
+                result = self.run_cmd(
+                    f"sudo mv {shlex.quote(source)} {shlex.quote(dest)}",
+                    f"Move failed: {source} → {dest}"
+                )
+                if result.returncode != 0:
+                    return False
+            else:
+                shutil.move(source, dest)
+
+            # Critical for CIFS: ensure data is written before timestamp operations
+            os.sync()
+
+            # Restore timestamps
+            if timestamps:
+                self.set_timestamps(dest, timestamps)
+
             if self.debug:
-                print(f"Removed source: {src}")
+                print(f"✓ Moved: {Path(source).name} → {Path(dest).name}")
 
             return True
 
-        except PermissionError as e:
-            if self.debug:
-                print(f"Permission error moving {src} → {dst}: {e}")
-            self._add_error(f"Permission error: {e}")
-            return False
-
-        except FileNotFoundError as e:
-            if self.debug:
-                print(f"File not found {src} → {dst}: {e}")
-            self._add_error(f"File not found: {src}")
-            return False
-
         except Exception as e:
-            if self.debug:
-                print(f"Failed to move {src} → {dst}: {e}")
             self._add_error(f"Move failed: {e}")
-        return False
+            return False
 
     def get_docker_cmd(self) -> str:
         """
@@ -465,7 +524,7 @@ class DjVuBundle:
 
         try:
             actual_size = os.path.getsize(self.full_path)
-            djvu_path=self.djvu_file.path
+            djvu_path=f"/images{self.djvu_file.path}"
             with sqlite3.connect(self.config.db_path, timeout=10.0) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
