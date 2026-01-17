@@ -276,6 +276,7 @@ class DjVuDebug:
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
         try:
+            self.bundle_button.enabled=False
             if self.progressbar:
                 self.progressbar.reset()
                 self.progressbar.set_description("Loading DjVu file")
@@ -328,6 +329,7 @@ class DjVuDebug:
 
             with self.solution.container:
                 self.content_row.update()
+            self.bundle_button.enabled=self.authenticated()
 
         except Exception as ex:
             self.solution.handle_exception(ex)
@@ -442,7 +444,7 @@ class DjVuDebug:
                 icon="archive",
                 on_click=self.on_bundle,
             ).tooltip("bundle the shown DjVu file")
-            self.bundle_button.enabled = self.authenticated()
+            self.bundle_button.enabled = False
             ui.checkbox("Create archive package").bind_value(
                 self, "create_package"
             ).bind_enabled_from(self, "bundling_enabled")
