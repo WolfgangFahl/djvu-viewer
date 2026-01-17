@@ -260,10 +260,14 @@ class DjVuCatalog(BaseCatalog):
 
                     if success:
                         success_count += 1
-                        ui.notify(f"✅ Successfully bundled {filename}", type="positive")
+                        msg=f"✅ Successfully bundled {filename}"
+                        msg_type="positive"
                     else:
                         error_count += 1
-                        ui.notify(f"❌ Failed to bundle {filename}", type="negative")
+                        msg=f"❌ Failed to bundle {filename}"
+                        msg_type="negative"
+                    with self.grid_row:
+                        ui.notify(msg,type=msg_type)
 
                     if self.progressbar:
                         self.progressbar.update(1)
