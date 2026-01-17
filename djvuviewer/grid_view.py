@@ -84,7 +84,7 @@ class GridView(View):
         self.search_text = ""
 
         # Background task management
-        self.task_runner = Optional[TaskRunner]=None
+        self.task_runner: Optional[TaskRunner]=None
 
         # Progress bar
         self.progress_row = None
