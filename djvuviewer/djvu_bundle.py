@@ -258,6 +258,17 @@ class DjVuBundle:
                 part_files.append(match.group(1))
         return part_files
 
+    def get_part_filenames(self) -> List[str]:
+        """
+        get a list of my part file names
+        """
+        # Get list of component files to remove
+        if self.has_incomplete_bundling:
+            part_files=[]
+        else:
+            part_files = self.get_part_filenames_from_dump()
+        return part_files
+
     def djvu_dump(self) -> str:
         """
         Run djvudump on self.djvu_file.djvu_path and return output.
@@ -297,10 +308,7 @@ class DjVuBundle:
             return
 
         # Get list of component files to remove
-        if self.has_incomplete_bundling:
-            part_files=[]
-        else:
-            part_files = self.get_part_filenames_from_dump()
+        part_files = self.get_part_filenames()
 
         try:
             original_stat = os.stat(self.full_path)
