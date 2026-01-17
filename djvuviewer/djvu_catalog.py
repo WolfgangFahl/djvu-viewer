@@ -293,7 +293,7 @@ class DjVuCatalog(BaseCatalog):
         """
         try:
             # Get selected rows from the grid
-            self.selected_rows = await self.lod_grid.get_selected_rows()
+            self.selected_rows = await self.grid.get_selected_rows()
 
             if not self.selected_rows:
                 ui.notify("No rows selected for bundling", type="warning")
@@ -301,8 +301,6 @@ class DjVuCatalog(BaseCatalog):
             self.run_background_task(self.bundle_selected)
         except Exception as ex:
             self.solution.handle_exception(ex)
-
-
 
 class WikiImageBrowser(BaseCatalog):
     """
