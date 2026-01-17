@@ -337,7 +337,7 @@ class GridView(View):
         """
         if self.progressbar:
             task_runner = TaskRunner(
-                timeout=self.task_timeout,
+                timeout=self.config.timeout,
                 progress=self.progressbar
             )
         else:
