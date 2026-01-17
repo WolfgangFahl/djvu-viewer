@@ -8,11 +8,12 @@ Created on 2024-08-26
 @author: wf
 """
 from dataclasses import asdict
+
 from djvuviewer.djvu_config import DjVuConfig
 from nicegui import ui
 
 from djvuviewer.grid_view import GridView
-
+from typing import List
 
 class BaseCatalog(GridView):
     """
@@ -185,30 +186,43 @@ class DjVuCatalog(BaseCatalog):
             self.solution.handle_exception(ex)
         self.lod = lod
 
+    def get_selected_filenames(self)->List[str]:
+        # Extract paths from selected rows
+        filenames_to_bundle = []
+        for row in self.selected_rows:
+            # Get the original record from lod using the row index
+            index = row.get("#")
+            if index and 1 <= index <= len(self.lod):
+                record = self.lod[index - 1]
+                filename= record.get("filename")
+                if filename:
+                    filenames_to_bundle.append(filename)
+        return filenames_to_bundle
+
     def bundle_selected(self):
+        """
+        bundle all selected files
+        """
+        # callbacks
+        def on_error(msg: str):
+            with self.grid_row:
+                ui.notify(f"❌ {filename}: {msg}", type="negative")
+
+        def on_progress(msg: str):
+            with self.grid_row:
+                ui.notify(f"ℹ️ {filename}: {msg}", type="info")
         try:
-            # Extract paths from selected rows
-            paths_to_bundle = []
-            for row in self.selected_rows:
-                # Get the original record from lod using the row index
-                index = row.get("#")
-                if index and 1 <= index <= len(self.lod):
-                    record = self.lod[index - 1]
-                    path = record.get("path")
-                    if path:
-                        paths_to_bundle.append(path)
-
-            if not paths_to_bundle:
-                ui.notify("No valid paths found in selected rows", type="warning")
+            filenames_to_bundle=self.get_selected_filenames()
+            if not filenames_to_bundle:
+                ui.notify("Nothing to bundle", type="warning")
                 return
-
             # Confirm before proceeding
-            total = len(paths_to_bundle)
-            ui.notify(f"Starting bundling process for {total} file(s)", type="info")
+            total = len(filenames_to_bundle)
+            with self.grid_row:
+                ui.notify(f"Starting bundling process for {total} file(s)", type="info")
 
             # Show progress
-            if self.progress_row:
-                self.progress_row.visible = True
+            self.show_progress_bar()
             if self.progressbar:
                 self.progressbar.total = total
                 self.progressbar.reset()
@@ -218,11 +232,8 @@ class DjVuCatalog(BaseCatalog):
             success_count = 0
             error_count = 0
 
-            for i, path in enumerate(paths_to_bundle, 1):
+            for i, filename in enumerate(filenames_to_bundle, 1):
                 try:
-                    # Extract filename from path
-                    filename = path.split("/")[-1] if "/" in path else path
-
                     if self.progressbar:
                         self.progressbar.set_description(f"Bundling {i}/{total}: {filename}")
 
@@ -238,15 +249,6 @@ class DjVuCatalog(BaseCatalog):
                         if self.progressbar:
                             self.progressbar.update(1)
                         continue
-
-                    # Bundle the file
-                    def on_error(msg: str):
-                        with self.grid_row:
-                            ui.notify(f"❌ {filename}: {msg}", type="negative")
-
-                    def on_progress(msg: str):
-                        with self.grid_row:
-                            ui.notify(f"ℹ️ {filename}: {msg}", type="info")
 
                     success = djvu_bundle.bundle(
                         create_backup=self.config.package_mode is not None,
@@ -268,7 +270,7 @@ class DjVuCatalog(BaseCatalog):
 
                 except Exception as ex:
                     error_count += 1
-                    error_msg = f"Error bundling {path}: {str(ex)}"
+                    error_msg = f"Error bundling {filename}: {str(ex)}"
                     ui.notify(error_msg, type="negative")
                     self.solution.handle_exception(ex)
 
@@ -282,10 +284,7 @@ class DjVuCatalog(BaseCatalog):
             self.solution.handle_exception(ex)
             ui.notify(f"Error during bundling: {str(ex)}", type="negative")
         finally:
-            # Hide progress
-            if self.progress_row:
-                self.progress_row.visible = False
-
+            self.hide_progress_bar()
 
     async def on_bundle(self):
         """
