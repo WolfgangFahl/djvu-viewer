@@ -418,6 +418,26 @@ class DjVuBundle:
                 "Warning: Failed to restore modification time"
             )
 
+    def move_file(self, src: str, dst: str) -> bool:
+        """
+        Move file using copy+delete pattern for better reliability in
+        CIFS envs
+        """
+        try:
+            # First copy the file
+            shutil.copy2(src, dst)  # copy2 preserves metadata
+            if self.debug:
+                print(f"Copied: {src} → {dst}")
+            # Then remove the source
+            os.remove(src)
+            if self.debug:
+                print(f"Removed source: {src}")
+            return True
+        except PermissionError as e:
+            if self.debug:
+                print(f"Permission error moving {src} → {dst}: {e}")
+            self._add_error(f"Permission error: {e}")
+
     def safe_move(self, source: str, dest: str, preserve_times: bool = True) -> bool:
         """
         Move file with timestamp preservation and permission handling.
@@ -484,15 +504,14 @@ class DjVuBundle:
                 )
                 if result.returncode != 0:
                     return False
+                # Restore timestamps
+                if timestamps:
+                    self.set_timestamps(dest, timestamps)
             else:
-                shutil.move(source, dest)
-
-            # Critical for CIFS: ensure data is written before timestamp operations
-            os.sync()
-
-            # Restore timestamps
-            if timestamps:
-                self.set_timestamps(dest, timestamps)
+                # move with timestamp preservation
+                self.move_file(source, dest)
+                # Critical for CIFS: ensure data is written before timestamp operations
+                os.sync()
 
             if self.debug:
                 print(f"✓ Moved: {Path(source).name} → {Path(dest).name}")
