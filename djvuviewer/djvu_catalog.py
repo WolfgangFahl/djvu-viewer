@@ -278,9 +278,6 @@ class DjVuCatalog(BaseCatalog):
                 type="positive" if error_count == 0 else "warning"
             )
 
-            # Refresh the catalog to show updated bundling status
-            await self.on_refresh()
-
         except Exception as ex:
             self.solution.handle_exception(ex)
             ui.notify(f"Error during bundling: {str(ex)}", type="negative")
