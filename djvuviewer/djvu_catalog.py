@@ -176,7 +176,12 @@ class DjVuCatalog(BaseCatalog):
             for df in djvu_files_by_path.values():
                 do_add = True
                 if self.show_todo:
-                    do_add = not df.bundled and df.filesize is not None
+                    is_in_wiki, _ = self.djvu_files.in_cache(df.filename, "wiki")
+                    is_in_new, _ = self.djvu_files.in_cache(df.filename, "new")
+
+                    do_add = (not df.bundled and df.filesize is not None
+                         and (is_in_wiki or is_in_new))
+
                 if do_add:
                     lod.append(asdict(df))
 

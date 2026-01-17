@@ -6,7 +6,7 @@ Created on 2026-01-05
 
 import os
 from dataclasses import asdict
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from lodstorage.lod import LOD
 from ngwidgets.progress import Progressbar
@@ -65,34 +65,43 @@ class DjVuFiles:
             if not empty:
                 self.dvm.migrate_to_package_fields()
 
-    def add_link(
-        self, view_record: Dict[str, Any], filename: str, new: bool = False
-    ) -> None:
+    def in_cache(self, filename: str, name: str = "wiki") -> Tuple[bool, str]:
         """
-        Add a wiki link to the view record.
-
-        Creates a link to a DjVu file on a MediaWiki instance. The link color
-        indicates availability: blue if the image exists in the cache, red otherwise.
+        Check if a file exists in the cache.
 
         Args:
-            view_record: Dictionary to store the generated link
-            filename: Name of the DjVu file
-            new: If True, creates link for 'new' wiki, otherwise for main 'wiki'
+            filename: Name of the file to check
+            name: Which cache to check - "wiki" or "new"
+
+        Returns:
+            Tuple of (is_in_cache, normalized_filename)
         """
+        images_by_filename = self.images_by_filename.get(name)
+
+        if not images_by_filename:
+            return False, filename
+
+        if filename in images_by_filename:
+            return True, filename
+
+        # Try with underscores replaced by spaces
+        if "_" in filename:
+            spaced_filename = filename.replace("_", " ")
+            if spaced_filename in images_by_filename:
+                return True, spaced_filename
+
+        return False, filename
+
+
+    def add_link(self, view_record: Dict[str, Any], filename: str, new: bool = False) -> None:
+        """Add a wiki link to the view record."""
         name = "new" if new else "wiki"
         url = self.config.wiki_fileurl(filename, new=new)
-        images_by_filename = self.images_by_filename.get(name)
-        link_style = Link.red
-        # if available in cache
-        if images_by_filename:
-            if filename in images_by_filename:
-                link_style = Link.blue
-            elif "_" in filename:
-                spaced_filename = filename.replace("_", " ")
-                if spaced_filename in images_by_filename:
-                    filename = spaced_filename
-                    link_style = Link.blue
-        link = Link.create(url=url, text=filename, style=link_style)
+
+        is_cached, normalized_filename = self.in_cache(filename, name)
+        link_style = Link.blue if is_cached else Link.red
+
+        link = Link.create(url=url, text=normalized_filename, style=link_style)
         view_record[name] = link
 
     def add_links(self, view_record: Dict[str, any], filename: str):
@@ -179,9 +188,9 @@ class DjVuFiles:
                         param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
                     )
                     for djvu_page_record in djvu_page_records:
-                        djvu_page = DjVuPage.from_dict(
+                        djvu_page = DjVuPage.from_dict( # @UndefinedVariable
                             djvu_page_record
-                        )  # @UndefinedVariable
+                        )
                         djvu_file.pages.append(djvu_page)
             if progressbar:
                 progressbar.update(1)
