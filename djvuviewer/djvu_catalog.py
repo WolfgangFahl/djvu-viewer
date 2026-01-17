@@ -205,7 +205,8 @@ class DjVuCatalog(BaseCatalog):
         # callbacks
         def notify(msg: str, type="info"):
             with self.grid_row:
-                ui.notify(msg, type=type)
+                timeout=100 if type=="info" else 300
+                ui.notify(msg, type=type,timeout=timeout)
 
         def on_error(msg: str):
             notify(f"❌ {filename}: {msg}", type="negative")
