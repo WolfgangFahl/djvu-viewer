@@ -275,7 +275,8 @@ class DjVuCatalog(BaseCatalog):
                 except Exception as ex:
                     error_count += 1
                     error_msg = f"Error bundling {filename}: {str(ex)}"
-                    ui.notify(error_msg, type="negative")
+                    with self.grid_row:
+                        ui.notify(error_msg, type="negative")
                     self.solution.handle_exception(ex)
 
             # Final summary
