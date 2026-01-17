@@ -163,6 +163,8 @@ class TestDjVu(Basetest):
         Test zipping and bundling with size ratio validation.
         """
         for djvu_bundle in self.get_djvu_test_bundles():
+            if os.path.exists(djvu_bundle.bundled_file_path):
+                os.remove(djvu_bundle.bundled_file_path)
             # Create backup zip
             zip_path = djvu_bundle.create_backup_zip()
             zip_filesize = self.show_fileinfo(zip_path)

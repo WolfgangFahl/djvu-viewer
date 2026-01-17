@@ -403,7 +403,7 @@ class DjVuDebug:
             if self.show_bundling_errors("djvu bundling"):
                 return
 
-            self.djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=True)
+            self.djvu_bundle.finalize_bundling(zip_path, bundled_path)
             if self.show_bundling_errors("replace unbundled with bundled"):
                 return
 
