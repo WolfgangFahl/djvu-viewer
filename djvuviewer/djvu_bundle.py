@@ -35,7 +35,6 @@ class DjVuBundle:
         self,
         djvu_file: DjVuFile,
         config: DjVuConfig = None,
-        use_sudo: bool = False,
         debug: bool = False,
         mw_images: Optional[Dict[str, 'MediaWikiImage']] = None,
     ):
@@ -57,7 +56,7 @@ class DjVuBundle:
         self.basename = os.path.basename(djvu_file.path)
         self.stem = os.path.splitext(self.basename)[0]
         self.config = config
-        self.use_sudo = use_sudo
+        self.use_sudo = config.use_sudo
         self.debug = debug
         self.mw_images: Dict[str, 'MediaWikiImage'] = mw_images or {}
         self.errors: List[str] = []

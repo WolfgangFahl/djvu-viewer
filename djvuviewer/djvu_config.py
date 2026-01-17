@@ -49,6 +49,7 @@ class DjVuConfig:
     )
     # package display mode
     package_mode: Optional[str] = "tar"
+    use_sudo: bool=False
     timeout:float=60 # maximum number of secs to wait for a background task to complete
 
     def __post_init__(self):

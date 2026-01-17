@@ -279,10 +279,11 @@ class DjVuCatalog(BaseCatalog):
                     self.solution.handle_exception(ex)
 
             # Final summary
-            ui.notify(
-                f"Bundling complete: {success_count} succeeded, {error_count} failed",
-                type="positive" if error_count == 0 else "warning"
-            )
+            with self.grid_row:
+                ui.notify(
+                    f"Bundling complete: {success_count} succeeded, {error_count} failed",
+                    type="positive" if error_count == 0 else "warning"
+                )
 
         except Exception as ex:
             self.solution.handle_exception(ex)

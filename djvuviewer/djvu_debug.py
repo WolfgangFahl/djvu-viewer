@@ -13,7 +13,7 @@ from pathlib import Path
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.widgets import Link
-from nicegui import background_tasks, run, ui
+from nicegui import run, ui
 
 from ngwidgets.task_runner import TaskRunner
 from djvuviewer.djvu_context import DjVuContext
@@ -62,7 +62,7 @@ class DjVuDebug:
         self.update_index_db = True
         self.update_wiki = True
         self.create_package = False
-        self.use_sudo = False
+        self.use_sudo = self.config.use_sudo
         self.package_type = self.config.package_mode
         self.bundling_enabled = False
 
