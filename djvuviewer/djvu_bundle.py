@@ -247,12 +247,19 @@ class DjVuBundle:
         # done
         pass
 
-    def get_part_filenames_from_dump(self) -> List[str]:
+
+    def get_part_filenames_from_dump(self, djvu_path: str) -> List[str]:
         """
-        get a list of my part file names
+        Get a list of part file names extracted from a DjVu dump.
+
+        Args:
+            djvu_path (str): Path to the DjVu file or the directory containing the dump.
+
+        Returns:
+            List[str]: List of part file names.
         """
         if not self.djvu_dump_log:
-            self.djvu_dump()
+            self.djvu_dump(djvu_path)
         part_files = []
         for line in self.djvu_dump_log.split("\n"):
             match = re.search(r"^\s+(.+\.(?:djvu|djbz))\s+->", line)
@@ -266,24 +273,29 @@ class DjVuBundle:
         """
         # Get list of component files to remove
         if self.has_incomplete_bundling:
-            part_files=[]
+            # we already bundled so the part_file list is in the bundled_file_path
+            part_files=self.get_part_filenames_from_dump(self.bundled_file_path)
         else:
-            part_files = self.get_part_filenames_from_dump()
+            part_files = self.get_part_filenames_from_dump(self.full_path)
         return part_files
 
-    def djvu_dump(self) -> str:
+    def djvu_dump(self,djvu_path:str=None) -> str:
         """
         Run djvudump on self.djvu_file.djvu_path and return output.
         Adds error to self.errors on failure.
 
+        Args:
+            djvu_path(str): full_path to the djvu file (bundled or indexed) to be dumped
         Returns:
             djvudump output string (empty on error)
         """
         output=""
+        if djvu_path is None:
+            djvu_path=self.full_path
         if not os.path.exists(self.full_path):
-            self._add_error(f"File not found: {self.full_path}")
+            self._add_error(f"File not found: {djvu_path}")
         else:
-            cmd = f"djvudump {shlex.quote(self.full_path)}"
+            cmd = f"djvudump {shlex.quote(djvu_path)}"
             result = self.run_cmd(cmd, "djvudump failed")
             if result.returncode == 0:
                 output = result.stdout

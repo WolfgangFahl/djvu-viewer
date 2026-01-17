@@ -388,10 +388,8 @@ class DjVuDebug:
             def on_progress(msg: str):
                 with self.content_row:
                     ui.notify(msg)
-                self.task_runner.log(msg)
 
             def on_error(msg: str):
-                self.task_runner.log(msg, level="error")
                 with self.content_row:
                     with ui.card().classes("w-full bg-red-50"):
                         ui.label(msg).classes("text-negative")
