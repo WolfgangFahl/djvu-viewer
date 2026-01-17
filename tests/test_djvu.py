@@ -48,7 +48,7 @@ class TestDjVu(Basetest):
         os.makedirs(self.backup_path, exist_ok=True)
         self.local = os.path.exists(DjVuConfig.get_config_file_path())
         # set to True to emulate CI mode to create a fresh djvu_data.db
-        force_test = True
+        force_test = False
         if force_test:
             self.local = False
         self.config = DjVuConfig.get_instance(test=force_test)
