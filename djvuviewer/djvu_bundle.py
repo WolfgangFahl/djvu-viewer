@@ -302,14 +302,13 @@ class DjVuBundle:
         self.djvu_dump_log=output
         return output
 
-    def finalize_bundling(self, zip_path: str, bundled_path: str):
+    def finalize_bundling(self):
         """
         Finalize bundling: remove originals, move bundled file to final location.
 
-        Args:
-            zip_path: Backup ZIP (must exist)
-            bundled_path: New bundled DjVu file
         """
+        zip_path=self.backup_file
+        bundled_path=self.bundled_file_path
         # Validate prerequisites
         if not Path(zip_path).exists():
             self._add_error(f"Backup ZIP not found: {zip_path}")
@@ -727,23 +726,18 @@ main "$@"
 """
         return script
 
-    def convert_to_bundled(self, output_path: str = None) -> str:
+    def convert_to_bundled(self):
         """
         Convert self.djvu_file to bundled format using djvmcvt.
 
-        Returns:
-            Path to bundled file
         """
-        if output_path is None:
-            output_path = self.bundled_file_path
+        output_path = self.bundled_file_path
 
         cmd = f"djvmcvt -b {shlex.quote(self.full_path)} {shlex.quote(output_path)}"
         result=self.run_cmd(cmd, "Failed to bundle DjVu file")
 
         if not os.path.exists(output_path) or result.returncode!=0:
             raise RuntimeError(f"Bundled file not created: {output_path} return code {result.returncode}")
-
-        return output_path
 
     @classmethod
     def convert_djvu_to_ppm(
@@ -874,15 +868,15 @@ main "$@"
             # Step 2: Convert to bundled format
             if not os.path.exists(self.bundled_file_path):
                 progress("Converting to bundled format...")
-                bundled_path = self.convert_to_bundled()
+                self.convert_to_bundled()
                 if self.error_count > 0:
                     error(f"Bundling failed with {self.error_count} errors")
                     return False
-                progress(f"Bundled file created: {bundled_path}")
+                progress(f"Bundled file created: {self.bundled_file_path}")
 
             # Step 3: Finalize (replace original)
             progress("Finalizing bundling...")
-            self.finalize_bundling(zip_path, bundled_path)
+            self.finalize_bundling()
             if self.error_count > 0:
                 error(f"Finalization failed with {self.error_count} errors")
                 return False
