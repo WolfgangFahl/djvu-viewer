@@ -82,7 +82,7 @@ class TestDjVu(Basetest):
                     rel_path = MediaWikiImage.relpath_of_url(full_path)
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
-                    djvu_file = self.dproc.get_djvu_file(full_path)
+                    djvu_file = self.dproc.get_djvu_file(url=full_path,config=self.config)
                     djvu_bundle = DjVuBundle(djvu_file, config=self.config)
                     self.test_bundles.append(djvu_bundle)
         return self.test_bundles
@@ -280,7 +280,7 @@ class TestDjVu(Basetest):
             rel_path = MediaWikiImage.relpath_of_url(djvu_path)
             if self.debug:
                 print(f"getting DjVuFile for {rel_path}")
-            djvu_file = self.dproc.get_djvu_file(djvu_path)
+            djvu_file = self.dproc.get_djvu_file(url=djvu_path,config=self.config)
             if self.debug:
                 print(djvu_file)
                 print(djvu_file.to_yaml())
