@@ -343,7 +343,7 @@ class DjVuDebug:
 
     def reload_debug_info(self):
         """Create background task to reload debug info."""
-        self.task_runner.run_async(self.load_debug_info)
+        self.task_runner.run(self.load_debug_info)
 
     def show_fileinfo(self, path: str) -> int:
         """
@@ -396,15 +396,15 @@ class DjVuDebug:
                     with ui.card().classes("w-full bg-red-50"):
                         ui.label(msg).classes("text-negative")
 
-            # Run bundling in background thread via TaskRunner
-            _success = await self.task_runner.run_task(
-                self.djvu_bundle.bundle,
+            success=self.djvu_bundle.bundle(
                 create_backup=self.create_package,
                 update_wiki=self.update_wiki,
                 update_index_db=self.update_index_db,
                 on_progress=on_progress,
                 on_error=on_error,
             )
+            msg="✅ Bundling done" if success else "❌ Bundling failed"
+            on_progress(msg)
 
             self.update_bundle_state()
 
@@ -416,7 +416,7 @@ class DjVuDebug:
         handle bundle click
         """
         with self.content_row:
-            self.task_runner.run_async(self.bundle)
+            self.task_runner.run(self.bundle)
 
     def on_refresh(self):
         """Handle refresh button click."""
@@ -427,7 +427,7 @@ class DjVuDebug:
         self.show_spinner()
 
         # Run reload task asynchronously
-        self.task_runner.run_task(self.reload_debug_info)
+        self.task_runner.run(self.reload_debug_info)
 
     def setup_ui(self):
         """Set up the user interface components for the DjVu debug page."""
