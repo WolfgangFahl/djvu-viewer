@@ -240,7 +240,7 @@ class DjVuCatalog(BaseCatalog):
                     # Load the DjVu file bundle
                     djvu_bundle = self.context.load_djvu_file(
                         filename, # page title
-                        progress=None  # No progress bar for individual files
+                        progressbar=None  # No progress bar for individual files
                     )
 
                     # Check if already bundled
