@@ -872,12 +872,13 @@ main "$@"
                 progress(f"Backup created: {zip_path}")
 
             # Step 2: Convert to bundled format
-            progress("Converting to bundled format...")
-            bundled_path = self.convert_to_bundled()
-            if self.error_count > 0:
-                error(f"Bundling failed with {self.error_count} errors")
-                return False
-            progress(f"Bundled file created: {bundled_path}")
+            if not os.path.exists(self.bundled_file_path):
+                progress("Converting to bundled format...")
+                bundled_path = self.convert_to_bundled()
+                if self.error_count > 0:
+                    error(f"Bundling failed with {self.error_count} errors")
+                    return False
+                progress(f"Bundled file created: {bundled_path}")
 
             # Step 3: Finalize (replace original)
             progress("Finalizing bundling...")
