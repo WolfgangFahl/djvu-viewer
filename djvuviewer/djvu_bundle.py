@@ -51,7 +51,7 @@ class DjVuBundle:
         self.djvu_file = djvu_file
         if config is None:
             config = DjVuConfig.get_instance()
-        self.full_path=f"{config.images_path}/images/{djvu_file.path}"
+        self.full_path=config.full_path(djvu_file.path)
         self.djvu_dir = os.path.dirname(self.full_path)
         self.basename = os.path.basename(djvu_file.path)
         self.stem = os.path.splitext(self.basename)[0]

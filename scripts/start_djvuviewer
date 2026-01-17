@@ -105,8 +105,10 @@ start_djvu_viewer() {
 
   if [[ "$REMOTE_DEBUG" == "true" ]]; then
     remote_debug_setup
-
-    nohup djvuviewer $options --debug \
+    # source instal might need --break-system-packages on newer python
+    pip install -e .
+    cmd="python -X frozen_modules=off -m djvuviewer.djvu_webcmd"
+    nohup  $cmd $options --debug \
       --debugServer "$DEBUG_SERVER" \
       --debugPort "$DEBUG_PORT" \
       --debugLocalPath "$DEBUG_LOCAL_PATH" \
