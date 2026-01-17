@@ -335,6 +335,13 @@ class DjVuBundle:
                 )
                 return
 
+            if not os.access(self.full_path, os.W_OK):
+                cmd = f"sudo chmod g+w {shlex.quote(self.full_path)}"
+                result=self.run_cmd(cmd, f"Failed to chmod g+w {self.full_path}")
+                if result.returncode!=0:
+                    return
+
+
             if self.debug:
                 print(f"trying to\nmv {bundled_path} {self.full_path}")
             if self.move_file(bundled_path, self.full_path):
@@ -661,10 +668,10 @@ main "$@"
             output_path = self.bundled_file_path
 
         cmd = f"djvmcvt -b {shlex.quote(self.full_path)} {shlex.quote(output_path)}"
-        self.run_cmd(cmd, "Failed to bundle DjVu file")
+        result=self.run_cmd(cmd, "Failed to bundle DjVu file")
 
-        if not os.path.exists(output_path):
-            raise RuntimeError(f"Bundled file not created: {output_path}")
+        if not os.path.exists(output_path) or result.returncode!=0:
+            raise RuntimeError(f"Bundled file not created: {output_path} return code {result.returncode}")
 
         return output_path
 

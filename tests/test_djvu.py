@@ -48,7 +48,7 @@ class TestDjVu(Basetest):
         os.makedirs(self.backup_path, exist_ok=True)
         self.local = os.path.exists(DjVuConfig.get_config_file_path())
         # set to True to emulate CI mode to create a fresh djvu_data.db
-        force_test = False
+        force_test = True
         if force_test:
             self.local = False
         self.config = DjVuConfig.get_instance(test=force_test)
@@ -291,7 +291,7 @@ class TestDjVu(Basetest):
         """
         test the DjVu image generation
         """
-        for relurl, elen, expected_bundled in self.test_tuples:
+        for relurl, elen, _expected_bundled in self.test_tuples:
             djvu_path = self.get_djvu(relurl)
             dproc = DjVuProcessor(verbose=self.debug, debug=self.debug)
 

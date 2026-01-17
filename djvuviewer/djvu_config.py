@@ -108,6 +108,8 @@ class DjVuConfig:
         Returns:
             Absolute filesytem path to DjVu file
         """
+        if relpath.startswith("/images"):
+            relpath=relpath.replace("/images","")
         full_path=f"{self.images_path}{relpath}"
         return full_path
 
