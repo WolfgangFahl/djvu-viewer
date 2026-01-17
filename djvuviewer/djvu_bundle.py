@@ -4,27 +4,28 @@ Created on 2026-01-03
 @author: wf
 """
 
-from datetime import datetime
 import logging
 import os
-from pathlib import Path
 import re
 import shlex
 import shutil
 import sqlite3
 import subprocess
 import tempfile
-from typing import Callable,Dict, List, Optional
 import zipfile
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
 
 from basemkit.shell import Shell
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.image_convert import ImageConverter
 from djvuviewer.packager import Packager
 
-
 logger = logging.getLogger(__name__)
+
 
 class DjVuBundle:
     """
@@ -36,7 +37,7 @@ class DjVuBundle:
         djvu_file: DjVuFile,
         config: DjVuConfig = None,
         debug: bool = False,
-        mw_images: Optional[Dict[str, 'MediaWikiImage']] = None,
+        mw_images: Optional[Dict[str, "MediaWikiImage"]] = None,
     ):
         """
         Initialize DjVuBundle with a DjVuFile instance.
@@ -51,14 +52,14 @@ class DjVuBundle:
         self.djvu_file = djvu_file
         if config is None:
             config = DjVuConfig.get_instance()
-        self.full_path=config.full_path(djvu_file.path)
+        self.full_path = config.full_path(djvu_file.path)
         self.djvu_dir = os.path.dirname(self.full_path)
         self.basename = os.path.basename(djvu_file.path)
         self.stem = os.path.splitext(self.basename)[0]
         self.config = config
         self.use_sudo = config.use_sudo
         self.debug = debug
-        self.mw_images: Dict[str, 'MediaWikiImage'] = mw_images or {}
+        self.mw_images: Dict[str, "MediaWikiImage"] = mw_images or {}
         self.errors: List[str] = []
         self.shell = Shell()
         self.djvu_dump_log = None
@@ -66,12 +67,12 @@ class DjVuBundle:
     @property
     def error_count(self) -> int:
         """Check if the bundle has errors."""
-        error_count=len(self.errors)
+        error_count = len(self.errors)
         return error_count
 
     @property
     def bundled_file_path(self) -> str:
-        bundled_file_path=os.path.join(self.djvu_dir, f"{self.stem}_bundled.djvu")
+        bundled_file_path = os.path.join(self.djvu_dir, f"{self.stem}_bundled.djvu")
         return bundled_file_path
 
     @property
@@ -83,20 +84,21 @@ class DjVuBundle:
     @property
     def has_incomplete_bundling(self) -> bool:
         """Check if bundling was interrupted (both files exist)."""
-        incomplete=(os.path.exists(self.full_path) and
-                os.path.exists(self.bundled_file_path))
+        incomplete = os.path.exists(self.full_path) and os.path.exists(
+            self.bundled_file_path
+        )
         return incomplete
 
     @property
-    def image_wiki(self) -> Optional['MediaWikiImage']:
+    def image_wiki(self) -> Optional["MediaWikiImage"]:
         """Get image from main wiki."""
-        image_wiki=self.mw_images.get('wiki')
+        image_wiki = self.mw_images.get("wiki")
         return image_wiki
 
     @property
-    def image_new(self) -> Optional['MediaWikiImage']:
+    def image_new(self) -> Optional["MediaWikiImage"]:
         """Get image from new wiki."""
-        image_new=self.mw_images.get('new')
+        image_new = self.mw_images.get("new")
         return image_new
 
     @property
@@ -246,7 +248,6 @@ class DjVuBundle:
         # done
         pass
 
-
     def get_part_filenames_from_dump(self, djvu_path: str) -> List[str]:
         """
         Get a list of part file names extracted from a DjVu dump.
@@ -273,12 +274,12 @@ class DjVuBundle:
         # Get list of component files to remove
         if self.has_incomplete_bundling:
             # we already bundled so the part_file list is in the bundled_file_path
-            part_files=self.get_part_filenames_from_dump(self.bundled_file_path)
+            part_files = self.get_part_filenames_from_dump(self.bundled_file_path)
         else:
             part_files = self.get_part_filenames_from_dump(self.full_path)
         return part_files
 
-    def djvu_dump(self,djvu_path:str=None) -> str:
+    def djvu_dump(self, djvu_path: str = None) -> str:
         """
         Run djvudump on self.djvu_file.djvu_path and return output.
         Adds error to self.errors on failure.
@@ -288,9 +289,9 @@ class DjVuBundle:
         Returns:
             djvudump output string (empty on error)
         """
-        output=""
+        output = ""
         if djvu_path is None:
-            djvu_path=self.full_path
+            djvu_path = self.full_path
         if not os.path.exists(self.full_path):
             self._add_error(f"File not found: {djvu_path}")
         else:
@@ -298,7 +299,7 @@ class DjVuBundle:
             result = self.run_cmd(cmd, "djvudump failed")
             if result.returncode == 0:
                 output = result.stdout
-        self.djvu_dump_log=output
+        self.djvu_dump_log = output
         return output
 
     def finalize_bundling(self):
@@ -306,8 +307,8 @@ class DjVuBundle:
         Finalize bundling: remove originals, move bundled file to final location.
 
         """
-        zip_path=self.backup_file
-        bundled_path=self.bundled_file_path
+        zip_path = self.backup_file
+        bundled_path = self.bundled_file_path
         # Validate prerequisites
         if not Path(zip_path).exists():
             self._add_error(f"Backup ZIP not found: {zip_path}")
@@ -404,17 +405,17 @@ class DjVuBundle:
             mtime_dt = datetime.fromtimestamp(mtime)
 
             # Format: YYMMDDhhmm (works on both GNU and BSD touch)
-            atime_fmt = atime_dt.strftime('%Y%m%d%H%M')
-            mtime_fmt = mtime_dt.strftime('%Y%m%d%H%M')
+            atime_fmt = atime_dt.strftime("%Y%m%d%H%M")
+            mtime_fmt = mtime_dt.strftime("%Y%m%d%H%M")
 
             # Set times separately (more reliable than combined -t)
             self.run_cmd(
                 f"sudo touch -a -t {atime_fmt} {shlex.quote(path)}",
-                "Warning: Failed to restore access time"
+                "Warning: Failed to restore access time",
             )
             self.run_cmd(
                 f"sudo touch -m -t {mtime_fmt} {shlex.quote(path)}",
-                "Warning: Failed to restore modification time"
+                "Warning: Failed to restore modification time",
             )
 
     def move_file(self, src: str, dst: str) -> bool:
@@ -474,7 +475,7 @@ class DjVuBundle:
                 if self.use_sudo:
                     result = self.run_cmd(
                         f"sudo chmod g+w {shlex.quote(str(dest_dir))}",
-                        f"Failed to set write permission on {dest_dir}"
+                        f"Failed to set write permission on {dest_dir}",
                     )
                     if result.returncode != 0:
                         return False
@@ -487,7 +488,7 @@ class DjVuBundle:
                 if self.use_sudo:
                     result = self.run_cmd(
                         f"sudo chmod g+w {shlex.quote(dest)}",
-                        f"Failed to set write permission on {dest}"
+                        f"Failed to set write permission on {dest}",
                     )
                     if result.returncode != 0:
                         return False
@@ -499,7 +500,7 @@ class DjVuBundle:
             if self.use_sudo:
                 result = self.run_cmd(
                     f"sudo mv {shlex.quote(source)} {shlex.quote(dest)}",
-                    f"Move failed: {source} → {dest}"
+                    f"Move failed: {source} → {dest}",
                 )
                 if result.returncode != 0:
                     return False
@@ -552,7 +553,7 @@ class DjVuBundle:
 
         try:
             actual_size = os.path.getsize(self.full_path)
-            djvu_path=f"/images{self.djvu_file.path}"
+            djvu_path = f"/images{self.djvu_file.path}"
             with sqlite3.connect(self.config.db_path, timeout=10.0) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
@@ -581,20 +582,19 @@ class DjVuBundle:
         """
         part_files = self.get_part_filenames()
         backup_file = self.backup_file
-        bundled_file =self.bundled_file_path
-        djvu_path=self.djvu_file.path
+        bundled_file = self.bundled_file_path
+        djvu_path = self.djvu_file.path
 
         # Build part files for zip command
         part_files_zip = " \\\n        ".join(shlex.quote(pf) for pf in part_files)
 
         # Build part removal commands
         part_removals = "\n    ".join(
-            f'rm -f {shlex.quote(os.path.join(self.djvu_dir, pf))}'
-            for pf in part_files
+            f"rm -f {shlex.quote(os.path.join(self.djvu_dir, pf))}" for pf in part_files
         )
 
         docker_cmd = self.get_docker_cmd()
-        docker_step = f'    refresh_mediawiki\n' if docker_cmd else ''
+        docker_step = f"    refresh_mediawiki\n" if docker_cmd else ""
 
         # Database update function
         db_func = ""
@@ -752,10 +752,12 @@ main "$@"
         output_path = self.bundled_file_path
 
         cmd = f"djvmcvt -b {shlex.quote(self.full_path)} {shlex.quote(output_path)}"
-        result=self.run_cmd(cmd, "Failed to bundle DjVu file")
+        result = self.run_cmd(cmd, "Failed to bundle DjVu file")
 
-        if not os.path.exists(output_path) or result.returncode!=0:
-            raise RuntimeError(f"Bundled file not created: {output_path} return code {result.returncode}")
+        if not os.path.exists(output_path) or result.returncode != 0:
+            raise RuntimeError(
+                f"Bundled file not created: {output_path} return code {result.returncode}"
+            )
 
     @classmethod
     def convert_djvu_to_ppm(
@@ -864,6 +866,7 @@ main "$@"
         Returns:
             bool: True if successful, False if errors occurred
         """
+
         def progress(msg: str):
             if on_progress:
                 on_progress(msg)

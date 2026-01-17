@@ -4,28 +4,28 @@ Created on 2025-02-25
 @author: wf
 """
 
-from concurrent.futures import Future, ThreadPoolExecutor
 import gc
 import logging
 import os
-from pathlib import Path
 import shutil
 import sys
 import tempfile
+from concurrent.futures import Future, ThreadPoolExecutor
+from pathlib import Path
 from typing import Generator, List, Optional
 
-from PIL import Image
-from basemkit.shell import Shell
 import djvu.decode
+import numpy
+from basemkit.shell import Shell
+from ngwidgets.profiler import Profiler
+from PIL import Image
+
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig, PngMode
 from djvuviewer.djvu_core import DjVuFile, DjVuImage, DjVuPage
 from djvuviewer.djvu_image_job import ImageJob
 from djvuviewer.packager import PackageMode, Packager
 from djvuviewer.wiki_images import MediaWikiImage
-from ngwidgets.profiler import Profiler
-import numpy
-
 
 if sys.platform != "win32":
     import resource
@@ -304,7 +304,7 @@ class DjVuProcessor:
     def get_djvu_file(
         self,
         url: str,
-        config:DjVuConfig,
+        config: DjVuConfig,
         progressbar: Optional["Progressbar"] = None,
     ) -> DjVuFile:
         """
@@ -324,7 +324,7 @@ class DjVuProcessor:
         """
         # get the relative path
         relpath = MediaWikiImage.relpath_of_url(url)
-        full_path=config.full_path(relpath)
+        full_path = config.full_path(relpath)
 
         # 1. Get container file metadata
         self.ensure_file_exists(full_path)

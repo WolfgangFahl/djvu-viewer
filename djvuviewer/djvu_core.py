@@ -25,7 +25,7 @@ class BaseFile:
     @property
     def exists(self) -> bool:
         """Check if file metadata is populated"""
-        avail = self.filesize is not None and self.filesize>0
+        avail = self.filesize is not None and self.filesize > 0
         return avail
 
     @staticmethod

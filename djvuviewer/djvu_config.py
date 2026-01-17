@@ -39,7 +39,7 @@ class DjVuConfig:
     )
     backup_path: Optional[str] = None  # Path for bundle backups
     log_path: Optional[str] = None  # Path for log files
-    script_path: Optional[str] = None # Path for bundle scripts
+    script_path: Optional[str] = None  # Path for bundle scripts
     cache_path: Optional[str] = None  # Path for cached date e.g. mediawiki images
     container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
@@ -49,8 +49,10 @@ class DjVuConfig:
     )
     # package display mode
     package_mode: Optional[str] = "tar"
-    use_sudo: bool=False
-    timeout:float=60 # maximum number of secs to wait for a background task to complete
+    use_sudo: bool = False
+    timeout: float = (
+        60  # maximum number of secs to wait for a background task to complete
+    )
 
     def __post_init__(self):
         """
@@ -114,8 +116,8 @@ class DjVuConfig:
             Absolute filesytem path to DjVu file
         """
         if relpath.startswith("/images"):
-            relpath=relpath.replace("/images","")
-        full_path=f"{self.images_path}{relpath}"
+            relpath = relpath.replace("/images", "")
+        full_path = f"{self.images_path}{relpath}"
         return full_path
 
     @classmethod

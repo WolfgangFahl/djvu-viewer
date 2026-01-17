@@ -4,14 +4,17 @@ Created on 2026-01-02
 @author: wf
 """
 
-from datetime import datetime
 import logging
 import os
 import time
 import traceback
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
+from ngwidgets.progress import TqdmProgressbar
+from tqdm import tqdm
+
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_context import DjVuContext
@@ -19,8 +22,6 @@ from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_processor import ImageJob
 from djvuviewer.djvu_wikimages import DjVuMediaWikiImages
 from djvuviewer.wiki_images import MediaWikiImage
-from ngwidgets.progress import TqdmProgressbar
-from tqdm import tqdm
 
 
 class DjVuActions:
@@ -75,7 +76,9 @@ class DjVuActions:
             fh.setFormatter(formatter)
             self.logger.addHandler(fh)
 
-    def get_djvu_files(self, url: Optional[str] = None, page_limit: int = None) -> Dict[str, DjVuFile]:
+    def get_djvu_files(
+        self, url: Optional[str] = None, page_limit: int = None
+    ) -> Dict[str, DjVuFile]:
         """
         get DjVu files.
 
@@ -90,17 +93,15 @@ class DjVuActions:
         if url is None:
             total_files = self.args.limit if self.args.limit else 10000
             progressbar = TqdmProgressbar(
-                total=total_files,
-                desc="Loading DjVu files",
-                unit="files"
+                total=total_files, desc="Loading DjVu files", unit="files"
             )
             djvu_files_by_path = self.djvu_files.get_djvu_files_by_path(
                 file_limit=self.args.limit,
                 page_limit=page_limit,
-                progressbar=progressbar
+                progressbar=progressbar,
             )
         else:
-            djvu_file = self.dproc.get_djvu_file(url=url,config=self.config)
+            djvu_file = self.dproc.get_djvu_file(url=url, config=self.config)
             djvu_files_by_path = {djvu_file.path: djvu_file}
             pass
         return djvu_files_by_path
@@ -247,8 +248,8 @@ class DjVuActions:
             # Execute bundling
             success = djvu_bundle.bundle(
                 create_backup=True,
-                update_wiki=self.args.get('update_wiki', True),
-                update_index_db=self.args.get('update_index_db', False),
+                update_wiki=self.args.get("update_wiki", True),
+                update_index_db=self.args.get("update_index_db", False),
                 on_progress=on_progress,
                 on_error=on_error,
             )
@@ -311,8 +312,8 @@ class DjVuActions:
             page_count = 0
             for path in djvu_files:
                 try:
-                    relpath=MediaWikiImage.relpath_of_url(path)
-                    full_path=self.config.full_path(relpath)
+                    relpath = MediaWikiImage.relpath_of_url(path)
+                    full_path = self.config.full_path(relpath)
                     djvu_file = None
                     prefix = ImageJob.get_prefix(path)
                     package_file = os.path.join(
@@ -512,5 +513,5 @@ class DjVuActions:
             max_errors: Maximum allowed error percentage before skipping update
             url: Optional single file path for targeted update
         """
-        djvu_files = self.get_djvu_files(url=url,page_limit=0)
+        djvu_files = self.get_djvu_files(url=url, page_limit=0)
         self.update_database(djvu_files, max_errors=max_errors)

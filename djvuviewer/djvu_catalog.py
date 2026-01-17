@@ -7,25 +7,22 @@ Created on 2024-08-26
 
 @author: wf
 """
-from dataclasses import asdict
 
-from djvuviewer.djvu_config import DjVuConfig
+from dataclasses import asdict
+from typing import List
+
 from nicegui import ui
 
+from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.grid_view import GridView
-from typing import List
+
 
 class BaseCatalog(GridView):
     """
     UI for browsing a catalog of images
     """
-    def __init__(
-        self,
-        solution,
-        config: DjVuConfig,
-        title: str,
-        limit: int = 5000
-    ):
+
+    def __init__(self, solution, config: DjVuConfig, title: str, limit: int = 5000):
         """
         Initialize the catalog view.
 
@@ -94,6 +91,7 @@ class DjVuCatalog(BaseCatalog):
     UI for browsing and querying the DjVu document catalog.
     Supports fetching records from a local SQLite DB.
     """
+
     def __init__(
         self,
         solution,
@@ -107,7 +105,7 @@ class DjVuCatalog(BaseCatalog):
             config: Configuration object containing connection and mode details
         """
         super().__init__(solution=solution, config=config, title="DjVu Index Database")
-        self.context=self.webserver.context
+        self.context = self.webserver.context
 
     def setup_custom_header_items(self):
         """Add DjVu-specific header items (todo checkbox)."""
@@ -117,7 +115,7 @@ class DjVuCatalog(BaseCatalog):
                 on_click=self.on_bundle,
             ).tooltip("bundle the selected DjVu files")
         show_todo_checkbox = ui.checkbox("show todo").bind_value(self, "show_todo")
-        show_todo_checkbox.on('click', lambda: self.on_refresh())
+        show_todo_checkbox.on("click", lambda: self.on_refresh())
 
     def get_source_hint(self) -> str:
         """Provide source hint for DjVu catalog."""
@@ -137,7 +135,7 @@ class DjVuCatalog(BaseCatalog):
         """
         # make sure we can lookup later
         view_record = {"#": index}
-        record["#"]=index
+        record["#"] = index
 
         filename = None
         if "path" in record:
@@ -186,7 +184,7 @@ class DjVuCatalog(BaseCatalog):
             self.solution.handle_exception(ex)
         self.lod = lod
 
-    def get_selected_filenames(self)->List[str]:
+    def get_selected_filenames(self) -> List[str]:
         # Extract paths from selected rows
         filenames_to_bundle = []
         for row in self.selected_rows:
@@ -194,7 +192,7 @@ class DjVuCatalog(BaseCatalog):
             index = row.get("#")
             if index and 1 <= index <= len(self.lod):
                 record = self.lod[index - 1]
-                filename= record.get("filename")
+                filename = record.get("filename")
                 if filename:
                     filenames_to_bundle.append(filename)
         return filenames_to_bundle
@@ -203,10 +201,12 @@ class DjVuCatalog(BaseCatalog):
         """
         bundle all selected files
         """
+
         # callbacks
-        def notify(msg:str,type="info"):
+        def notify(msg: str, type="info"):
             with self.grid_row:
-                ui.notify(msg,type=type)
+                ui.notify(msg, type=type)
+
         def on_error(msg: str):
             notify(f"❌ {filename}: {msg}", type="negative")
 
@@ -214,7 +214,7 @@ class DjVuCatalog(BaseCatalog):
             notify(f"ℹ️ {filename}: {msg}", type="info")
 
         try:
-            filenames_to_bundle=self.get_selected_filenames()
+            filenames_to_bundle = self.get_selected_filenames()
             if not filenames_to_bundle:
                 notify("Nothing to bundle", type="warning")
                 return
@@ -236,16 +236,21 @@ class DjVuCatalog(BaseCatalog):
             for i, filename in enumerate(filenames_to_bundle, 1):
                 try:
                     if self.progressbar:
-                        self.progressbar.set_description(f"Bundling {i}/{total}: {filename}")
+                        self.progressbar.set_description(
+                            f"Bundling {i}/{total}: {filename}"
+                        )
 
                     # Load the DjVu file bundle
                     djvu_bundle = self.context.load_djvu_file(
-                        filename, # page title
-                        progressbar=None  # No progress bar for individual files
+                        filename,  # page title
+                        progressbar=None,  # No progress bar for individual files
                     )
 
                     # Check if already bundled
-                    if djvu_bundle.djvu_file.bundled and not djvu_bundle.has_incomplete_bundling:
+                    if (
+                        djvu_bundle.djvu_file.bundled
+                        and not djvu_bundle.has_incomplete_bundling
+                    ):
                         notify(f"⏭️ Skipping {filename} (already bundled)", type="info")
                         if self.progressbar:
                             self.progressbar.update(1)
@@ -261,13 +266,13 @@ class DjVuCatalog(BaseCatalog):
 
                     if success:
                         success_count += 1
-                        msg=f"✅ Successfully bundled {filename}"
-                        msg_type="positive"
+                        msg = f"✅ Successfully bundled {filename}"
+                        msg_type = "positive"
                     else:
                         error_count += 1
-                        msg=f"❌ Failed to bundle {filename}"
-                        msg_type="negative"
-                    notify(msg,type=msg_type)
+                        msg = f"❌ Failed to bundle {filename}"
+                        msg_type = "negative"
+                    notify(msg, type=msg_type)
 
                     if self.progressbar:
                         self.progressbar.update(1)
@@ -281,7 +286,7 @@ class DjVuCatalog(BaseCatalog):
             # Final summary
             notify(
                 f"Bundling complete: {success_count} succeeded, {error_count} failed",
-                type="positive" if error_count == 0 else "warning"
+                type="positive" if error_count == 0 else "warning",
             )
 
         except Exception as ex:
@@ -306,10 +311,12 @@ class DjVuCatalog(BaseCatalog):
         except Exception as ex:
             self.solution.handle_exception(ex)
 
+
 class WikiImageBrowser(BaseCatalog):
     """
     Browser for wiki images via MediaWiki API.
     """
+
     def __init__(
         self,
         solution,
@@ -331,9 +338,7 @@ class WikiImageBrowser(BaseCatalog):
         if self.config.new_url:
             url_options.append(self.config.new_url)
         ui.select(
-            options=url_options,
-            label="wiki",
-            on_change=lambda: self.on_refresh()
+            options=url_options, label="wiki", on_change=lambda: self.on_refresh()
         ).classes("w-64").bind_value(self, "images_url")
 
         # Limit Selector
@@ -364,7 +369,7 @@ class WikiImageBrowser(BaseCatalog):
             - url: full image URL
         """
         view_record = {"#": index}
-        record["#"]=index
+        record["#"] = index
 
         raw_name = record.get("title", "")
         filename = raw_name.replace("File:", "").replace("Datei:", "")

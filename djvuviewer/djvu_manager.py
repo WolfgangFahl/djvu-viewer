@@ -109,14 +109,12 @@ class DjVuManager:
             }
 
         if new_columns is None:
-            new_columns = {
-                "filename": "TEXT"
-            }
+            new_columns = {"filename": "TEXT"}
 
         # Check if table exists
         cursor = self.sql_db.c.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND LOWER(name)=LOWER(?)",
-            (table_name,)
+            (table_name,),
         )
         if not cursor.fetchone():
             return  # Table doesn't exist yet, nothing to migrate
@@ -127,7 +125,9 @@ class DjVuManager:
 
         # Check if migration needed
         needs_rename = any(old_name in columns for old_name in field_map.keys())
-        needs_new_columns = any(col_name not in columns for col_name in new_columns.keys())
+        needs_new_columns = any(
+            col_name not in columns for col_name in new_columns.keys()
+        )
 
         if not needs_rename and not needs_new_columns:
             return  # Already migrated

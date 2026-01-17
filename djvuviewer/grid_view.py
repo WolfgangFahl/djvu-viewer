@@ -3,16 +3,17 @@ Created on 2026-01-15
 
 @author: wf
 """
-from _collections_abc import Callable
-from collections import OrderedDict
+
 import inspect
+from collections import OrderedDict
 from typing import List, Optional
 
+from _collections_abc import Callable
 from ngwidgets.input_webserver import InputWebSolution
 from ngwidgets.lod_grid import GridConfig, ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.task_runner import TaskRunner
-from nicegui import ui, run
+from nicegui import run, ui
 
 
 class View:
@@ -52,7 +53,7 @@ class View:
         Returns:
             bool: True if user is authenticated
         """
-        if hasattr(self.solution, 'webserver'):
+        if hasattr(self.solution, "webserver"):
             return self.solution.webserver.authenticated()
         return False
 
@@ -84,7 +85,7 @@ class GridView(View):
         self.search_text = ""
 
         # Background task management
-        self.task_runner: Optional[TaskRunner]=None
+        self.task_runner: Optional[TaskRunner] = None
 
         # Progress bar
         self.progress_row = None
@@ -93,7 +94,7 @@ class GridView(View):
         # UI containers
         self.ui_container = None
         self.header_row = None
-        self.header_setup= False
+        self.header_setup = False
         self.grid_row = None
         self.source_info_label = None
 
@@ -148,8 +149,10 @@ class GridView(View):
 
             # Source info label
             if source_hint:
-                self.source_info_label = ui.label(source_hint).classes("text-caption text-gray-600")
-            self.header_setup=True
+                self.source_info_label = ui.label(source_hint).classes(
+                    "text-caption text-gray-600"
+                )
+            self.header_setup = True
 
     def setup_custom_header_items(self):
         """
@@ -170,7 +173,7 @@ class GridView(View):
         ui.input(
             label="Search",
             placeholder="search ...",
-            on_change=lambda: None  # Just update binding
+            on_change=lambda: None,  # Just update binding
         ).bind_value(self, "search_text").classes("w-48")
         ui.button("Search", icon="search", on_click=self.on_search_click)
 
@@ -213,12 +216,12 @@ class GridView(View):
         self.view_lod = []
         for ri, record in enumerate(self.lod):
             view_record = OrderedDict(record)
-            if hasattr(self, 'key_col') and self.key_col in view_record:
+            if hasattr(self, "key_col") and self.key_col in view_record:
                 view_record.move_to_end(self.key_col, last=False)
             view_record["#"] = ri + 1
             view_record.move_to_end("#", last=False)
             self.view_lod.append(view_record)
-        if hasattr(self, 'key_col') and self.key_col:
+        if hasattr(self, "key_col") and self.key_col:
             self.view_lod.sort(key=lambda r: r.get(self.key_col, ""))
 
     def get_grid_config(self) -> GridConfig:
@@ -247,13 +250,15 @@ class GridView(View):
             return
         try:
             grid_config = self.get_grid_config()
-            self.grid_config=grid_config
+            self.grid_config = grid_config
 
             with self.grid_row:
                 self.grid = ListOfDictsGrid(lod=self.view_lod, config=grid_config)
                 self.grid.ag_grid.options["pagination"] = True
                 self.grid.ag_grid.options["paginationPageSize"] = 15
-                self.grid.ag_grid.options["paginationPageSizeSelector"] = self.limit_options
+                self.grid.ag_grid.options["paginationPageSizeSelector"] = (
+                    self.limit_options
+                )
                 if grid_config.multiselect:
                     self.grid.set_checkbox_selection(grid_config.key_col)
         except Exception as ex:
@@ -280,7 +285,7 @@ class GridView(View):
         clear the grid row
         """
         self.grid_row.clear()
-        self.grid=None
+        self.grid = None
 
     def show_spinner(self):
         # Show loading spinner
@@ -299,7 +304,9 @@ class GridView(View):
         # Run background task
         self.run_background_task(self.load_lod)
 
-    def setup_progress_bar(self, total: int = 1, desc: str = "Loading", unit: str = "items"):
+    def setup_progress_bar(
+        self, total: int = 1, desc: str = "Loading", unit: str = "items"
+    ):
         """
         Setup progress bar UI.
 
@@ -337,8 +344,7 @@ class GridView(View):
         """
         if self.progressbar:
             task_runner = TaskRunner(
-                timeout=self.config.timeout,
-                progress=self.progressbar
+                timeout=self.config.timeout, progress=self.progressbar
             )
         else:
             task_runner = TaskRunner(timeout=self.config.timeout)

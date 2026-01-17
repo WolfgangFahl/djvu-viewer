@@ -3,12 +3,14 @@ Created on 2026-01-05
 
 @author: wf
 """
-from collections import Counter
-from dataclasses import asdict
+
 import json
 import re
+from collections import Counter
+from dataclasses import asdict
 
 from basemkit.basetest import Basetest
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_files import DjVuFiles
 from djvuviewer.wiki_images import MediaWikiImages
@@ -117,7 +119,9 @@ class TestDjVuFiles(Basetest):
                 print(f"\n{mime_type}:")
             client = MediaWikiImages(api_url=api_url, mime_types=[mime_type])
             search_query = f"filemime:{mime_type}"
-            images = client.fetch_by_cirrus_search(search_query, limit=50,max_size_kb=10)
+            images = client.fetch_by_cirrus_search(
+                search_query, limit=50, max_size_kb=10
+            )
 
             # Create pagecount histogram
             pagecount_histogram = Counter()
@@ -127,9 +131,9 @@ class TestDjVuFiles(Basetest):
             if self.debug:
                 print(pagecount_histogram.most_common(10))
             for image in images:
-                if image.pagecount is not None and image.pagecount>1:
+                if image.pagecount is not None and image.pagecount > 1:
                     if self.debug:
-                        print(json.dumps(asdict(image),indent=2))
+                        print(json.dumps(asdict(image), indent=2))
 
     def get_color(self, name: str, view_record: dict) -> str:
         """Extract color value from the style attribute of the named link in view_record"""
@@ -156,5 +160,5 @@ class TestDjVuFiles(Basetest):
                     print(f"  wiki: {wiki_color}")
                     print(f"  new: {new_color}")
 
-                self.assertEqual("blue", wiki_color,"wiki")
-                self.assertEqual("blue", new_color,"new")
+                self.assertEqual("blue", wiki_color, "wiki")
+                self.assertEqual("blue", new_color, "new")

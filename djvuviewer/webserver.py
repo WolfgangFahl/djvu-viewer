@@ -263,17 +263,17 @@ class DjVuSolution(InputWebSolution):
     async def djvu_catalog(self):
         def show():
             self.djvu_catalog_view = DjVuCatalog(
-                self,
-                config=self.webserver.djvu_config)
+                self, config=self.webserver.djvu_config
+            )
             self.djvu_catalog_view.setup_ui()
 
         await self.setup_content_div(show)
 
     async def djvu_browse(self):
         def show():
-            self.djvu_catalog_view =WikiImageBrowser(
-                self,
-                config=self.webserver.djvu_config)
+            self.djvu_catalog_view = WikiImageBrowser(
+                self, config=self.webserver.djvu_config
+            )
             self.djvu_catalog_view.setup_ui()
 
         await self.setup_content_div(show)

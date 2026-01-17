@@ -4,18 +4,19 @@ Created on 2026-01-05
 @author: wf
 """
 
-from dataclasses import asdict
 import os
+from dataclasses import asdict
 from typing import Any, Dict, List, Optional
+
+from lodstorage.lod import LOD
+from ngwidgets.progress import Progressbar
+from ngwidgets.widgets import Link
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu, DjVuFile, DjVuPage
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache, DjVuMediaWikiImages
 from djvuviewer.wiki_images import MediaWikiImage
-from lodstorage.lod import LOD
-from ngwidgets.progress import Progressbar
-from ngwidgets.widgets import Link
 
 
 class DjVuFiles:
@@ -54,12 +55,12 @@ class DjVuFiles:
         self.lod = None
         # SQL db based
         if self.config.db_path:
-            empty=False
+            empty = False
             # Remove broken 0-byte database file if it exists
             if os.path.exists(self.config.db_path):
                 if os.path.getsize(self.config.db_path) == 0:
                     os.remove(self.config.db_path)
-                    empty=True
+                    empty = True
             self.dvm = DjVuManager(config=self.config)
             if not empty:
                 self.dvm.migrate_to_package_fields()
@@ -87,9 +88,9 @@ class DjVuFiles:
             if filename in images_by_filename:
                 link_style = Link.blue
             elif "_" in filename:
-                spaced_filename=filename.replace("_"," ")
+                spaced_filename = filename.replace("_", " ")
                 if spaced_filename in images_by_filename:
-                    filename=spaced_filename
+                    filename = spaced_filename
                     link_style = Link.blue
         link = Link.create(url=url, text=filename, style=link_style)
         view_record[name] = link
@@ -104,14 +105,10 @@ class DjVuFiles:
 
             if config.new_url:
                 self.add_link(view_record, filename, new=True)
-                backlink = self.config.wiki_fileurl(
-                    filename, new=True, quoted=True
-                )
+                backlink = self.config.wiki_fileurl(filename, new=True, quoted=True)
             backparam = f"?backlink={backlink}" if backlink else ""
             local_url = f"{config.url_prefix}/djvu/{filename}{backparam}"
-            archive_name = filename.replace(
-                ".djvu", "." + self.config.package_mode
-            )
+            archive_name = filename.replace(".djvu", "." + self.config.package_mode)
             view_record["Package"] = Link.create(url=local_url, text=archive_name)
 
             debug_url = f"{config.url_prefix}/djvu/debug/{filename}"
@@ -182,7 +179,9 @@ class DjVuFiles:
                         param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
                     )
                     for djvu_page_record in djvu_page_records:
-                        djvu_page = DjVuPage.from_dict(djvu_page_record)  # @UndefinedVariable
+                        djvu_page = DjVuPage.from_dict(
+                            djvu_page_record
+                        )  # @UndefinedVariable
                         djvu_file.pages.append(djvu_page)
             if progressbar:
                 progressbar.update(1)
@@ -220,7 +219,9 @@ class DjVuFiles:
             # Merge strategy implies we need a temporary map to handle overwrites
             # 1. Map existing images by relpath
             existing_map = {
-                img.relpath: img for img in self.images[key] if hasattr(img, "relpath") and img.relpath
+                img.relpath: img
+                for img in self.images[key]
+                if hasattr(img, "relpath") and img.relpath
             }
 
             # 2. Update map with new images (this performs the replacement)
@@ -391,7 +392,7 @@ class DjVuFiles:
     def store_lods(
         self,
         djvu_lod: List[Dict[str, Any]],
-        page_lod: Optional[List[Dict[str, Any]]]=None,
+        page_lod: Optional[List[Dict[str, Any]]] = None,
         sample_record_count: int = 1,
         with_drop: bool = False,
     ) -> None:

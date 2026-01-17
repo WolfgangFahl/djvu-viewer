@@ -3,11 +3,13 @@ Created on 2026-01-02
 
 @author: wf
 """
-import re
+
 import logging
+import re
 from dataclasses import field
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Union
+from urllib.parse import unquote
 
 import requests
 from basemkit.yamlable import lod_storable
@@ -23,6 +25,7 @@ class MediaWikiImage:
     """
     Represents a single image resource from MediaWiki.
     """
+
     url: str
     mime: str
     size: int
@@ -62,7 +65,7 @@ class MediaWikiImage:
     @classmethod
     def relpath_of_url(cls, url: str) -> str:
         """retrieve wiki image-relative path from url by removing './' and '/images/'."""
-        path=url
+        path = unquote(url)
         # Look for 'images/' anywhere in the path and extract everything after it
         match = re.search(r"images/(.*)", path)
 
@@ -251,9 +254,7 @@ class MediaWikiImages:
         return results
 
     def build_size_filter(
-        self,
-        min_size: Optional[int] = None,
-        max_size: Optional[int] = None
+        self, min_size: Optional[int] = None, max_size: Optional[int] = None
     ) -> str:
         """
         Build a CirrusSearch filesize filter string.
@@ -274,10 +275,7 @@ class MediaWikiImages:
         return ""
 
     def fetch_titles_by_cirrus(
-        self,
-        search_query: str,
-        limit: int = 50,
-        per_request: int = 50
+        self, search_query: str, limit: int = 50, per_request: int = 50
     ) -> List[str]:
         """
         Get file titles using CirrusSearch.
@@ -296,35 +294,33 @@ class MediaWikiImages:
 
         while remaining > 0:
             params = {
-                'action': 'query',
-                'list': 'search',
-                'srsearch': search_query,
-                'srnamespace': 6,  # File namespace
-                'srlimit': min(per_request, remaining),
-                'format': 'json'
+                "action": "query",
+                "list": "search",
+                "srsearch": search_query,
+                "srnamespace": 6,  # File namespace
+                "srlimit": min(per_request, remaining),
+                "format": "json",
             }
             params.update(continue_params)
 
             data = self._make_request(params)
 
-            results = data.get('query', {}).get('search', [])
+            results = data.get("query", {}).get("search", [])
             if not results:
                 break
 
-            titles.extend([r['title'] for r in results])
+            titles.extend([r["title"] for r in results])
             remaining -= len(results)
 
-            if remaining > 0 and data.get('continue'):
-                continue_params = data['continue']
+            if remaining > 0 and data.get("continue"):
+                continue_params = data["continue"]
             else:
                 break
 
         return titles
 
     def fetch_images_by_titles(
-        self,
-        titles: List[str],
-        progressbar: Optional[Progressbar] = None
+        self, titles: List[str], progressbar: Optional[Progressbar] = None
     ) -> List[MediaWikiImage]:
         """
         Fetch full image details for a list of titles.
@@ -340,25 +336,25 @@ class MediaWikiImages:
 
         # Fetch in batches (API limit: 50 titles per request)
         for i in range(0, len(titles), 50):
-            batch = titles[i:i+50]
+            batch = titles[i : i + 50]
             params = {
-                'action': 'query',
-                'titles': '|'.join(batch),
-                'prop': 'imageinfo',
-                'iiprop': '|'.join(self.aiprop),
-                'format': 'json'
+                "action": "query",
+                "titles": "|".join(batch),
+                "prop": "imageinfo",
+                "iiprop": "|".join(self.aiprop),
+                "format": "json",
             }
 
             data = self._make_request(params)
-            pages = data.get('query', {}).get('pages', {})
+            pages = data.get("query", {}).get("pages", {})
 
             for page_id, page_data in pages.items():
-                imageinfo = page_data.get('imageinfo', [])
+                imageinfo = page_data.get("imageinfo", [])
                 if imageinfo:
                     # Merge page title into the image info dict to match 'allimages' structure
                     info_dict = imageinfo[0].copy()
-                    info_dict['title'] = page_data.get('title')
-                    info_dict['page_id'] = page_id
+                    info_dict["title"] = page_data.get("title")
+                    info_dict["page_id"] = page_id
                     images.append(MediaWikiImage.from_dict(info_dict))
 
             if progressbar:
@@ -395,16 +391,11 @@ class MediaWikiImages:
 
         # Step 1: Get titles via CirrusSearch
         titles = self.fetch_titles_by_cirrus(
-            search_query=full_query,
-            limit=limit,
-            per_request=per_request
+            search_query=full_query, limit=limit, per_request=per_request
         )
 
         # Step 2: Fetch full image details
-        images = self.fetch_images_by_titles(
-            titles=titles,
-            progressbar=progressbar
-        )
+        images = self.fetch_images_by_titles(titles=titles, progressbar=progressbar)
 
         return images[:limit]
 

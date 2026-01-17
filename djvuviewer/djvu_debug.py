@@ -12,10 +12,10 @@ from pathlib import Path
 
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
+from ngwidgets.task_runner import TaskRunner
 from ngwidgets.widgets import Link
 from nicegui import run, ui
 
-from ngwidgets.task_runner import TaskRunner
 from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.djvu_core import DjVuPage
 from djvuviewer.djvu_image_job import ImageJob
@@ -244,9 +244,7 @@ class DjVuDebug:
             # View Link
             if self.djvu_bundle and self.djvu_bundle.description_url_new:
                 image_url = self.djvu_bundle.description_url_new
-                backlink = (
-                    f"&backlink={urllib.parse.quote(image_url)}"
-                )
+                backlink = f"&backlink={urllib.parse.quote(image_url)}"
             view_url = f"{base_url}/{filename_stem}?page={page.page_index}{backlink}"
             record["view"] = Link.create(url=view_url, text="view")
 
@@ -276,7 +274,7 @@ class DjVuDebug:
     async def load_debug_info(self):
         """Load DjVu file metadata and display it."""
         try:
-            self.bundle_button.enabled=False
+            self.bundle_button.enabled = False
             if self.progressbar:
                 self.progressbar.reset()
                 self.progressbar.set_description("Loading DjVu file")
@@ -285,9 +283,7 @@ class DjVuDebug:
             # Load file metadata (blocking IO)
             try:
                 self.djvu_bundle = await run.io_bound(
-                    self.context.load_djvu_file,
-                    self.page_title,
-                    self.progressbar
+                    self.context.load_djvu_file, self.page_title, self.progressbar
                 )
 
                 # Extract djvu_file for convenience
@@ -329,7 +325,7 @@ class DjVuDebug:
 
             with self.solution.container:
                 self.content_row.update()
-            self.bundle_button.enabled=self.authenticated()
+            self.bundle_button.enabled = self.authenticated()
 
         except Exception as ex:
             self.solution.handle_exception(ex)
@@ -356,14 +352,14 @@ class DjVuDebug:
             ui.notify(f"{path} ({filesize}) {iso_date}")
         return filesize
 
-    def show_bundling_errors(self,title:str)->bool:
+    def show_bundling_errors(self, title: str) -> bool:
         """
         show bundling errors
         Returns:
             bool: true if there are errors
         """
-        error_count=self.djvu_bundle.error_count
-        has_errors=error_count>0
+        error_count = self.djvu_bundle.error_count
+        has_errors = error_count > 0
         if has_errors:
             with self.content_row:
                 ui.label(f"❌ {title}: {error_count} error(s) found").classes(
@@ -372,8 +368,7 @@ class DjVuDebug:
 
                 # Show errors in an expansion panel
                 with ui.expansion(
-                    f"Error Details ({error_count})",
-                    icon="error"
+                    f"Error Details ({error_count})", icon="error"
                 ).classes("w-full"):
                     for i, error in enumerate(self.djvu_bundle.errors, 1):
                         with ui.card().classes("w-full bg-red-50"):
@@ -396,14 +391,14 @@ class DjVuDebug:
                     with ui.card().classes("w-full bg-red-50"):
                         ui.label(msg).classes("text-negative")
 
-            success=self.djvu_bundle.bundle(
+            success = self.djvu_bundle.bundle(
                 create_backup=self.create_package,
                 update_wiki=self.update_wiki,
                 update_index_db=self.update_index_db,
                 on_progress=on_progress,
                 on_error=on_error,
             )
-            msg="✅ Bundling done" if success else "❌ Bundling failed"
+            msg = "✅ Bundling done" if success else "❌ Bundling failed"
             on_progress(msg)
 
             self.update_bundle_state()
@@ -468,7 +463,7 @@ class DjVuDebug:
                 unit="pages",
             )
             # attach to the task_runner
-            self.task_runner.progress=self.progressbar
+            self.task_runner.progress = self.progressbar
             self.progress_row.visible = False
         # side by side cards for bundle infos left: djvu right: state
         self.card_row = ui.row().classes("w-full")

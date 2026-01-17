@@ -8,11 +8,12 @@ from argparse import Namespace
 
 from ngwidgets.progress import Progressbar
 
+from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_files import DjVuFiles
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.packager import PackageMode
-from djvuviewer.djvu_bundle import DjVuBundle
+
 
 class DjVuContext:
     """
@@ -70,28 +71,27 @@ class DjVuContext:
             url=self.config.base_url, name="wiki", titles=[page_title]
         )
         if wiki_images:
-            mw_images['wiki'] = wiki_images[0]
+            mw_images["wiki"] = wiki_images[0]
 
         if self.config.new_url:
             new_images = self.djvu_files.fetch_images(
                 url=self.config.new_url, name="new", titles=[page_title]
             )
             if new_images:
-                mw_images['new'] = new_images[0]
+                mw_images["new"] = new_images[0]
 
         if not mw_images:
             raise ValueError(f"Image not found in any wiki: {page_title}")
 
         # Use first available image to determine path
         active_image = next(iter(mw_images.values()))
-        djvu_file = self.dproc.get_djvu_file(url=active_image.url,config=self.config,progressbar=progressbar)
+        djvu_file = self.dproc.get_djvu_file(
+            url=active_image.url, config=self.config, progressbar=progressbar
+        )
 
         # Create bundle with MediaWiki metadata
         djvu_bundle = DjVuBundle(
-            djvu_file,
-            config=self.config,
-            debug=self.args.debug,
-            mw_images=mw_images
+            djvu_file, config=self.config, debug=self.args.debug, mw_images=mw_images
         )
 
         return djvu_bundle

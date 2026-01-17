@@ -4,15 +4,16 @@ Created on 2025-02-24
 @author: wf
 """
 
-from argparse import Namespace
 import argparse
 import glob
 import json
 import os
 import shutil
+from argparse import Namespace
 from typing import List, Optional
 
 from basemkit.basetest import Basetest
+
 from djvuviewer.djvu_bundle import DjVuBundle
 from djvuviewer.djvu_cmd import DjVuCmd
 from djvuviewer.djvu_config import DjVuConfig
@@ -82,7 +83,9 @@ class TestDjVu(Basetest):
                     rel_path = MediaWikiImage.relpath_of_url(full_path)
                     if self.debug:
                         print(f"getting DjVuFile for {rel_path}")
-                    djvu_file = self.dproc.get_djvu_file(url=full_path,config=self.config)
+                    djvu_file = self.dproc.get_djvu_file(
+                        url=full_path, config=self.config
+                    )
                     djvu_bundle = DjVuBundle(djvu_file, config=self.config)
                     self.test_bundles.append(djvu_bundle)
         return self.test_bundles
@@ -171,7 +174,7 @@ class TestDjVu(Basetest):
 
             # Convert to bundled format
             djvu_bundle.convert_to_bundled()
-            bundled_path=djvu_bundle.bundled_file_path
+            bundled_path = djvu_bundle.bundled_file_path
             bundle_filesize = self.show_fileinfo(bundled_path)
 
             # Calculate and validate size ratio
@@ -283,7 +286,7 @@ class TestDjVu(Basetest):
             rel_path = MediaWikiImage.relpath_of_url(djvu_path)
             if self.debug:
                 print(f"getting DjVuFile for {rel_path}")
-            djvu_file = self.dproc.get_djvu_file(url=djvu_path,config=self.config)
+            djvu_file = self.dproc.get_djvu_file(url=djvu_path, config=self.config)
             if self.debug:
                 print(djvu_file)
                 print(djvu_file.to_yaml())
@@ -381,7 +384,7 @@ class TestDjVu(Basetest):
             bundle.check_package(package_file, relurl=relurl)
 
         self.assertTrue(
-            bundle.error_count==0,
+            bundle.error_count == 0,
             f"package validation failed for {relurl or package_file}:\n{bundle.get_error_summary()}",
         )
 
