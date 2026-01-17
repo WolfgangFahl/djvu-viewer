@@ -387,7 +387,7 @@ class DjVuDebug:
             # Use TaskRunner for progress/errors
             def on_progress(msg: str):
                 with self.content_row:
-                    self.ui.notifiy(msg)
+                    ui.notify(msg)
                 self.task_runner.log(msg)
 
             def on_error(msg: str):
