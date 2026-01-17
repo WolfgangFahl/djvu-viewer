@@ -43,6 +43,7 @@ class BaseCatalog(GridView):
         self.limit = limit
         self.djvu_files = self.webserver.context.djvu_files
         self.show_todo = False
+        self.show_notify = True
         self.images_url = self.config.base_url
 
         # Setup UI (inherited method)
@@ -116,6 +117,7 @@ class DjVuCatalog(BaseCatalog):
             ).tooltip("bundle the selected DjVu files")
         show_todo_checkbox = ui.checkbox("show todo").bind_value(self, "show_todo")
         show_todo_checkbox.on("click", lambda: self.on_refresh())
+        self.show_notify_checkbox=ui.checkbox("notify").bind_value(self,"show_notify")
 
     def get_source_hint(self) -> str:
         """Provide source hint for DjVu catalog."""
@@ -209,9 +211,10 @@ class DjVuCatalog(BaseCatalog):
 
         # callbacks
         def notify(msg: str, type="info"):
-            with self.grid_row:
-                timeout=100 if type=="info" else 300
-                ui.notify(msg, type=type,timeout=timeout)
+            if self.show_notify:
+                with self.grid_row:
+                    timeout=100 if type=="info" else 300
+                    ui.notify(msg, type=type,timeout=timeout)
 
         def on_error(msg: str):
             notify(f"❌ {filename}: {msg}", type="negative")
