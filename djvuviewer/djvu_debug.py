@@ -15,11 +15,10 @@ from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.widgets import Link
 from nicegui import background_tasks, run, ui
 
-from djvuviewer.djvu_bundle import DjVuBundle
+from ngwidgets.task_runner import TaskRunner
 from djvuviewer.djvu_context import DjVuContext
 from djvuviewer.djvu_core import DjVuPage
 from djvuviewer.djvu_image_job import ImageJob
-from djvuviewer.djvu_processor import DjVuProcessor
 
 
 class DjVuDebug:
@@ -55,7 +54,7 @@ class DjVuDebug:
         self.total_pages = 0
         self.view_lod = []
         self.lod_grid = None
-        self.load_task = None
+        self.task_runner = TaskRunner(timeout=self.config.timeout)
         self.zip_size = 0
         self.bundled_size = 0
 
@@ -67,7 +66,6 @@ class DjVuDebug:
         self.package_type = self.config.package_mode
         self.bundling_enabled = False
 
-        self.timeout = 30.0  # Longer timeout for DjVu processing
         self.ui_container = None
         self.bundle_state_container = None
 
@@ -345,7 +343,7 @@ class DjVuDebug:
 
     def reload_debug_info(self):
         """Create background task to reload debug info."""
-        self.load_task = background_tasks.create(self.load_debug_info())
+        self.task_runner.run_async(self.load_debug_info)
 
     def show_fileinfo(self, path: str) -> int:
         """
@@ -382,44 +380,32 @@ class DjVuDebug:
         return has_errors
 
     async def bundle(self):
-        """
-        run the bundle activities in background
-        """
+        """Run bundling activities in background."""
         try:
-            self.djvu_bundle.use_sudo=self.use_sudo
-            zip_path = self.djvu_bundle.backup_file
-            self.zip_size = self.show_fileinfo(zip_path)
-            if self.create_package:
-                if os.path.exists(self.djvu_bundle.backup_file):
-                    with self.content_row:
-                        ui.notify(f"{self.djvu_bundle.backup_file} already exists")
-                else:
-                    zip_path = self.djvu_bundle.create_backup_zip()
-                    if self.show_bundling_errors("backup zip"):
-                        return
+            self.djvu_bundle.use_sudo = self.use_sudo
 
-            bundled_path = self.djvu_bundle.convert_to_bundled()
-            self.bundled_size = self.show_fileinfo(bundled_path)
-            if self.show_bundling_errors("djvu bundling"):
-                return
-
-            self.djvu_bundle.finalize_bundling(zip_path, bundled_path)
-            if self.show_bundling_errors("replace unbundled with bundled"):
-                return
-
-            docker_cmd = self.djvu_bundle.get_docker_cmd()
-            if docker_cmd and self.update_wiki:
-                result = self.djvu_bundle.shell.run(docker_cmd)
-                if result.returncode != 0:
-                    with self.content_row:
-                        ui.notify("docker command failed")
-            if self.update_index_db:
-                success, msg = self.djvu_bundle.update_index_database()
+            # Use TaskRunner for progress/errors
+            def on_progress(msg: str):
                 with self.content_row:
-                    if success:
-                        ui.notify(msg, type="positive")
-                    else:
-                        ui.notify(msg, type="warning")
+                    self.ui.notifiy(msg)
+                self.task_runner.log(msg)
+
+            def on_error(msg: str):
+                self.task_runner.log(msg, level="error")
+                with self.content_row:
+                    with ui.card().classes("w-full bg-red-50"):
+                        ui.label(msg).classes("text-negative")
+
+            # Run bundling in background thread via TaskRunner
+            _success = await self.task_runner.run_task(
+                self.djvu_bundle.bundle,
+                create_backup=self.create_package,
+                update_wiki=self.update_wiki,
+                update_index_db=self.update_index_db,
+                on_progress=on_progress,
+                on_error=on_error,
+            )
+
             self.update_bundle_state()
 
         except Exception as ex:
@@ -430,29 +416,18 @@ class DjVuDebug:
         handle bundle click
         """
         with self.content_row:
-            self.bundle_task = background_tasks.create(self.bundle())
+            self.task_runner.run_async(self.bundle)
 
     def on_refresh(self):
         """Handle refresh button click."""
-
-        def cancel_running():
-            if self.load_task:
-                self.load_task.cancel()
+        # Cancel any running task using TaskRunner
+        self.task_runner.cancel_running()
 
         # Show loading spinner
-        self.content_row.clear()
-        with self.content_row:
-            ui.spinner()
-        self.content_row.update()
+        self.show_spinner()
 
-        # Cancel any running task
-        cancel_running()
-
-        # Set timeout
-        ui.timer(self.timeout, lambda: cancel_running(), once=True)
-
-        # Reload
-        self.reload_debug_info()
+        # Run reload task asynchronously
+        self.task_runner.run_task(self.reload_debug_info)
 
     def setup_ui(self):
         """Set up the user interface components for the DjVu debug page."""
@@ -492,6 +467,8 @@ class DjVuDebug:
                 desc="Loading DjVu",
                 unit="pages",
             )
+            # attach to the task_runner
+            self.task_runner.progress=self.progressbar
             self.progress_row.visible = False
         # side by side cards for bundle infos left: djvu right: state
         self.card_row = ui.row().classes("w-full")

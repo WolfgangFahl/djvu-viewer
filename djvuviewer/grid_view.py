@@ -284,11 +284,7 @@ class GridView(View):
         self.grid_row.clear()
         self.grid=None
 
-    def on_refresh(self) -> None:
-        """
-        Handle refresh button click.
-        Initiates a background reload and updates the view upon completion.
-        """
+    def show_spinner(self):
         # Show loading spinner
         if self.grid_row:
             self.clear_grid_row()
@@ -296,6 +292,12 @@ class GridView(View):
                 ui.spinner("dots", size="lg")
             self.grid_row.update()
 
+    def on_refresh(self) -> None:
+        """
+        Handle refresh button click.
+        Initiates a background reload and updates the view upon completion.
+        """
+        self.show_spinner()
         # Run background task
         self.run_background_task(self.load_lod)
 

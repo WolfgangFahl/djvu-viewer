@@ -39,6 +39,7 @@ class DjVuConfig:
     )
     backup_path: Optional[str] = None  # Path for bundle backups
     log_path: Optional[str] = None  # Path for log files
+    script_path: Optional[str] = None # Path for bundle scripts
     cache_path: Optional[str] = None  # Path for cached date e.g. mediawiki images
     container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
@@ -48,6 +49,7 @@ class DjVuConfig:
     )
     # package display mode
     package_mode: Optional[str] = "tar"
+    timeout:float=60 # maximum number of secs to wait for a background task to complete
 
     def __post_init__(self):
         """
@@ -61,6 +63,7 @@ class DjVuConfig:
             self.images_path = os.path.join(examples_path, "images")
             self.db_path = os.path.join(examples_path, "djvu_data.db")
             self.backup_path = os.path.join(examples_path, "backup")
+            self.backup_path = os.path.join(examples_path, "scripts")
             # Create log directory for example configuration
             self.log_path = "/tmp/djvu-viewer/log"
             os.makedirs(self.log_path, exist_ok=True)
@@ -69,6 +72,7 @@ class DjVuConfig:
             required_fields = [
                 "package_path",
                 "images_path",
+                "script_path",
                 "db_path",
                 "backup_path",
                 "log_path",

@@ -209,97 +209,58 @@ class DjVuActions:
     def bundle_single_file(
         self,
         url: str,
-        sleep: float = 0.0,
         generate_script: bool = False,
     ) -> Tuple[bool, Optional[str], Optional[str]]:
-        """
-        Bundle a single DjVu file from indirect to bundled format.
-
-        Args:
-            url: URL or filename of the DjVu file to bundle
-            sleep: Sleep time in seconds before finalization
-            generate_script: If True, only generate and return the bundling script
-
-        Returns:
-            Tuple of (success, bundled_path, message)
-            - success: True if bundling was successful
-            - bundled_path: Path to the bundled file (or None if failed/script mode)
-            - message: Script command if generate_script=True, error message if failed,
-                       or success message if successful
-        """
+        """Bundle a single DjVu file from indirect to bundled format."""
         try:
-            # Resolve URL to actual file path
+            # Resolve URL to DjVuBundle
             if not "image/" in url:
                 mw_client = DjVuMediaWikiImages.get_mediawiki_images_client(
                     self.config.new_url
                 )
                 image = mw_client.fetch_image(f"File:{url}")
                 url = image.url
-            relpath=MediaWikiImage.relpath_of_url(url)
+
+            relpath = MediaWikiImage.relpath_of_url(url)
             full_path = self.config.full_path(relpath)
 
             if not os.path.exists(full_path):
                 raise FileNotFoundError(f"File not found: {full_path}")
 
-            # Show original file info
-            _original_size = self.show_fileinfo(full_path)
-
-            djvu_file = self.dproc.get_djvu_file(url=url,config=self.config)
+            djvu_file = self.dproc.get_djvu_file(url=url, config=self.config)
             djvu_bundle = DjVuBundle(djvu_file, config=self.config, debug=self.debug)
 
-            # If only generating script, return it
+            # Generate script mode
             if generate_script:
-                script_cmd = djvu_bundle.generate_bundling_script()
-                return True, None, script_cmd
+                return True, None, djvu_bundle.generate_bundling_script()
 
-            if self.verbose:
-                print(
-                    f"Creating backup for {url}... {djvu_file.page_count} pages {djvu_file.iso_date}"
-                )
-
-            zip_path = djvu_bundle.create_backup_zip()
-            zip_size = self.show_fileinfo(zip_path)
-
-            if self.verbose:
-                print(f"Converting to bundled format...")
-            bundled_path = djvu_bundle.convert_to_bundled()
-
-            # Show bundled file info
-            bundled_size = self.show_fileinfo(bundled_path)
-
-            if self.verbose:
-                print(f"Finalizing bundling...")
-            djvu_bundle.finalize_bundling(zip_path, bundled_path, sleep=sleep)
-
-            if djvu_bundle.error_count>0:
-                self.errors.extend(djvu_bundle.errors)
-                error_msg = f"Bundling failed with {len(djvu_bundle.errors)} errors"
+            # Progress/error callbacks for CLI
+            def on_progress(msg: str):
                 if self.verbose:
-                    print(f"❌ {error_msg}")
-                return False, None, error_msg
+                    print(msg)
 
-            # Success message
-            success_msg = f"✅ Successfully bundled {url}"
-            if self.verbose:
-                print(success_msg)
-
-            # Generate MediaWiki maintenance command if applicable
-            docker_cmd = djvu_bundle.get_docker_cmd()
-            if docker_cmd:
+            def on_error(msg: str):
                 if self.verbose:
-                    print(f"running ...\n{docker_cmd}")
-                result = self.djvu_bundle.shell.run(docker_cmd)
-                if result.returncode != 0:
-                    self.errors.extend(result.stderr)
+                    print(f"❌ {msg}")
+                self.errors.append(Exception(msg))
 
-            return True, bundled_path, success_msg
+            # Execute bundling
+            success = djvu_bundle.bundle(
+                create_backup=True,
+                update_wiki=self.args.get('update_wiki', True),
+                update_index_db=self.args.get('update_index_db', False),
+                on_progress=on_progress,
+                on_error=on_error,
+            )
+
+            bundled_path = djvu_bundle.bundled_file if success else None
+            msg = f"✅ Successfully bundled {url}" if success else f"❌ Bundling failed"
+
+            return success, bundled_path, msg
 
         except Exception as e:
             self.errors.append(e)
-            error_msg = f"Error bundling {url}: {e}"
-            if self.verbose:
-                print(f"❌ {error_msg}")
-            return False, None, error_msg
+            return False, None, f"Error: {e}"
 
     def bundle_djvu_files(self) -> None:
         """
@@ -314,14 +275,13 @@ class DjVuActions:
         This is a wrapper around bundle_single_file() for CLI compatibility.
         """
         url = self.args.url
-        sleep = getattr(self.args, "sleep", 2.0)
         generate_script = getattr(self.args, "script", False)
 
         if not url:
             raise ValueError("bundle is currently only implemented for single files")
 
         success, bundled_path, message = self.bundle_single_file(
-            url=url, sleep=sleep, generate_script=generate_script
+            url=url, generate_script=generate_script
         )
 
         # Print the message (script, success message, or error)

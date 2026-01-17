@@ -4,26 +4,25 @@ Created on 2026-01-03
 @author: wf
 """
 
+from datetime import datetime
 import logging
 import os
+from pathlib import Path
 import re
 import shlex
 import shutil
 import sqlite3
 import subprocess
 import tempfile
-import time
+from typing import Callable,Dict, List, Optional
 import zipfile
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, List, Optional
 
 from basemkit.shell import Shell
-
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVuFile
 from djvuviewer.image_convert import ImageConverter
 from djvuviewer.packager import Packager
+
 
 logger = logging.getLogger(__name__)
 
@@ -819,3 +818,88 @@ main "$@"
         return f"Found {len(self.errors)} error(s):\n" + "\n".join(
             f"  - {error}" for error in self.errors
         )
+
+    def bundle(
+        self,
+        create_backup: bool = True,
+        update_wiki: bool = True,
+        update_index_db: bool = True,
+        on_progress: Optional[Callable[[str], None]] = None,
+        on_error: Optional[Callable[[str], None]] = None,
+    ) -> bool:
+        """
+        Execute complete bundling workflow.
+
+        Args:
+            create_backup: Create backup ZIP before bundling
+            update_wiki: Run MediaWiki maintenance command after bundling
+            update_index_db: Update the index database after bundling
+            on_progress: Callback for progress messages
+            on_error: Callback for error messages
+
+        Returns:
+            bool: True if successful, False if errors occurred
+        """
+        def progress(msg: str):
+            if on_progress:
+                on_progress(msg)
+
+        def error(msg: str):
+            if on_error:
+                on_error(msg)
+
+        try:
+            # Step 1: Create backup (if needed)
+            zip_path = self.backup_file
+            if create_backup and not os.path.exists(zip_path):
+                progress(f"Creating backup ZIP...")
+                zip_path = self.create_backup_zip()
+                if self.error_count > 0:
+                    error(f"Backup failed with {self.error_count} errors")
+                    return False
+                progress(f"Backup created: {zip_path}")
+
+            # Step 2: Convert to bundled format
+            progress("Converting to bundled format...")
+            bundled_path = self.convert_to_bundled()
+            if self.error_count > 0:
+                error(f"Bundling failed with {self.error_count} errors")
+                return False
+            progress(f"Bundled file created: {bundled_path}")
+
+            # Step 3: Finalize (replace original)
+            progress("Finalizing bundling...")
+            self.finalize_bundling(zip_path, bundled_path)
+            if self.error_count > 0:
+                error(f"Finalization failed with {self.error_count} errors")
+                return False
+            progress("Bundling finalized")
+
+            # Step 4: Update MediaWiki (optional)
+            if update_wiki:
+                docker_cmd = self.get_docker_cmd()
+                if docker_cmd:
+                    progress(f"Running MediaWiki update...")
+                    result = self.shell.run(docker_cmd)
+                    if result.returncode != 0:
+                        error(f"MediaWiki update failed: {result.stderr}")
+                        return False
+                    progress("MediaWiki updated")
+
+            # Step 5: Update index database (optional)
+            if update_index_db:
+                progress("Updating index database...")
+                success, msg = self.update_index_database()
+                if success:
+                    progress(msg)
+                else:
+                    error(msg)
+                    return False
+
+            progress(f"✅ Successfully bundled {self.djvu_file.path}")
+            return True
+
+        except Exception as e:
+            self.errors.append(e)
+            error(f"Bundling failed: {e}")
+            return False
