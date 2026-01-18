@@ -28,6 +28,20 @@ class BaseFile:
         avail = self.filesize is not None and self.filesize > 0
         return avail
 
+
+    def formatted_date(self,date_format:str="%Y-%m-%d %H:%M") ->str:
+        """
+        Return the date formatted according to the given date_format.
+        """
+        fmt_date=""
+        if self.iso_date:
+            try:
+                dt = datetime.datetime.fromisoformat(self.iso_date)
+                fmt_date=dt.strftime(date_format)
+            except (ValueError, AttributeError):
+                fmt_date=self.iso_date
+        return fmt_date
+
     @staticmethod
     def get_fileinfo(filepath: str):
         filesize = None
@@ -55,6 +69,11 @@ class BaseFile:
         self.filename = os.path.basename(filepath)
         self.iso_date, self.filesize = self.get_fileinfo(filepath)
 
+    @classmethod
+    def of_path(cls,path:str)->'BaseFile':
+        base_file=cls()
+        base_file.set_fileinfo(path)
+        return base_file
 
 @lod_storable
 class DjVuPage(BaseFile):

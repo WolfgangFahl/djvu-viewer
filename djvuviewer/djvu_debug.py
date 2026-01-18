@@ -6,20 +6,17 @@ Created on 2026-01-02
 @author: wf
 """
 
-import os
-import urllib.parse
 from pathlib import Path
+from typing import Optional
+import urllib.parse
 
+from djvuviewer.djvu_context import DjVuContext
+from djvuviewer.djvu_core import DjVuPage, BaseFile
 from ngwidgets.lod_grid import ListOfDictsGrid
 from ngwidgets.progress import NiceguiProgressbar
 from ngwidgets.task_runner import TaskRunner
 from ngwidgets.widgets import Link
 from nicegui import run, ui
-
-from djvuviewer.djvu_context import DjVuContext
-from djvuviewer.djvu_core import DjVuPage
-from djvuviewer.djvu_image_job import ImageJob
-
 
 class DjVuDebug:
     """
@@ -55,8 +52,8 @@ class DjVuDebug:
         self.view_lod = []
         self.lod_grid = None
         self.task_runner = TaskRunner(timeout=self.config.timeout)
-        self.zip_size = 0
-        self.bundled_size = 0
+        self.zip_file: Optional[BaseFile]=None
+        self.bundled_file: Optional[BaseFile] = None
 
         # options
         self.update_index_db = True
@@ -169,6 +166,12 @@ class DjVuDebug:
         # Header
         ui.html(header_html)
 
+    def file_label(self,base_file:BaseFile):
+        # Add size and iso_date labels when available
+        if base_file.filesize and base_file.filesize > 0:
+            caption=f"{base_file.filesize:,} bytes {base_file.formatted_date()}"
+            ui.label(caption).classes("text-caption text-grey-7")
+
     def update_bundle_state(self):
         """
         update bundle state
@@ -182,36 +185,32 @@ class DjVuDebug:
         self.bundle_state_container.clear()
         with self.bundle_state_container:
             ui.label("Bundling State").classes("text-subtitle1 mb-2")
-            # Bundled Three-state display: ❌ Not bundled | ⚠️ Incomplete | ✅ Bundled
-            if self.djvu_bundle.has_incomplete_bundling:
-                ui.label("⚠️ Incomplete - retry bundling").classes("text-warning")
-                self.bundling_enabled = True  # Allow retry
-            elif self.djvu_file.bundled:
-                ui.label("✅ Bundled").classes("text-positive")
-            else:
-                ui.label("❌ Not bundled").classes("text-grey-7")
-            if self.bundled_size and self.bundled_size > 0:
-                ui.label(f"Size: {self.bundled_size:,} bytes").classes(
-                    "text-caption text-grey-7"
-                )
+            with ui.row():
+                # Bundled Three-state display: ❌ Not bundled | ⚠️ Incomplete | ✅ Bundled
+                if self.djvu_bundle.has_incomplete_bundling:
+                    ui.label("⚠️ Incomplete - retry bundling").classes("text-warning")
+                    self.bundling_enabled = True  # Allow retry
+                elif self.djvu_file.bundled:
+                    ui.label("✅ Bundled").classes("text-positive")
+                else:
+                    ui.label("❌ Not bundled").classes("text-grey-7")
+                if self.djvu_bundle.has_incomplete_bundling:
+                    self.bundled_file=BaseFile.of_path(self.djvu_bundle.bundled_file_path)
+                else:
+                    self.bundled_file=BaseFile.of_path(self.djvu_bundle.full_path)
+                self.file_label(self.bundled_file)
+
 
             # Backup file - just a disabled checkbox and download link
-            backup_exists = os.path.exists(self.djvu_bundle.backup_file)
-            self.create_package = not backup_exists
+            self.zip_file=BaseFile.of_path(self.djvu_bundle.backup_file)
+            self.create_package = not self.zip_file.exists
             with ui.row().classes("gap-4 items-center"):
-                ui.checkbox("Backup exists", value=backup_exists).props("disable")
+                ui.checkbox("Backup exists", value=self.zip_file.exists).props("disable")
 
-                if backup_exists:
-                    backup_rel_path = os.path.relpath(
-                        self.djvu_bundle.backup_file, self.config.backup_path
-                    )
-                    download_url = f"{self.config.url_prefix}/backups/{backup_rel_path}"
-                    ui.link(f"⬇️{backup_rel_path}", download_url).classes("text-primary")
-                    # Add size labels when available
-                    if self.zip_size and self.zip_size > 0:
-                        ui.label(f"{self.zip_size:,} bytes").classes(
-                            "text-caption text-grey-7"
-                        )
+                if self.zip_file.exists:
+                    download_url = f"{self.config.url_prefix}/backups/{self.zip_file.filename}"
+                    ui.link(f"⬇️{self.zip_file.filename}", download_url).classes("text-primary")
+                    self.file_label(self.zip_file)
 
             with ui.expansion("Bundling script", icon="code"):
                 # Script
@@ -342,15 +341,6 @@ class DjVuDebug:
     def reload_debug_info(self):
         """Create background task to reload debug info."""
         self.task_runner.run(self.load_debug_info)
-
-    def show_fileinfo(self, path: str) -> int:
-        """
-        show info for a file
-        """
-        iso_date, filesize = ImageJob.get_fileinfo(path)
-        with self.content_row:
-            ui.notify(f"{path} ({filesize}) {iso_date}")
-        return filesize
 
     def show_bundling_errors(self, title: str) -> bool:
         """

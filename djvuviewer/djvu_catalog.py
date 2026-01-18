@@ -7,13 +7,16 @@ Created on 2024-08-26
 
 @author: wf
 """
-
 from dataclasses import asdict
+import os
 from typing import List
 
+from djvuviewer.djvu_bundle import DjVuBundleFile
+from djvuviewer.djvu_config import DjVuConfig
+from djvuviewer.djvu_core import BaseFile
+from ngwidgets.widgets import Link
 from nicegui import ui
 
-from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.grid_view import GridView
 
 
@@ -55,11 +58,17 @@ class BaseCatalog(GridView):
     def to_view_lod(self):
         """Convert records to view format with row numbers and links."""
         try:
+            if self.progressbar:
+                self.progressbar.total = len(self.lod)
+                self.progressbar.reset()
+                self.progressbar.set_description("Loading ...")
             view_lod = []
             for i, record in enumerate(self.lod):
                 index = i + 1
                 view_record = self.get_view_record(record, index)
                 view_lod.append(view_record)
+                if self.progressbar:
+                    self.progressbar.update(1)
             self.view_lod = view_lod
         except Exception as ex:
             self.solution.handle_exception(ex)
@@ -107,6 +116,7 @@ class DjVuCatalog(BaseCatalog):
         """
         super().__init__(solution=solution, config=config, title="DjVu Index Database")
         self.context = self.webserver.context
+        self.djvu_files_by_path=None
 
     def setup_custom_header_items(self):
         """Add DjVu-specific header items (todo checkbox)."""
@@ -140,13 +150,26 @@ class DjVuCatalog(BaseCatalog):
         record["#"] = index
 
         filename = None
+        djvu_bundle_file= None
         if "path" in record:
             val = record["path"]
+            if val:
+                djvu_file = self.djvu_files_by_path.get(val)
+                if djvu_file:
+                    djvu_bundle_file=DjVuBundleFile(djvu_file,self.config)
             if isinstance(val, str) and "/" in val:
                 filename = val.split("/")[-1]
             else:
                 filename = val
+
         self.djvu_files.add_links(view_record, filename)
+        backup_link=""
+        if djvu_bundle_file:
+            backup_file=BaseFile.of_path(djvu_bundle_file.backup_file)
+            if backup_file.exists:
+                backup_file_url=f"/backups/{backup_file.filename}"
+                backup_link=Link.create(url=backup_file_url,text=backup_file.iso_date)
+        view_record["djvu-backup"]=backup_link
         view_record["filesize"] = record.get("filesize")
         view_record["pages"] = record.get("page_count")
         view_record["date"] = record.get("iso_date")
@@ -190,6 +213,8 @@ class DjVuCatalog(BaseCatalog):
         except Exception as ex:
             self.solution.handle_exception(ex)
         self.lod = lod
+        # Store for later lookup
+        self.djvu_files_by_path = djvu_files_by_path
 
     def get_selected_filenames(self) -> List[str]:
         # Extract paths from selected rows

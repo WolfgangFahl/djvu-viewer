@@ -26,10 +26,57 @@ from djvuviewer.packager import Packager
 
 logger = logging.getLogger(__name__)
 
+class DjVuBundleFile:
+    """
+    Base class for DjVu file path calculations and file system properties.
+    Handles path resolution and derived file name/location calculations.
+    """
 
-class DjVuBundle:
+    def __init__(
+        self,
+        djvu_file: DjVuFile,
+        config: DjVuConfig = None,
+    ):
+        """
+        Initialize DjVuBundleFile with a DjVuFile instance.
+
+        Args:
+            djvu_file: The DjVuFile metadata
+            config: DjVu configuration
+        """
+        self.djvu_file = djvu_file
+        if config is None:
+            config = DjVuConfig.get_instance()
+        self.config = config
+
+        # Calculate base paths once
+        self.full_path = config.full_path(djvu_file.path)
+        self.djvu_dir = os.path.dirname(self.full_path)
+        self.basename = os.path.basename(djvu_file.path)
+        self.stem = os.path.splitext(self.basename)[0]
+
+    @property
+    def bundled_file_path(self) -> str:
+        """Path for the bundled version of the DjVu file."""
+        return os.path.join(self.djvu_dir, f"{self.stem}_bundled.djvu")
+
+    @property
+    def backup_file(self) -> str:
+        """Path for the backup ZIP file."""
+        return os.path.join(self.config.backup_path, f"{self.stem}.zip")
+
+    @property
+    def has_incomplete_bundling(self) -> bool:
+        """Check if bundling was interrupted (both files exist)."""
+        return os.path.exists(self.full_path) and os.path.exists(
+            self.bundled_file_path
+        )
+
+
+class DjVuBundle(DjVuBundleFile):
     """
     DjVu bundle handling with validation and error collection.
+    Extends DjVuBundleFile with bundling operations and error tracking.
     """
 
     def __init__(
@@ -44,20 +91,14 @@ class DjVuBundle:
 
         Args:
             djvu_file: The DjVuFile metadata
-            config: configuration
-            use_sudo: if True, use sudo for file operations
+            config: DjVu configuration
             debug: if True output debug info where appropriate
             mw_images: Optional dict of MediaWiki images keyed by wiki name
         """
-        self.djvu_file = djvu_file
-        if config is None:
-            config = DjVuConfig.get_instance()
-        self.full_path = config.full_path(djvu_file.path)
-        self.djvu_dir = os.path.dirname(self.full_path)
-        self.basename = os.path.basename(djvu_file.path)
-        self.stem = os.path.splitext(self.basename)[0]
-        self.config = config
-        self.use_sudo = config.use_sudo
+        super().__init__(djvu_file, config)
+
+        # Bundle-specific attributes
+        self.use_sudo = self.config.use_sudo
         self.debug = debug
         self.mw_images: Dict[str, "MediaWikiImage"] = mw_images or {}
         self.errors: List[str] = []
@@ -66,29 +107,8 @@ class DjVuBundle:
 
     @property
     def error_count(self) -> int:
-        """Check if the bundle has errors."""
-        error_count = len(self.errors)
-        return error_count
-
-    @property
-    def bundled_file_path(self) -> str:
-        bundled_file_path = os.path.join(self.djvu_dir, f"{self.stem}_bundled.djvu")
-        return bundled_file_path
-
-    @property
-    def backup_file(self) -> str:
-        # Create backup ZIP path
-        backup_file = os.path.join(self.config.backup_path, f"{self.stem}.zip")
-        return backup_file
-
-    @property
-    def has_incomplete_bundling(self) -> bool:
-        """Check if bundling was interrupted (both files exist)."""
-        incomplete = os.path.exists(self.full_path) and os.path.exists(
-            self.bundled_file_path
-        )
-        return incomplete
-
+        """Get the number of errors in the bundle."""
+        return len(self.errors)
     @property
     def image_wiki(self) -> Optional["MediaWikiImage"]:
         """Get image from main wiki."""

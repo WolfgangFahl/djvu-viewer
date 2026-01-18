@@ -355,11 +355,11 @@ class GridView(View):
         Synchronize the UI grid with the current logical data state.
 
         1. Converts logical data (lod) to view data (view_lod).
-        2. Sets up the header with source info.
         3. Re-renders or updates the grid component.
         """
         try:
             # Transform data
+            self.show_progress_bar()
             self.to_view_lod()
 
             # Setup header with source info
@@ -370,6 +370,7 @@ class GridView(View):
             self.clear_grid_row()
             # First time render
             await self.render_grid()
+            self.hide_progress_bar()
 
             # Update container if exists
             if self.ui_container:
