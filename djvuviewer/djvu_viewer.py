@@ -4,6 +4,7 @@ Created on 2025-02-25
 
 @author: wf
 """
+from urllib.parse import unquote_plus
 
 import logging
 import mimetypes
@@ -64,8 +65,11 @@ class DjVuViewer:
 
     def sanitize_path(self, path: str) -> str:
         """
-        fix mediawiki path quirks e.g. with blanks
+        Fix mediawiki path quirks e.g. with blanks and plus signs
         """
+        # Decode URL encoding (+ and %20 both become spaces)
+        path = unquote_plus(path)
+        # Convert spaces to underscores
         path = path.replace(" ", "_")
         return path
 
