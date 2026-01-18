@@ -169,7 +169,7 @@ class DjVuCatalog(BaseCatalog):
                 backup_file_url=f"/backups/{backup_file.filename}"
                 backup_link=Link.create(url=backup_file_url,text=backup_file.filename)
         view_record["djvu-backup"]=backup_link
-        view_record["backup-size"]=backup_file.filesize or ""
+        view_record["backup-size"]=backup_file.filesize
         view_record["backup-date"]=backup_file.formatted_date() or ""
         view_record["filesize"] = record.get("filesize")
         view_record["pages"] = record.get("page_count")
