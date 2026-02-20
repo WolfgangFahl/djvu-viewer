@@ -35,7 +35,10 @@ class DjVuConfig:
     images_path: Optional[str] = None  # MediaWiki images directory
     db_path: Optional[str] = None  # full Path for the djvu index database
     queries_path: Optional[str] = (
-        None  # Path for YAML files with named parameterized queries
+        None  # Path for YAML files with named parameterized queries (djvu SQLite)
+    )
+    wiki_queries_path: Optional[str] = (
+        None  # Path for YAML files with wiki MariaDB queries
     )
     backup_path: Optional[str] = None  # Path for bundle backups
     log_path: Optional[str] = None  # Path for log files
@@ -61,6 +64,8 @@ class DjVuConfig:
         examples_path = DjVuConfig.get_examples_path()
         if self.queries_path is None:
             self.queries_path = os.path.join(examples_path, "djvu_queries.yaml")
+        if self.wiki_queries_path is None:
+            self.wiki_queries_path = os.path.join(examples_path, "wiki_queries.yaml")
         if self.is_example:
             self.package_path = os.path.join(examples_path, "djvu_images")
             self.images_path = os.path.join(examples_path, "images")

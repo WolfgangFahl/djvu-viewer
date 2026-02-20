@@ -14,6 +14,20 @@
       sum(page_count) as pages
     FROM DjVu
 
+# Statistik für --info: Anzahl, älteste/neueste Datei, Seitenanzahl, Größe
+'djvu_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      min(iso_date) as oldest,
+      max(iso_date) as newest,
+      max(page_count) as max_pages,
+      round(avg(page_count), 1) as avg_pages,
+      max(filesize) as max_filesize,
+      round(avg(filesize), 0) as avg_filesize
+    FROM DjVu
+
 # Bilder nach DPI zählen
 'dpi':
   param_list:

@@ -90,5 +90,6 @@ only-include = ["djvuviewer","djvuviewer_examples"]
 [project.scripts]
 djvuconv = "djvuviewer.djvu_cmd:main"
 djvuviewer = "djvuviewer.djvu_webcmd:main"
+djvu_migration = "djvuviewer.djvu_migration:main"
 
 

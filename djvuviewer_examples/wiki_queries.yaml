@@ -1,0 +1,16 @@
+#
+# SQL queries auf MediaWiki Datenbank (MariaDB)
+# WF 2026-02-20
+#
+
+# Statistik der DjVu-Dateien in der Wiki-Datenbank
+# Anzahl, älteste und neueste Datei
+'wiki_djvu_stats':
+  sql: |
+    SELECT
+      count(*) as files,
+      min(img_timestamp) as oldest,
+      max(img_timestamp) as newest
+    FROM image
+    WHERE img_media_type = 'OFFICE'
+      AND img_minor_mime = 'vnd.djvu'
