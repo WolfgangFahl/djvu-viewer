@@ -1,0 +1,12 @@
+#
+# SQL endpoints for djvu-viewer
+# WF 2026-02-21
+#
+endpoints:
+  'djvu_migrate':
+    name: djvu_migrate
+    description: In-memory SQLite federation database for migration info
+    lang: sql
+    endpoint: ':memory:'
+    database: sqlite
+
