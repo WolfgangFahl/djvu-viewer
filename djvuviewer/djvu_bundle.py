@@ -26,6 +26,7 @@ from djvuviewer.packager import Packager
 
 logger = logging.getLogger(__name__)
 
+
 class DjVuBundleFile:
     """
     Base class for DjVu file path calculations and file system properties.
@@ -68,9 +69,7 @@ class DjVuBundleFile:
     @property
     def has_incomplete_bundling(self) -> bool:
         """Check if bundling was interrupted (both files exist)."""
-        return os.path.exists(self.full_path) and os.path.exists(
-            self.bundled_file_path
-        )
+        return os.path.exists(self.full_path) and os.path.exists(self.bundled_file_path)
 
 
 class DjVuBundle(DjVuBundleFile):
@@ -109,6 +108,7 @@ class DjVuBundle(DjVuBundleFile):
     def error_count(self) -> int:
         """Get the number of errors in the bundle."""
         return len(self.errors)
+
     @property
     def image_wiki(self) -> Optional["MediaWikiImage"]:
         """Get image from main wiki."""

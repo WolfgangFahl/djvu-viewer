@@ -7,15 +7,16 @@ Created on 2024-08-26
 
 @author: wf
 """
+
 from dataclasses import asdict
 from typing import List
+
+from ngwidgets.widgets import Link
+from nicegui import ui
 
 from djvuviewer.djvu_bundle import DjVuBundleFile
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import BaseFile
-from ngwidgets.widgets import Link
-from nicegui import ui
-
 from djvuviewer.grid_view import GridView
 
 
@@ -115,7 +116,7 @@ class DjVuCatalog(BaseCatalog):
         """
         super().__init__(solution=solution, config=config, title="DjVu Index Database")
         self.context = self.webserver.context
-        self.djvu_files_by_path=None
+        self.djvu_files_by_path = None
 
     def setup_custom_header_items(self):
         """Add DjVu-specific header items (todo checkbox)."""
@@ -126,7 +127,9 @@ class DjVuCatalog(BaseCatalog):
             ).tooltip("bundle the selected DjVu files")
         show_todo_checkbox = ui.checkbox("show todo").bind_value(self, "show_todo")
         show_todo_checkbox.on("click", lambda: self.on_refresh())
-        self.show_notify_checkbox=ui.checkbox("notify").bind_value(self,"show_notify")
+        self.show_notify_checkbox = ui.checkbox("notify").bind_value(
+            self, "show_notify"
+        )
 
     def get_source_hint(self) -> str:
         """Provide source hint for DjVu catalog."""
@@ -149,28 +152,30 @@ class DjVuCatalog(BaseCatalog):
         record["#"] = index
 
         filename = None
-        djvu_bundle_file= None
+        djvu_bundle_file = None
         if "path" in record:
             val = record["path"]
             if val:
                 djvu_file = self.djvu_files_by_path.get(val)
                 if djvu_file:
-                    djvu_bundle_file=DjVuBundleFile(djvu_file,self.config)
+                    djvu_bundle_file = DjVuBundleFile(djvu_file, self.config)
             if isinstance(val, str) and "/" in val:
                 filename = val.split("/")[-1]
             else:
                 filename = val
 
         self.djvu_files.add_links(view_record, filename)
-        backup_link=""
+        backup_link = ""
         if djvu_bundle_file:
-            backup_file=BaseFile.of_path(djvu_bundle_file.backup_file)
+            backup_file = BaseFile.of_path(djvu_bundle_file.backup_file)
             if backup_file.exists:
-                backup_file_url=f"/backups/{backup_file.filename}"
-                backup_link=Link.create(url=backup_file_url,text=backup_file.filename)
-        view_record["djvu-backup"]=backup_link
-        view_record["backup-size"]=backup_file.filesize
-        view_record["backup-date"]=backup_file.formatted_date() or ""
+                backup_file_url = f"/backups/{backup_file.filename}"
+                backup_link = Link.create(
+                    url=backup_file_url, text=backup_file.filename
+                )
+        view_record["djvu-backup"] = backup_link
+        view_record["backup-size"] = backup_file.filesize
+        view_record["backup-date"] = backup_file.formatted_date() or ""
         view_record["filesize"] = record.get("filesize")
         view_record["pages"] = record.get("page_count")
         view_record["date"] = record.get("iso_date")
@@ -205,8 +210,11 @@ class DjVuCatalog(BaseCatalog):
                     is_in_wiki, _ = self.djvu_files.in_cache(df.filename, "wiki")
                     is_in_new, _ = self.djvu_files.in_cache(df.filename, "new")
 
-                    do_add = (not df.bundled and df.filesize is not None
-                         and (is_in_wiki or is_in_new))
+                    do_add = (
+                        not df.bundled
+                        and df.filesize is not None
+                        and (is_in_wiki or is_in_new)
+                    )
 
                 if do_add:
                     lod.append(asdict(df))
@@ -239,8 +247,8 @@ class DjVuCatalog(BaseCatalog):
         def notify(msg: str, type="info"):
             if self.show_notify:
                 with self.grid_row:
-                    timeout=100 if type=="info" else 300
-                    ui.notify(msg, type=type,timeout=timeout)
+                    timeout = 100 if type == "info" else 300
+                    ui.notify(msg, type=type, timeout=timeout)
 
         def on_error(msg: str):
             notify(f"❌ {filename}: {msg}", type="negative")

@@ -9,12 +9,13 @@ from argparse import ArgumentParser, Namespace
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
+from ngwidgets.progress import TqdmProgressbar
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
+from djvuviewer.djvu_wikimages import DjVuImagesCache
 from djvuviewer.multilang_querymanager import MultiLanguageQueryManager
 from djvuviewer.version import Version
-from djvuviewer.wiki_images import MediaWikiImages
 
 
 class DjVuMigration(BaseCmd):
@@ -96,23 +97,6 @@ class DjVuMigration(BaseCmd):
         except Exception as ex:
             print(f"  Wiki DB query failed: {ex}")
         return None
-        try:
-            import os
-
-            em = EndpointManager.of_yaml(
-                yaml_path=os.path.expanduser("~/.pylodstorage/endpoints.yaml")
-            )
-            endpoint = em.get_endpoint(self.config.wiki_endpoint)
-            backend = get_sql_backend(endpoint)
-            mlqm = MultiLanguageQueryManager(yaml_path=queries_path, languages=["sql"])
-            q = mlqm.query4Name("wiki_djvu_stats")
-            if q is None:
-                return None
-            rows = backend.query(q.query)
-            return rows[0] if rows else None
-        except Exception as ex:
-            print(f"  Wiki DB query failed: {ex}")
-        return None
 
     def query_sqlite(self) -> Optional[dict]:
         """
@@ -137,21 +121,26 @@ class DjVuMigration(BaseCmd):
             Dict with API stats or None on error
         """
         try:
-            api_url = self.config.base_url.rstrip("/") + "/api.php"
-            client = MediaWikiImages(
-                api_url=api_url,
-                mime_types=("image/vnd.djvu", "image/x-djvu"),
-                aiprop=("url", "mime", "size", "timestamp"),
-                timeout=30,
+            url = self.config.base_url
+            progressbar = TqdmProgressbar(
+                total=10000, desc="Fetching MediaWiki images", unit="files"
             )
-            images = client.fetch_allimages(limit=10000, as_objects=True)
+            cache = DjVuImagesCache.from_cache(
+                config=self.config,
+                url=url,
+                name="wiki",
+                limit=10000,
+                progressbar=progressbar,
+            )
+            images = cache.images
             if images:
                 timestamps = sorted(img.timestamp for img in images if img.timestamp)
-                return {
+                result = {
                     "files": len(images),
                     "oldest": timestamps[0] if timestamps else None,
                     "newest": timestamps[-1] if timestamps else None,
                 }
+                return result
         except Exception as ex:
             print(f"  API cache query failed: {ex}")
         return None

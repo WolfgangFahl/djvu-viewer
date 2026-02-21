@@ -92,8 +92,9 @@ class DjVuFiles:
 
         return False, filename
 
-
-    def add_link(self, view_record: Dict[str, Any], filename: str, new: bool = False) -> None:
+    def add_link(
+        self, view_record: Dict[str, Any], filename: str, new: bool = False
+    ) -> None:
         """Add a wiki link to the view record."""
         name = "new" if new else "wiki"
         url = self.config.wiki_fileurl(filename, new=new)
@@ -188,7 +189,7 @@ class DjVuFiles:
                         param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
                     )
                     for djvu_page_record in djvu_page_records:
-                        djvu_page = DjVuPage.from_dict( # @UndefinedVariable
+                        djvu_page = DjVuPage.from_dict(  # @UndefinedVariable
                             djvu_page_record
                         )
                         djvu_file.pages.append(djvu_page)
