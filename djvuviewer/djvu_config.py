@@ -47,6 +47,12 @@ class DjVuConfig:
     container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
     new_url: Optional[str] = None
+    wiki_endpoint: Optional[str] = (
+        "genwiki"  # endpoint name in ~/.pylodstorage/endpoints.yaml
+    )
+    gov_endpoint: Optional[str] = (
+        "https://gov.genealogy.net/sparql"  # GOV SPARQL endpoint URL
+    )
     url_prefix: Optional[str] = (
         ""  # URL prefix for proxied deployments (e.g., "/djvu-viewer")
     )

@@ -65,6 +65,15 @@ python -m build
 - Use **isort** for import organization
 - Use **Google-style docstrings** (as indicated by README badge)
 - Use type hints throughout the codebase
+- Never use return expressions assign return vars for debugging with meaningful names
+- avoid multiple return statements assign the default return value to the return var and flow to the end if
+the code does not get to complex
+  # Bad: return f(g(h(i(pi*3),l(x))
+  # Good:
+  flight_area=...
+  return flight_area
+
+
 
 ### Imports Organization
 Order imports in this sequence with blank lines between groups:
@@ -202,6 +211,22 @@ class DjVuCmd(BaseCmd):
 - Use `pyproject.toml` for project metadata and dependencies
 - Version managed via `hatchling` in `djvuviewer/__init__.py`
 - Optional test dependencies under `[project.optional-dependencies]`
+
+### Named Parameterized Queries — STAY AT ABSTRACTION LEVEL
+
+This project uses the **Named Parameterized Query** abstraction from `lodstorage` / `pylodstorage`.
+Queries are defined by name in YAML files and executed via `MultiLanguageQueryManager` and `DjVuManager`.
+
+**CRITICAL RULE: Never bypass the abstraction. When in doubt ASK THE USER.**
+- DO NOT inspect raw `Query` object internals
+- DO NOT wire up database connections manually
+- DO NOT use raw `SQLDB`, `mysql.connector`, `pymysql` or any driver directly
+- DO use `DjVuManager.query(query_name, param_dict)` for SQLite queries
+- DO get the SQL string via `q = mlqm.query4Name(name)` then pass `q.query` to `get_sql_backend(endpoint).query(q.query)`
+- DO use `get_sql_backend()` from `lodstorage.sql_backend` with an `Endpoint` from `EndpointManager.of_yaml()` for MariaDB
+- DO add new SQL queries as named entries in the appropriate YAML file (`djvu_queries.yaml` or `wiki_queries.yaml`)
+- DO configure the endpoint name in `DjVuConfig.wiki_endpoint`
+- When you do not know how to execute a query at the abstraction level — STOP and ASK THE USER
 
 ## Dependencies
 - **pybasemkit**: Base classes, YAML/JSON I/O, CLI tooling

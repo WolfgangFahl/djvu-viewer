@@ -5,13 +5,10 @@ Created on 2026-02-20
 """
 
 import argparse
-import os
 from argparse import ArgumentParser, Namespace
 from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
-from lodstorage.mysql import MySqlQuery
-from lodstorage.query import EndpointManager, QueryManager
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
@@ -60,26 +57,6 @@ class DjVuMigration(BaseCmd):
             action="store_true",
             help="Show statistics from all three sources (wiki DB, SQLite, API cache)",
         )
-        parser.add_argument(
-            "--wiki-url",
-            default="https://wiki.genealogy.net/",
-            help="MediaWiki base URL for API queries (default: %(default)s)",
-        )
-        parser.add_argument(
-            "--db-path",
-            default=self.config.db_path,
-            help="Path to DjVu SQLite database (default: %(default)s)",
-        )
-        parser.add_argument(
-            "--wiki-queries-path",
-            default=self.config.wiki_queries_path,
-            help="Path to YAML file with wiki MariaDB queries (default: %(default)s)",
-        )
-        parser.add_argument(
-            "--gov-endpoint",
-            default="https://gov.genealogy.net/sparql",
-            help="GOV SPARQL endpoint URL (default: %(default)s)",
-        )
         return parser
 
     def handle_args(self, args: Namespace) -> bool:
@@ -94,34 +71,44 @@ class DjVuMigration(BaseCmd):
         """
         handled = super().handle_args(args)
         if args.info:
-            self.config.db_path = args.db_path
             self.show_info()
             handled = True
         return handled
 
     def query_wiki_db(self) -> Optional[dict]:
         """
-        Query wiki MariaDB via EndpointManager + QueryManager + MySqlQuery.
-        Uses endpoint 'genwiki39' from ~/.pylodstorage/endpoints.yaml.
+        Query wiki MariaDB via MultiLanguageQueryManager with endpoint_name.
 
         Returns:
             Dict with wiki DB stats or None if endpoint not configured
         """
-        queries_path = self.args.wiki_queries_path
+        queries_path = self.config.wiki_queries_path
         if not queries_path:
             return None
         try:
-            ep_path = os.path.expanduser("~/.pylodstorage/endpoints.yaml")
-            em = EndpointManager.load_from_yaml_file(ep_path)
-            ep = em.endpoints.get("genwiki39")
-            if ep is None:
-                return None
-            qm = QueryManager(lang="sql", queriesPath=queries_path, with_default=False)
-            q = qm.queriesByName.get("wiki_djvu_stats")
+            mlqm = MultiLanguageQueryManager(
+                yaml_path=queries_path,
+                endpoint_name=self.config.wiki_endpoint,
+                languages=["sql"],
+            )
+            rows = mlqm.query("wiki_djvu_stats")
+            return rows[0] if rows else None
+        except Exception as ex:
+            print(f"  Wiki DB query failed: {ex}")
+        return None
+        try:
+            import os
+
+            em = EndpointManager.of_yaml(
+                yaml_path=os.path.expanduser("~/.pylodstorage/endpoints.yaml")
+            )
+            endpoint = em.get_endpoint(self.config.wiki_endpoint)
+            backend = get_sql_backend(endpoint)
+            mlqm = MultiLanguageQueryManager(yaml_path=queries_path, languages=["sql"])
+            q = mlqm.query4Name("wiki_djvu_stats")
             if q is None:
                 return None
-            sql = q.params.apply_parameters_with_check({})
-            rows = MySqlQuery(ep).execute_sql_query(sql)
+            rows = backend.query(q.query)
             return rows[0] if rows else None
         except Exception as ex:
             print(f"  Wiki DB query failed: {ex}")
@@ -150,7 +137,7 @@ class DjVuMigration(BaseCmd):
             Dict with API stats or None on error
         """
         try:
-            api_url = self.args.wiki_url.rstrip("/") + "/api.php"
+            api_url = self.config.base_url.rstrip("/") + "/api.php"
             client = MediaWikiImages(
                 api_url=api_url,
                 mime_types=("image/vnd.djvu", "image/x-djvu"),
@@ -159,9 +146,7 @@ class DjVuMigration(BaseCmd):
             )
             images = client.fetch_allimages(limit=10000, as_objects=True)
             if images:
-                timestamps = sorted(
-                    img.timestamp for img in images if img.timestamp
-                )
+                timestamps = sorted(img.timestamp for img in images if img.timestamp)
                 return {
                     "files": len(images),
                     "oldest": timestamps[0] if timestamps else None,
