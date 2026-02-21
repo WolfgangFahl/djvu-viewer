@@ -4,27 +4,10 @@
 # WF 2025-02-28
 #
 
+# --- Migration federation queries (run against djvu_migrate in-memory db) ---
+# Tables loaded by DjVuMigration.prepare(): djvu, mw_images, wiki
 
-# Gesamtanzahl der Dateien und Seiten ermitteln
-'total':
-  param_list:
-  sql: |
-    SELECT
-      count(*) as files,
-      sum(page_count) as pages
-    FROM DjVu
-
-# Statistik der MediaWiki Images: Anzahl, älteste/neueste Datei
-'mw_images_stats':
-  param_list:
-  sql: |
-    SELECT
-      count(*) as files,
-      min(timestamp) as oldest,
-      max(timestamp) as newest
-    FROM MediaWikiImage
-
-# Statistik für --info: Anzahl, älteste/neueste Datei, Seitenanzahl, Größe
+# Stats for the djvu table (extracted from DjVu SQLite)
 'djvu_stats':
   param_list:
   sql: |
@@ -36,6 +19,37 @@
       round(avg(page_count), 1) as avg_pages,
       max(filesize) as max_filesize,
       round(avg(filesize), 0) as avg_filesize
+    FROM djvu
+
+# Stats for the mw_images table (extracted from MediaWiki API cache)
+'mw_images_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      min(timestamp) as oldest,
+      max(timestamp) as newest
+    FROM mw_images
+
+# Stats for the wiki table (extracted from MariaDB)
+'wiki_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      min(oldest) as oldest,
+      max(newest) as newest
+    FROM wiki
+
+# --- DjVu SQLite queries (run against the real DjVu SQLite db via DjVuManager) ---
+
+# Gesamtanzahl der Dateien und Seiten ermitteln
+'total':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      sum(page_count) as pages
     FROM DjVu
 
 # Bilder nach DPI zählen
@@ -106,7 +120,7 @@
     ORDER BY path
     LIMIT {{ limit }}
 
- # Alle Bild-Datensätze für einen Pfad mit konfigurierbarem Limit abrufen
+# Alle Bild-Datensätze für einen Pfad mit konfigurierbarem Limit abrufen
 'all_pages_for_path':
   param_list:
     - name: limit

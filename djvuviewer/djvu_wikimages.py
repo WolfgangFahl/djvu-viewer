@@ -112,11 +112,15 @@ class DjVuImagesCache:
     def to_lod(self) -> List[dict]:
         """
         Convert the image list to a list of dicts for storage and tabular display.
+        Columns that are None in every row are dropped.
 
         Returns:
             List of dicts, one per image, using MediaWikiImage dataclass fields.
         """
         lod = [img.__dict__ for img in self.images]
+        if lod:
+            always_none = {k for k in lod[0] if all(r.get(k) is None for r in lod)}
+            lod = [{k: v for k, v in r.items() if k not in always_none} for r in lod]
         return lod
 
     @classmethod

@@ -28,53 +28,24 @@ class TestDjVuMigration(Basetest):
         Basetest.setUp(self, debug=debug, profile=profile)
         self.config = DjVuConfig(is_example=True)
 
-    def test_info_sqlite(self):
+    def test_extract_djvu(self):
         """
-        Test --info: SQLite query returns expected stats structure
-        """
-        from djvuviewer.djvu_manager import DjVuManager
-
-        manager = DjVuManager(self.config)
-        rows = manager.query("djvu_stats")
-        self.assertIsNotNone(rows)
-        self.assertEqual(len(rows), 1)
-        stats = rows[0]
-        if self.debug:
-            print(f"SQLite stats: {stats}")
-        for key in [
-            "files",
-            "oldest",
-            "newest",
-            "max_pages",
-            "avg_pages",
-            "max_filesize",
-            "avg_filesize",
-        ]:
-            self.assertIn(key, stats, f"Missing key: {key}")
-
-    def test_info_output(self):
-        """
-        Test --info runs without error using example config
+        Test extract_djvu returns table name 'djvu' and expected stats keys
         """
         migration = DjVuMigration.__new__(DjVuMigration)
         migration.config = self.config
-        migration.args = argparse.Namespace(
-            info=True,
-            wiki_url="https://wiki.genealogy.net/",
-            db_path=self.config.db_path,
-            wiki_endpoint="genwiki39",
-            queries_path=self.config.queries_path,
-        )
-        migration.show_info()
+        table, lod = migration.extract_djvu()
+        self.assertEqual(table, "djvu")
+        self.assertIsNotNone(lod)
+        self.assertGreater(len(lod), 0)
+        for key in ["iso_date", "page_count", "filesize"]:
+            self.assertIn(key, lod[0], f"Missing key: {key}")
+        if self.debug:
+            print(f"extract_djvu: {len(lod)} rows, first: {lod[0]}")
 
-    def test_query_mw_images_uses_cache_with_progressbar(self):
+    def test_extract_mw_images_uses_cache_with_progressbar(self):
         """
-        Test that query_mw_images uses DjVuImagesCache.from_cache and passes a progressbar.
-
-        Verifies:
-        1. DjVuImagesCache.from_cache is called (cache is used, not bypassed)
-        2. A Progressbar instance is passed as the progressbar argument
-        3. Result is a list of dicts with a 'files' key
+        Test that extract_mw_images uses DjVuImagesCache.from_cache and passes a progressbar.
         """
         fake_image = MagicMock(spec=MediaWikiImage)
         fake_image.timestamp = "2020-01-01T00:00:00Z"
@@ -97,23 +68,26 @@ class TestDjVuMigration(Basetest):
             "djvuviewer.djvu_migrate.DjVuImagesCache.from_cache",
             return_value=fake_cache,
         ) as mock_from_cache:
-            result = migration.query_mw_images()
+            table, lod = migration.extract_mw_images()
 
-        # Cache must have been used
         mock_from_cache.assert_called_once()
         call_kwargs = mock_from_cache.call_args.kwargs
-
-        # A progressbar must have been passed
         progressbar = call_kwargs.get("progressbar")
         self.assertIsNotNone(progressbar, "progressbar must be passed to from_cache")
-        self.assertIsInstance(
-            progressbar, Progressbar, "progressbar must be a Progressbar instance"
-        )
+        self.assertIsInstance(progressbar, Progressbar)
 
-        # Result must be a list of dicts with 'files'
-        self.assertIsNotNone(result)
-        self.assertIsInstance(result, list)
-        stats = result[0]
-        self.assertEqual(stats["files"], 1)
+        self.assertEqual(table, "mw_images")
+        self.assertIsNotNone(lod)
+        self.assertEqual(len(lod), 1)
+        self.assertEqual(lod[0]["url"], fake_image.url)
         if self.debug:
-            print(f"query_mw_images result: {result}")
+            print(f"extract_mw_images result: {lod}")
+
+    def test_show_info(self):
+        """
+        Test show_info runs without error using example config
+        """
+        migration = DjVuMigration.__new__(DjVuMigration)
+        migration.config = self.config
+        migration.args = argparse.Namespace(info=True, format="simple")
+        migration.show_info()

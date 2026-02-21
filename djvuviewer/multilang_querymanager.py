@@ -3,7 +3,6 @@ Created on 2024-09-12
 @author: wf
 """
 
-import os
 from typing import List, Optional
 
 from lodstorage.query import EndpointManager, Query, QueryManager
@@ -16,9 +15,8 @@ class MultiLanguageQueryManager:
     Query manager for multiple languages with optional SQL backend support.
     If endpoint_name is given, queries are executed via get_sql_backend.
 
-    The endpoints.yaml is resolved in this order:
-    1. endpoints_path argument (project-specific, e.g. djvuviewer_examples/endpoints.yaml)
-    2. ~/.pylodstorage/endpoints.yaml (user default, merged by EndpointManager)
+    endpoints_path: project-specific endpoints.yaml (e.g. djvuviewer_examples/endpoints.yaml).
+    If None, falls back to ~/.pylodstorage/endpoints.yaml.
     """
 
     def __init__(
@@ -35,9 +33,8 @@ class MultiLanguageQueryManager:
         Args:
             yaml_path: Path to the project YAML queries file.
                        If None, only the lodstorage default queries.yaml is loaded.
-            endpoint_name: Name of the endpoint in endpoints.yaml to use for queries.
-            endpoints_path: Path to the project endpoints.yaml.
-                            Falls back to ~/.pylodstorage/endpoints.yaml when not given.
+            endpoint_name: Name of the endpoint to use for queries.
+            endpoints_path: Path to project endpoints.yaml, or None for user default.
             languages: Query languages to load (sql, sparql, ask).
             debug: Enable debug output.
         """
@@ -60,28 +57,10 @@ class MultiLanguageQueryManager:
 
         self._backend = None
         if endpoint_name:
-            resolved = self._resolve_endpoints_path(endpoints_path)
-            em = EndpointManager.of_yaml(yaml_path=resolved)
+            yaml = endpoints_path or YamlPath.getDefaultPath("endpoints.yaml")
+            em = EndpointManager.of_yaml(yaml_path=yaml)
             endpoint = em.get_endpoint(endpoint_name)
             self._backend = get_sql_backend(endpoint)
-
-    @staticmethod
-    def _resolve_endpoints_path(endpoints_path: Optional[str]) -> str:
-        """
-        Return the endpoints.yaml path to use.
-
-        Args:
-            endpoints_path: Explicit project endpoints.yaml path, or None.
-
-        Returns:
-            Resolved path — explicit path if given and exists, otherwise
-            the lodstorage user default (~/.pylodstorage/endpoints.yaml).
-        """
-        if endpoints_path and os.path.isfile(endpoints_path):
-            resolved = endpoints_path
-        else:
-            resolved = YamlPath.getDefaultPath("endpoints.yaml")
-        return resolved
 
     def query4Name(self, name: str) -> Query:
         """
@@ -100,7 +79,9 @@ class MultiLanguageQueryManager:
                 break
         return result
 
-    def store_lod(self, lod: List[dict], entity_name: str, primary_key: str) -> None:
+    def store_lod(
+        self, lod: List[dict], entity_name: str, primary_key: Optional[str] = None
+    ) -> None:
         """
         Store a list of dicts into the configured backend (SQLite only).
 
@@ -109,8 +90,9 @@ class MultiLanguageQueryManager:
             entity_name: Table name to create/populate.
             primary_key: Column to use as primary key.
         """
+        non_none_first = sorted(lod, key=lambda r: sum(v is None for v in r.values()))
         entity_info = self._backend.createTable(
-            lod, entity_name, primary_key, withCreate=True, withDrop=True
+            non_none_first, entity_name, primary_key, withCreate=True, withDrop=True
         )
         self._backend.store(
             lod, entityInfo=entity_info, executeMany=True, fixNone=True, replace=True

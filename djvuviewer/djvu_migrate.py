@@ -6,10 +6,14 @@ Created on 2026-02-20
 
 import argparse
 from argparse import ArgumentParser, Namespace
-from typing import List, Optional
+from typing import List, Optional, Tuple
+
+import logging
 
 from basemkit.base_cmd import BaseCmd
 from ngwidgets.progress import TqdmProgressbar
+
+logger = logging.getLogger(__name__)
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
@@ -22,11 +26,14 @@ class DjVuMigration(BaseCmd):
     """
     Command-line tool for DjVu migration to MediaWiki 1.39.
 
-    Queries three sources via named parameterized queries
-    (MultiLanguageQueryManager - sql, sparql, ask):
-    1. Wiki database (MariaDB)        — endpoint: genwiki39
-    2. DjVu-Viewer database (SQLite)  — endpoint: djvu
-    3. MediaWiki images               — endpoint: mw_images (in-memory SQLite)
+    All three sources are extracted into a single in-memory federation db
+    (djvu_migrate endpoint) as tables named after their domain prefix:
+      djvu       — extracted from DjVu SQLite
+      mw_images  — extracted from MediaWiki API cache
+      wiki       — extracted from MariaDB (genwiki39)
+
+    Stats queries (djvu_stats, mw_images_stats, wiki_stats) then run
+    against that single db via MultiLanguageQueryManager.
 
     See https://djvu-wiki.genealogy.net/DjVu-Viewer_Integration
     """
@@ -56,7 +63,7 @@ class DjVuMigration(BaseCmd):
         parser.add_argument(
             "--info",
             action="store_true",
-            help="Show statistics from all three sources (wiki DB, SQLite, mw_images)",
+            help="Show migration statistics from all sources",
         )
         parser.add_argument(
             "--format",
@@ -86,125 +93,143 @@ class DjVuMigration(BaseCmd):
             handled = True
         return handled
 
-    def query_wiki_db(self) -> Optional[List[dict]]:
+    def extract_djvu(self) -> Tuple[str, Optional[List[dict]]]:
         """
-        Query wiki MariaDB via named query 'wiki_djvu_stats'.
+        Extract all DjVu records from the DjVu SQLite database.
 
         Returns:
-            List of dicts or None if endpoint not configured
+            Tuple of table name 'djvu' and list of dicts, or None on error.
         """
-        queries_path = self.config.wiki_queries_path
-        if not queries_path:
-            return None
         lod = None
         try:
+            lod = DjVuManager(self.config).query("all_djvu", {"limit": 100000})
+        except Exception as ex:
+            logger.warning("djvu extract failed: %s", ex)
+        return "djvu", lod
+
+    def extract_mw_images(self) -> Tuple[str, Optional[List[dict]]]:
+        """
+        Extract all MediaWiki images from the API cache.
+
+        Returns:
+            Tuple of table name 'mw_images' and list of dicts, or None on error.
+        """
+        lod = None
+        try:
+            cache = DjVuImagesCache.from_cache(
+                config=self.config,
+                url=self.config.base_url,
+                name="wiki",
+                limit=10000,
+                progressbar=TqdmProgressbar(
+                    total=10000, desc="Fetching MediaWiki images", unit="files"
+                ),
+            )
+            if cache.images:
+                lod = cache.to_lod()
+        except Exception as ex:
+            logger.warning("mw_images extract failed: %s", ex)
+        return "mw_images", lod
+
+    def extract_wiki(self) -> Tuple[str, Optional[List[dict]]]:
+        """
+        Extract wiki DjVu stats from the MariaDB (genwiki39).
+
+        Returns:
+            Tuple of table name 'wiki' and list of dicts, or None on error.
+        """
+        lod = None
+        if not self.config.wiki_queries_path:
+            return "wiki", lod
+        try:
             mlqm = MultiLanguageQueryManager(
-                yaml_path=queries_path,
+                yaml_path=self.config.wiki_queries_path,
                 endpoint_name=self.config.wiki_endpoint,
-                endpoints_path=self.config.endpoints_path,
+                endpoints_path=None,
                 languages=["sql"],
             )
             lod = mlqm.query("wiki_djvu_stats")
         except Exception as ex:
-            print(f"  Wiki DB query failed: {ex}")
-        return lod
+            logger.warning("wiki extract failed: %s", ex)
+        return "wiki", lod
 
-    def query_djvu(self) -> Optional[List[dict]]:
+    def prepare(self) -> MultiLanguageQueryManager:
         """
-        Query DjVu SQLite database via named query 'djvu_stats'.
+        Extract all sources and load them into the single djvu_migrate
+        in-memory federation database.
 
         Returns:
-            List of dicts or None on error
+            MultiLanguageQueryManager connected to the federation db,
+            ready for named queries.
+        """
+        mlqm = MultiLanguageQueryManager(
+            yaml_path=self.config.queries_path,
+            endpoint_name="djvu_migrate",
+            endpoints_path=self.config.endpoints_path,
+            languages=["sql"],
+        )
+        for table, lod in [
+            self.extract_djvu(),
+            self.extract_mw_images(),
+            self.extract_wiki(),
+        ]:
+            if lod:
+                mlqm.store_lod(lod, table, primary_key=None)
+        return mlqm
+
+    def get(
+        self, mlqm: MultiLanguageQueryManager, query_name: str
+    ) -> Optional[List[dict]]:
+        """
+        Run a named query against the federation database.
+
+        Args:
+            mlqm: Federation MultiLanguageQueryManager from prepare().
+            query_name: Named query defined in djvu_queries.yaml.
+
+        Returns:
+            List of result dicts, or None on error.
         """
         lod = None
         try:
-            manager = DjVuManager(self.config)
-            lod = manager.query("djvu_stats")
+            lod = mlqm.query(query_name)
         except Exception as ex:
-            print(f"  SQLite query failed: {ex}")
+            logger.warning("%s failed: %s", query_name, ex)
         return lod
 
-    def query_mw_images(self) -> Optional[List[dict]]:
+    def _show_section(
+        self,
+        mlqm: MultiLanguageQueryManager,
+        query_name: str,
+        fmt: str,
+    ) -> str:
         """
-        Fetch MediaWiki images, store into the mw_images in-memory endpoint,
-        then query 'mw_images_stats' by name.
+        Render one info section via Query.documentQueryResult.
+
+        Args:
+            mlqm: Federation MultiLanguageQueryManager from prepare().
+            query_name: Named query to run and render.
+            fmt: tabulate format string.
 
         Returns:
-            List of dicts from mw_images_stats query, or None on error
+            Rendered string for the section.
         """
-        lod = None
-        try:
-            url = self.config.base_url
-            progressbar = TqdmProgressbar(
-                total=10000, desc="Fetching MediaWiki images", unit="files"
-            )
-            cache = DjVuImagesCache.from_cache(
-                config=self.config,
-                url=url,
-                name="wiki",
-                limit=10000,
-                progressbar=progressbar,
-            )
-            if cache.images:
-                mlqm = MultiLanguageQueryManager(
-                    yaml_path=self.config.queries_path,
-                    endpoint_name="mw_images",
-                    endpoints_path=self.config.endpoints_path,
-                    languages=["sql"],
-                )
-                mlqm.store_lod(cache.to_lod(), "MediaWikiImage", primary_key="url")
-                lod = mlqm.query("mw_images_stats")
-        except Exception as ex:
-            print(f"  mw_images query failed: {ex}")
-        return lod
+        lod = self.get(mlqm, query_name)
+        if lod is None:
+            result = f"{query_name}: (nicht verfügbar)"
+        else:
+            q = mlqm.query4Name(query_name)
+            result = q.documentQueryResult(lod, tablefmt=fmt, withSourceCode=False)
+        return result
 
     def show_info(self) -> None:
         """
-        Display statistics from all three sources using named queries and documentQueryResult.
+        Prepare the federation db and display all migration statistics.
         """
         fmt = getattr(self.args, "format", "simple")
-
-        print("DjVu Migration Info")
-        print("=" * 60)
-
-        # --- 1. Wiki DB ---
-        print("\n1. Wiki-Datenbank (MariaDB)")
-        wiki_lod = self.query_wiki_db()
-        if wiki_lod is None:
-            if not self.config.wiki_queries_path:
-                print(
-                    "  (nicht verfügbar — endpoint 'genwiki39' noch nicht konfiguriert)"
-                )
-            else:
-                print("  (nicht verfügbar)")
-        else:
-            mlqm = MultiLanguageQueryManager(
-                yaml_path=self.config.wiki_queries_path, languages=["sql"]
-            )
-            q = mlqm.query4Name("wiki_djvu_stats")
-            print(q.documentQueryResult(wiki_lod, tablefmt=fmt, withSourceCode=False))
-
-        # --- 2. DjVu SQLite ---
-        print("\n2. DjVu-Viewer Datenbank (SQLite)")
-        manager = DjVuManager(self.config)
-        djvu_lod = self.query_djvu()
-        if djvu_lod is None:
-            print("  (nicht verfügbar)")
-        else:
-            q = manager.mlqm.query4Name("djvu_stats")
-            print(q.documentQueryResult(djvu_lod, tablefmt=fmt, withSourceCode=False))
-
-        # --- 3. MediaWiki images ---
-        print("\n3. MediaWiki Images")
-        mw_lod = self.query_mw_images()
-        if mw_lod is None:
-            print("  (nicht verfügbar)")
-        else:
-            mlqm = MultiLanguageQueryManager(
-                yaml_path=self.config.queries_path, languages=["sql"]
-            )
-            q = mlqm.query4Name("mw_images_stats")
-            print(q.documentQueryResult(mw_lod, tablefmt=fmt, withSourceCode=False))
+        mlqm = self.prepare()
+        for query_name in ["wiki_stats", "djvu_stats", "mw_images_stats"]:
+            print(self._show_section(mlqm, query_name, fmt))
 
 
 def main(argv: Optional[List[str]] = None) -> int:
