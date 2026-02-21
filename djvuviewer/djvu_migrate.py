@@ -158,7 +158,7 @@ class DjVuMigration(BaseCmd):
             print(f"   Dateien:  {wiki_stats.get('files', '?')}")
             print(f"   Älteste:  {wiki_stats.get('oldest', '?')}")
             print(f"   Neueste:  {wiki_stats.get('newest', '?')}")
-        else:
+        elif not self.config.wiki_queries_path:
             print("   (nicht verfügbar — endpoint 'genwiki39' noch nicht konfiguriert)")
 
         print("\n2. DjVu-Viewer Datenbank (SQLite)")

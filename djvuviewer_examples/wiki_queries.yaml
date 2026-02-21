@@ -9,8 +9,8 @@
   sql: |
     SELECT
       count(*) as files,
-      min(img_timestamp) as oldest,
-      max(img_timestamp) as newest
+      DATE_FORMAT(min(img_timestamp), '%Y-%m-%dT%H:%i:%sZ') as oldest,
+      DATE_FORMAT(max(img_timestamp), '%Y-%m-%dT%H:%i:%sZ') as newest
     FROM image
     WHERE img_media_type = 'OFFICE'
       AND img_minor_mime = 'vnd.djvu'

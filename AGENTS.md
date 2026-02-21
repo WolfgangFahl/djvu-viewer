@@ -212,6 +212,15 @@ class DjVuCmd(BaseCmd):
 - Version managed via `hatchling` in `djvuviewer/__init__.py`
 - Optional test dependencies under `[project.optional-dependencies]`
 
+### Fix Data at the Source — NEVER Patch Presentation
+
+**CRITICAL RULE: Fix data problems where the data originates, not in display/formatting code.**
+- If a query returns dates in the wrong format, fix the SQL query or the data model
+- DO NOT add formatting helpers, wrapper methods, or conversion logic in `show_info` or any display layer
+- DO NOT add utility methods (e.g. `iso_date()`) to CLI/presentation classes to paper over bad data
+- DO NOT introduce new helper functions, static methods, or imports to work around a data format issue
+- When in doubt about where the fix belongs — STOP and ASK THE USER
+
 ### Named Parameterized Queries — STAY AT ABSTRACTION LEVEL
 
 This project uses the **Named Parameterized Query** abstraction from `lodstorage` / `pylodstorage`.
