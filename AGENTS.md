@@ -212,30 +212,6 @@ class DjVuCmd(BaseCmd):
 - Version managed via `hatchling` in `djvuviewer/__init__.py`
 - Optional test dependencies under `[project.optional-dependencies]`
 
-### Fix Data at the Source — NEVER Patch Presentation
-
-**CRITICAL RULE: Fix data problems where the data originates, not in display/formatting code.**
-- If a query returns dates in the wrong format, fix the SQL query or the data model
-- DO NOT add formatting helpers, wrapper methods, or conversion logic in `show_info` or any display layer
-- DO NOT add utility methods (e.g. `iso_date()`) to CLI/presentation classes to paper over bad data
-- DO NOT introduce new helper functions, static methods, or imports to work around a data format issue
-- When in doubt about where the fix belongs — STOP and ASK THE USER
-
-### Named Parameterized Queries — STAY AT ABSTRACTION LEVEL
-
-This project uses the **Named Parameterized Query** abstraction from `lodstorage` / `pylodstorage`.
-Queries are defined by name in YAML files and executed via `MultiLanguageQueryManager` and `DjVuManager`.
-
-**CRITICAL RULE: Never bypass the abstraction. When in doubt ASK THE USER.**
-- DO NOT inspect raw `Query` object internals
-- DO NOT wire up database connections manually
-- DO NOT use raw `SQLDB`, `mysql.connector`, `pymysql` or any driver directly
-- DO use `DjVuManager.query(query_name, param_dict)` for SQLite queries
-- DO get the SQL string via `q = mlqm.query4Name(name)` then pass `q.query` to `get_sql_backend(endpoint).query(q.query)`
-- DO use `get_sql_backend()` from `lodstorage.sql_backend` with an `Endpoint` from `EndpointManager.of_yaml()` for MariaDB
-- DO add new SQL queries as named entries in the appropriate YAML file (`djvu_queries.yaml` or `wiki_queries.yaml`)
-- DO configure the endpoint name in `DjVuConfig.wiki_endpoint`
-- When you do not know how to execute a query at the abstraction level — STOP and ASK THE USER
 
 ## Dependencies
 - **pybasemkit**: Base classes, YAML/JSON I/O, CLI tooling
@@ -243,3 +219,17 @@ Queries are defined by name in YAML files and executed via `MultiLanguageQueryMa
 - **py-3rdparty-mediawiki**: MediaWiki API access
 - **djvulibre-python**: DjVu file handling
 - **pillow**: Image processing
+
+## ABSTRACTION
+- We hate HACKING!
+###  Named Parameterized Queries — STAY AT ABSTRACTION LEVEL
+
+This project uses the **Named Parameterized Query** abstraction from `lodstorage` / `pylodstorage`.
+Queries are defined by name in YAML files and executed via `MultiLanguageQueryManager` even if we use an in mmemory Database
+it will be declared as an endpoint
+
+**CRITICAL IMPORTANT RULE: NEVER EVERY bypass the abstraction.**
+- DO get the SQL string via `q = mlqm.query4Name(name)` then pass `q.query` to `get_sql_backend(endpoint).query(q.query)`
+- DO add new SQL queries as named entries in the appropriate YAML file (`djvu_queries.yaml` or `wiki_queries.yaml`)
+- DO configure the endpoint name in `DjVuConfig.wiki_endpoint`
+
