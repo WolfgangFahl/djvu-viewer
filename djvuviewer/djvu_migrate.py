@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 from ngwidgets.progress import TqdmProgressbar
+from tabulate import tabulate
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
@@ -58,6 +59,16 @@ class DjVuMigration(BaseCmd):
             action="store_true",
             help="Show statistics from all three sources (wiki DB, SQLite, API cache)",
         )
+        parser.add_argument(
+            "--format",
+            default="simple",
+            metavar="FMT",
+            help=(
+                "tabulate table format for --info output "
+                "(e.g. simple, grid, pipe, github, latex, mediawiki). "
+                "Default: simple"
+            ),
+        )
         return parser
 
     def handle_args(self, args: Namespace) -> bool:
@@ -76,12 +87,12 @@ class DjVuMigration(BaseCmd):
             handled = True
         return handled
 
-    def query_wiki_db(self) -> Optional[dict]:
+    def query_wiki_db(self) -> Optional[List[dict]]:
         """
         Query wiki MariaDB via MultiLanguageQueryManager with endpoint_name.
 
         Returns:
-            Dict with wiki DB stats or None if endpoint not configured
+            List of dicts with wiki DB stats or None if endpoint not configured
         """
         queries_path = self.config.wiki_queries_path
         if not queries_path:
@@ -92,23 +103,23 @@ class DjVuMigration(BaseCmd):
                 endpoint_name=self.config.wiki_endpoint,
                 languages=["sql"],
             )
-            rows = mlqm.query("wiki_djvu_stats")
-            return rows[0] if rows else None
+            lod = mlqm.query("wiki_djvu_stats")
+            return lod
         except Exception as ex:
             print(f"  Wiki DB query failed: {ex}")
         return None
 
-    def query_sqlite(self) -> Optional[dict]:
+    def query_sqlite(self) -> Optional[List[dict]]:
         """
         Query DjVu SQLite database via DjVuManager for file statistics.
 
         Returns:
-            Dict with SQLite stats or None on error
+            List of dicts with SQLite stats or None on error
         """
         try:
             manager = DjVuManager(self.config)
-            rows = manager.query("djvu_stats")
-            return rows[0] if rows else None
+            lod = manager.query("djvu_stats")
+            return lod
         except Exception as ex:
             print(f"  SQLite query failed: {ex}")
         return None
@@ -148,44 +159,50 @@ class DjVuMigration(BaseCmd):
     def show_info(self) -> None:
         """
         Display statistics from all three sources.
+
+        Named queries return a list-of-dicts; each is rendered via
+        Query.documentQueryResult so --format maps directly to tablefmt.
+        The API-cache result has no named query and is rendered with tabulate directly.
         """
+        fmt = getattr(self.args, "format", "simple")
+
         print("DjVu Migration Info")
         print("=" * 60)
 
+        # --- 1. Wiki DB ---
         print("\n1. Wiki-Datenbank (MariaDB)")
-        wiki_stats = self.query_wiki_db()
-        if wiki_stats:
-            print(f"   Dateien:  {wiki_stats.get('files', '?')}")
-            print(f"   Älteste:  {wiki_stats.get('oldest', '?')}")
-            print(f"   Neueste:  {wiki_stats.get('newest', '?')}")
-        elif not self.config.wiki_queries_path:
-            print("   (nicht verfügbar — endpoint 'genwiki39' noch nicht konfiguriert)")
+        wiki_lod = self.query_wiki_db()
+        if wiki_lod is None:
+            if not self.config.wiki_queries_path:
+                print(
+                    "  (nicht verfügbar — endpoint 'genwiki39' noch nicht konfiguriert)"
+                )
+            else:
+                print("  (nicht verfügbar)")
+        else:
+            mlqm = MultiLanguageQueryManager(
+                yaml_path=self.config.wiki_queries_path, languages=["sql"]
+            )
+            q = mlqm.query4Name("wiki_djvu_stats")
+            print(q.documentQueryResult(wiki_lod, tablefmt=fmt, withSourceCode=False))
 
+        # --- 2. SQLite ---
         print("\n2. DjVu-Viewer Datenbank (SQLite)")
-        sqlite_stats = self.query_sqlite()
-        if sqlite_stats:
-            max_fs = sqlite_stats.get("max_filesize") or 0
-            avg_fs = sqlite_stats.get("avg_filesize") or 0
-            print(f"   Dateien:     {sqlite_stats.get('files', '?')}")
-            print(f"   Älteste:     {sqlite_stats.get('oldest', '?')}")
-            print(f"   Neueste:     {sqlite_stats.get('newest', '?')}")
-            print(f"   Max. Seiten: {sqlite_stats.get('max_pages', '?')}")
-            print(f"   Ø Seiten:    {sqlite_stats.get('avg_pages', '?')}")
-            print(f"   Max. Größe:  {max_fs / 1024 / 1024:.1f} MB")
-            print(f"   Ø Größe:     {avg_fs / 1024 / 1024:.1f} MB")
+        manager = DjVuManager(self.config)
+        sqlite_lod = self.query_sqlite()
+        if sqlite_lod is None:
+            print("  (nicht verfügbar)")
         else:
-            print("   (nicht verfügbar)")
+            q = manager.mlqm.query4Name("djvu_stats")
+            print(q.documentQueryResult(sqlite_lod, tablefmt=fmt, withSourceCode=False))
 
+        # --- 3. API cache ---
         print("\n3. MediaWiki API Cache")
-        api_stats = self.query_api_cache()
-        if api_stats:
-            print(f"   Dateien:  {api_stats.get('files', '?')}")
-            print(f"   Älteste:  {api_stats.get('oldest', '?')}")
-            print(f"   Neueste:  {api_stats.get('newest', '?')}")
+        api_result = self.query_api_cache()
+        if api_result is None:
+            print("  (nicht verfügbar)")
         else:
-            print("   (nicht verfügbar)")
-
-        print()
+            print(tabulate([api_result], headers="keys", tablefmt=fmt))
 
 
 def main(argv: Optional[List[str]] = None) -> int:
