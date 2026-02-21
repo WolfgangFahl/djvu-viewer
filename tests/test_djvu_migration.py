@@ -83,6 +83,26 @@ class TestDjVuMigration(Basetest):
         if self.debug:
             print(f"extract_mw_images result: {lod}")
 
+    def test_federated_diff(self):
+        """
+        Federated query: find files present in mw_images but not in djvu and vice versa.
+        Reveals the discrepancy between the MediaWiki API image list and the DjVu SQLite index.
+        """
+        migration = DjVuMigration.__new__(DjVuMigration)
+        migration.config = self.config
+        mlqm = migration.prepare()
+
+        only_in_mw = mlqm.query("mw_images_not_in_djvu")
+        only_in_djvu = mlqm.query("djvu_not_in_mw_images")
+
+        self.assertIsInstance(only_in_mw, list)
+        self.assertIsInstance(only_in_djvu, list)
+        if self.debug:
+            for query_name in ["mw_images_not_in_djvu", "djvu_not_in_mw_images"]:
+                print(migration.show_section(mlqm, query_name, "simple"))
+            print(f"in mw_images not in djvu: {len(only_in_mw)}")
+            print(f"in djvu not in mw_images: {len(only_in_djvu)}")
+
     def test_show_info(self):
         """
         Test show_info runs without error using example config

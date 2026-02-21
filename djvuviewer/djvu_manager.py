@@ -8,7 +8,7 @@ from basemkit.profiler import Profiler
 from lodstorage.sql import SQLDB
 
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.multilang_querymanager import MultiLanguageQueryManager
+from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 
 
 class DjVuManager:

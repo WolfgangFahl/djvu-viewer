@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache
-from djvuviewer.multilang_querymanager import MultiLanguageQueryManager
+from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 from djvuviewer.version import Version
 
 
@@ -197,7 +197,7 @@ class DjVuMigration(BaseCmd):
             logger.warning("%s failed: %s", query_name, ex)
         return lod
 
-    def _show_section(
+    def show_section(
         self,
         mlqm: MultiLanguageQueryManager,
         query_name: str,
@@ -229,7 +229,7 @@ class DjVuMigration(BaseCmd):
         fmt = getattr(self.args, "format", "simple")
         mlqm = self.prepare()
         for query_name in ["wiki_stats", "djvu_stats", "mw_images_stats"]:
-            print(self._show_section(mlqm, query_name, fmt))
+            print(self.show_section(mlqm, query_name, fmt))
 
 
 def main(argv: Optional[List[str]] = None) -> int:

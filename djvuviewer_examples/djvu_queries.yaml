@@ -41,6 +41,34 @@
       max(newest) as newest
     FROM wiki
 
+# Federated: mw_images entries not present in djvu (join on relpath = path)
+'mw_images_not_in_djvu':
+  param_list:
+    - name: limit
+      type: int
+      default_value: 10
+  sql: |
+    SELECT m.relpath, m.filename, m.timestamp, m.size
+    FROM mw_images m
+    LEFT JOIN djvu d ON m.relpath = d.path
+    WHERE d.path IS NULL
+    ORDER BY m.relpath
+    LIMIT {{ limit }}
+
+# Federated: djvu entries not present in mw_images (join on path = relpath)
+'djvu_not_in_mw_images':
+  param_list:
+    - name: limit
+      type: int
+      default_value: 10
+  sql: |
+    SELECT d.path, d.iso_date, d.filesize, d.page_count
+    FROM djvu d
+    LEFT JOIN mw_images m ON d.path = m.relpath
+    WHERE m.relpath IS NULL
+    ORDER BY d.path
+    LIMIT {{ limit }}
+
 # --- DjVu SQLite queries (run against the real DjVu SQLite db via DjVuManager) ---
 
 # Gesamtanzahl der Dateien und Seiten ermitteln

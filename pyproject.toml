@@ -36,7 +36,7 @@ dependencies = [
 
 	# platform independent knowledge graph ready list of dicts (table) handling
 	# https://pypi.org/project/pyLodStorage/
-	"pyLodStorage>=0.18.6",
+	"pyLodStorage>=0.19.0",
 
 	# https://pypi.org/project/rdflib-endpoint/
 	"rdflib-endpoint>=0.5.4",

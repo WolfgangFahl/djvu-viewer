@@ -113,7 +113,7 @@ def formatted_date(self, date_format: str = "%Y-%m-%d %H:%M") -> str:
 - **Functions/methods**: snake_case (`get_fileinfo`, `handle_args`)
 - **Variables**: snake_case (`djvu_path`, `page_index`)
 - **Constants**: SCREAMING_SNAKE_CASE (e.g., `PACKAGE_MODE`)
-- **Private methods**: prefix with underscore (`_internal_method`)
+- **Private methods**: avoid — do not use underscore-prefixed methods. If a method is needed in tests or subclasses it must be public. Private methods prevent reuse and testability.
 
 #### Domain Prefixes — use consistently everywhere (endpoints, queries, variables, methods)
 | Prefix | Domain | Examples |
@@ -235,7 +235,7 @@ class DjVuCmd(BaseCmd):
 ###  Named Parameterized Queries — STAY AT ABSTRACTION LEVEL
 
 This project uses the **Named Parameterized Query** abstraction from `lodstorage` / `pylodstorage`.
-Queries are defined by name in YAML files and executed via `MultiLanguageQueryManager` even if we use an in mmemory Database
+Queries are defined by name in YAML files and executed via `lodstorage.multilang_querymanager.MultiLanguageQueryManager` even if we use an in-memory Database
 it will be declared as an endpoint
 
 **CRITICAL IMPORTANT RULE: NEVER EVERY bypass the abstraction.**
