@@ -67,18 +67,28 @@ class TestDjVuMigration(Basetest):
         )
         migration.show_info()
 
-    def test_query_api_cache_uses_cache_with_progressbar(self):
+    def test_query_mw_images_uses_cache_with_progressbar(self):
         """
-        Test that query_api_cache uses DjVuImagesCache.from_cache and passes a progressbar.
+        Test that query_mw_images uses DjVuImagesCache.from_cache and passes a progressbar.
 
-        Verifies the two bugs are fixed:
+        Verifies:
         1. DjVuImagesCache.from_cache is called (cache is used, not bypassed)
         2. A Progressbar instance is passed as the progressbar argument
+        3. Result is a list of dicts with a 'files' key
         """
         fake_image = MagicMock(spec=MediaWikiImage)
         fake_image.timestamp = "2020-01-01T00:00:00Z"
+        fake_image.url = "https://wiki.example.org/images/a/ab/Test.djvu"
         fake_cache = MagicMock(spec=DjVuImagesCache)
         fake_cache.images = [fake_image]
+        fake_cache.to_lod.return_value = [
+            {
+                "url": fake_image.url,
+                "timestamp": fake_image.timestamp,
+                "mime": "image/vnd.djvu",
+                "size": 1234,
+            }
+        ]
 
         migration = DjVuMigration.__new__(DjVuMigration)
         migration.config = self.config
@@ -87,7 +97,7 @@ class TestDjVuMigration(Basetest):
             "djvuviewer.djvu_migrate.DjVuImagesCache.from_cache",
             return_value=fake_cache,
         ) as mock_from_cache:
-            result = migration.query_api_cache()
+            result = migration.query_mw_images()
 
         # Cache must have been used
         mock_from_cache.assert_called_once()
@@ -100,8 +110,10 @@ class TestDjVuMigration(Basetest):
             progressbar, Progressbar, "progressbar must be a Progressbar instance"
         )
 
-        # Result must be correct
+        # Result must be a list of dicts with 'files'
         self.assertIsNotNone(result)
-        self.assertEqual(result["files"], 1)
+        self.assertIsInstance(result, list)
+        stats = result[0]
+        self.assertEqual(stats["files"], 1)
         if self.debug:
-            print(f"query_api_cache result: {result}")
+            print(f"query_mw_images result: {result}")

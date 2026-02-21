@@ -24,7 +24,10 @@ class DjVuManager:
            config:DjVuConfig - the DjVu configuration to use
         """
         self.config = config
-        self.mlqm = MultiLanguageQueryManager(yaml_path=self.config.queries_path)
+        self.mlqm = MultiLanguageQueryManager(
+            yaml_path=self.config.queries_path,
+            endpoints_path=self.config.endpoints_path,
+        )
         self.sql_db = SQLDB(self.config.db_path, check_same_thread=False)
 
     def query(self, query_name: str, param_dict=None):

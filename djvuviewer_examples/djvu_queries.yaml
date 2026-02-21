@@ -14,6 +14,16 @@
       sum(page_count) as pages
     FROM DjVu
 
+# Statistik der MediaWiki Images: Anzahl, älteste/neueste Datei
+'mw_images_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      min(timestamp) as oldest,
+      max(timestamp) as newest
+    FROM MediaWikiImage
+
 # Statistik für --info: Anzahl, älteste/neueste Datei, Seitenanzahl, Größe
 'djvu_stats':
   param_list:

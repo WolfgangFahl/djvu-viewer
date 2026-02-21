@@ -109,6 +109,16 @@ class DjVuImagesCache:
         cache_file = str(base_dir / f"djvu_images_{name}.{ext}")
         return cache_file
 
+    def to_lod(self) -> List[dict]:
+        """
+        Convert the image list to a list of dicts for storage and tabular display.
+
+        Returns:
+            List of dicts, one per image, using MediaWikiImage dataclass fields.
+        """
+        lod = [img.__dict__ for img in self.images]
+        return lod
+
     @classmethod
     def from_cache(
         cls,

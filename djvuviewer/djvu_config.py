@@ -47,9 +47,10 @@ class DjVuConfig:
     container_name: Optional[str] = None  # MediaWiki container name for maintenance
     base_url: Optional[str] = "https://wiki.genealogy.net/"
     new_url: Optional[str] = None
-    wiki_endpoint: Optional[str] = (
-        "genwiki"  # endpoint name in ~/.pylodstorage/endpoints.yaml
+    endpoints_path: Optional[str] = (
+        None  # Path for endpoints.yaml (djvu-viewer project endpoints)
     )
+    wiki_endpoint: Optional[str] = "genwiki39"  # endpoint name in endpoints.yaml
     gov_endpoint: Optional[str] = (
         "https://gov.genealogy.net/sparql"  # GOV SPARQL endpoint URL
     )
@@ -68,6 +69,8 @@ class DjVuConfig:
         make sure we set defaults
         """
         examples_path = DjVuConfig.get_examples_path()
+        if self.endpoints_path is None:
+            self.endpoints_path = os.path.join(examples_path, "endpoints.yaml")
         if self.queries_path is None:
             self.queries_path = os.path.join(examples_path, "djvu_queries.yaml")
         if self.wiki_queries_path is None:

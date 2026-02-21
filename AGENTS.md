@@ -115,6 +115,16 @@ def formatted_date(self, date_format: str = "%Y-%m-%d %H:%M") -> str:
 - **Constants**: SCREAMING_SNAKE_CASE (e.g., `PACKAGE_MODE`)
 - **Private methods**: prefix with underscore (`_internal_method`)
 
+#### Domain Prefixes — use consistently everywhere (endpoints, queries, variables, methods)
+| Prefix | Domain | Examples |
+|--------|--------|---------|
+| `djvu` | DjVu files / SQLite index DB | `djvu_stats`, `djvu` endpoint, `query_djvu()` |
+| `mw` | MediaWiki (general) | `mw_client`, `mw_endpoint` |
+| `mw_images` | MediaWiki images (in-memory SQLite) | `mw_images` endpoint, `mw_images_stats` query, `query_mw_images()` |
+| `wiki` | Wiki DB (MariaDB, genwiki39) | `wiki_djvu_stats`, `wiki_endpoint`, `query_wiki_db()` |
+
+Never invent technical names like `api_cache` — always use the domain prefix above.
+
 ### Dataclasses
 Use `@dataclass` decorators for data models with `field` for defaults:
 ```python

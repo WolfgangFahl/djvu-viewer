@@ -10,7 +10,6 @@ from typing import List, Optional
 
 from basemkit.base_cmd import BaseCmd
 from ngwidgets.progress import TqdmProgressbar
-from tabulate import tabulate
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
@@ -25,9 +24,9 @@ class DjVuMigration(BaseCmd):
 
     Queries three sources via named parameterized queries
     (MultiLanguageQueryManager - sql, sparql, ask):
-    1. Wiki database (MariaDB)
-    2. DjVu-Viewer database (SQLite)
-    3. MediaWiki API cache
+    1. Wiki database (MariaDB)        — endpoint: genwiki39
+    2. DjVu-Viewer database (SQLite)  — endpoint: djvu
+    3. MediaWiki images               — endpoint: mw_images (in-memory SQLite)
 
     See https://djvu-wiki.genealogy.net/DjVu-Viewer_Integration
     """
@@ -57,7 +56,7 @@ class DjVuMigration(BaseCmd):
         parser.add_argument(
             "--info",
             action="store_true",
-            help="Show statistics from all three sources (wiki DB, SQLite, API cache)",
+            help="Show statistics from all three sources (wiki DB, SQLite, mw_images)",
         )
         parser.add_argument(
             "--format",
@@ -89,48 +88,51 @@ class DjVuMigration(BaseCmd):
 
     def query_wiki_db(self) -> Optional[List[dict]]:
         """
-        Query wiki MariaDB via MultiLanguageQueryManager with endpoint_name.
+        Query wiki MariaDB via named query 'wiki_djvu_stats'.
 
         Returns:
-            List of dicts with wiki DB stats or None if endpoint not configured
+            List of dicts or None if endpoint not configured
         """
         queries_path = self.config.wiki_queries_path
         if not queries_path:
             return None
+        lod = None
         try:
             mlqm = MultiLanguageQueryManager(
                 yaml_path=queries_path,
                 endpoint_name=self.config.wiki_endpoint,
+                endpoints_path=self.config.endpoints_path,
                 languages=["sql"],
             )
             lod = mlqm.query("wiki_djvu_stats")
-            return lod
         except Exception as ex:
             print(f"  Wiki DB query failed: {ex}")
-        return None
+        return lod
 
-    def query_sqlite(self) -> Optional[List[dict]]:
+    def query_djvu(self) -> Optional[List[dict]]:
         """
-        Query DjVu SQLite database via DjVuManager for file statistics.
+        Query DjVu SQLite database via named query 'djvu_stats'.
 
         Returns:
-            List of dicts with SQLite stats or None on error
+            List of dicts or None on error
         """
+        lod = None
         try:
             manager = DjVuManager(self.config)
             lod = manager.query("djvu_stats")
-            return lod
         except Exception as ex:
             print(f"  SQLite query failed: {ex}")
-        return None
+        return lod
 
-    def query_api_cache(self) -> Optional[dict]:
+    def query_mw_images(self) -> Optional[List[dict]]:
         """
-        Query MediaWiki API cache for DjVu file count and date range.
+        Fetch MediaWiki images, store into the mw_images in-memory endpoint,
+        then query 'mw_images_stats' by name.
 
         Returns:
-            Dict with API stats or None on error
+            List of dicts from mw_images_stats query, or None on error
         """
+        lod = None
         try:
             url = self.config.base_url
             progressbar = TqdmProgressbar(
@@ -143,26 +145,22 @@ class DjVuMigration(BaseCmd):
                 limit=10000,
                 progressbar=progressbar,
             )
-            images = cache.images
-            if images:
-                timestamps = sorted(img.timestamp for img in images if img.timestamp)
-                result = {
-                    "files": len(images),
-                    "oldest": timestamps[0] if timestamps else None,
-                    "newest": timestamps[-1] if timestamps else None,
-                }
-                return result
+            if cache.images:
+                mlqm = MultiLanguageQueryManager(
+                    yaml_path=self.config.queries_path,
+                    endpoint_name="mw_images",
+                    endpoints_path=self.config.endpoints_path,
+                    languages=["sql"],
+                )
+                mlqm.store_lod(cache.to_lod(), "MediaWikiImage", primary_key="url")
+                lod = mlqm.query("mw_images_stats")
         except Exception as ex:
-            print(f"  API cache query failed: {ex}")
-        return None
+            print(f"  mw_images query failed: {ex}")
+        return lod
 
     def show_info(self) -> None:
         """
-        Display statistics from all three sources.
-
-        Named queries return a list-of-dicts; each is rendered via
-        Query.documentQueryResult so --format maps directly to tablefmt.
-        The API-cache result has no named query and is rendered with tabulate directly.
+        Display statistics from all three sources using named queries and documentQueryResult.
         """
         fmt = getattr(self.args, "format", "simple")
 
@@ -186,23 +184,27 @@ class DjVuMigration(BaseCmd):
             q = mlqm.query4Name("wiki_djvu_stats")
             print(q.documentQueryResult(wiki_lod, tablefmt=fmt, withSourceCode=False))
 
-        # --- 2. SQLite ---
+        # --- 2. DjVu SQLite ---
         print("\n2. DjVu-Viewer Datenbank (SQLite)")
         manager = DjVuManager(self.config)
-        sqlite_lod = self.query_sqlite()
-        if sqlite_lod is None:
+        djvu_lod = self.query_djvu()
+        if djvu_lod is None:
             print("  (nicht verfügbar)")
         else:
             q = manager.mlqm.query4Name("djvu_stats")
-            print(q.documentQueryResult(sqlite_lod, tablefmt=fmt, withSourceCode=False))
+            print(q.documentQueryResult(djvu_lod, tablefmt=fmt, withSourceCode=False))
 
-        # --- 3. API cache ---
-        print("\n3. MediaWiki API Cache")
-        api_result = self.query_api_cache()
-        if api_result is None:
+        # --- 3. MediaWiki images ---
+        print("\n3. MediaWiki Images")
+        mw_lod = self.query_mw_images()
+        if mw_lod is None:
             print("  (nicht verfügbar)")
         else:
-            print(tabulate([api_result], headers="keys", tablefmt=fmt))
+            mlqm = MultiLanguageQueryManager(
+                yaml_path=self.config.queries_path, languages=["sql"]
+            )
+            q = mlqm.query4Name("mw_images_stats")
+            print(q.documentQueryResult(mw_lod, tablefmt=fmt, withSourceCode=False))
 
 
 def main(argv: Optional[List[str]] = None) -> int:
