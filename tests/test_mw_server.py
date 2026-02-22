@@ -6,7 +6,7 @@ Created on 2026-02-21
 
 from basemkit.basetest import Basetest
 import unittest
-from djvuviewer.mw_server import ServerConfig
+from djvuviewer.mw_server import ServerConfig, ServerProfile
 
 
 class TestMwServer(Basetest):
@@ -19,12 +19,13 @@ class TestMwServer(Basetest):
         setUp test environment
         """
         Basetest.setUp(self, debug=debug, profile=profile)
-        self.server_config=ServerConfig.of_yaml()
+        self.server_config = ServerConfig.of_yaml()
+        self.profile = ServerProfile()
 
     @unittest.skipIf(Basetest.inPublicCI(), "server config not available in CI")
     def test_server_config(self):
         """Test server config loading"""
         print(self.server_config)
-        self.server_config.run()
-        self.server_config.save()
+        self.profile.run()
+        self.profile.save()
         pass

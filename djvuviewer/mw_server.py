@@ -8,10 +8,10 @@ MediaWiki Server handling
 
 from dataclasses import field
 import pathlib
-import subprocess
-import time
 from typing import Dict, List, Optional
+from basemkit.profiler import Profiler
 
+from mwstools_backend.remote import Remote
 from basemkit.yamlable import lod_storable
 from djvuviewer.djvu_core import DjVu
 
@@ -72,6 +72,7 @@ class SetupLocation:
     """
     A server/folder location for migration.
     """
+
     server: Optional[str] = None
     folder: Optional[str] = None
 
@@ -82,6 +83,7 @@ class ServerConfig:
     Server configuration loaded from ~/.djvuviewer/server_config.yaml.
     Only image stores marked target: true are writable for migration.
     """
+
     folders: Dict[str, SetupLocation] = field(default_factory=dict)
 
     test_files: List[TestFile] = field(default_factory=list)
@@ -104,6 +106,26 @@ class ServerConfig:
         server_config = cls.load_from_yaml_file(yaml_path)
         return server_config
 
+
+class ServerProfile:
+    """
+    Profile server by checking test files.
+    """
+
+    def __init__(
+        self,
+        config: ServerConfig = None,
+        yaml_path: str = None,
+        debug: bool = False,
+        verbose: bool = False,
+    ):
+        if config is None:
+            self.config = ServerConfig.of_yaml(yaml_path)
+        else:
+            self.config = config
+        self.debug = debug
+        self.verbose = verbose
+
     def check_djvu(
         self, server: Server, imagefolder: ImageFolder, djvu: TestFile
     ) -> Optional[float]:
@@ -112,50 +134,38 @@ class ServerConfig:
         Sets bundled on djvu and returns djvudumpMs.
 
         Args:
-            server: The server to check on.
+            server: The server to check.
             imagefolder: The image folder to check.
             djvu: The djvu test file to check.
 
         Returns:
             djvudumpMs or None if check failed.
         """
+        remote=Remote(host=server.hostname)
         filepath = f"{imagefolder.path}/{djvu.hash_path}/{djvu.name}"
-        is_local = server.is_local
-        try:
-            if is_local:
-                djvu.set_fileinfo(filepath)
-                stat_cmd = None
-            else:
-                stat_cmd = ["ssh", server.hostname, f"stat -c '%s' {filepath}"]
-            t0 = time.time()
-            if stat_cmd:
-                stat_proc = subprocess.run(stat_cmd, capture_output=True, text=True)
-                if stat_proc.returncode != 0:
-                    return None
-            cmd = (
-                ["djvudump", filepath]
-                if is_local
-                else ["ssh", server.hostname, f"djvudump {filepath}"]
-            )
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            djvudump_ms = round((time.time() - t0) * 1000, 1)
+        cmd=f"djvudump {filepath}"
+        profiler = Profiler(f"{cmd}", profile=self.debug or self.verbose)
+        result=remote.run(cmd)
+        output = result.stdout
+        elapsed_sec = profiler.time()
+        djvudump_ms = round(elapsed_sec * 1000, 1)
 
-            output = proc.stdout
-            if "bundled" in output:
-                djvu.bundled = True
-            elif "indirect" in output:
-                djvu.bundled = False
-            return djvudump_ms
-        except Exception:
+        if output is None:
             return None
+
+        if "bundled" in output:
+            djvu.bundled = True
+        elif "indirect" in output:
+            djvu.bundled = False
+        return djvudump_ms
 
     def run(self):
         """
         Check all test files on all servers/image stores.
         """
-        for _server_name, server in self.servers.items():
+        for _server_name, server in self.config.servers.items():
             for _image_name, imagefolder in server.imagefolders.items():
-                for tf in self.test_files:
+                for tf in self.config.test_files:
                     djvudump_ms = self.check_djvu(server, imagefolder, tf)
                     if djvudump_ms:
                         imagefolder.djvudumpMs = djvudump_ms
@@ -164,4 +174,4 @@ class ServerConfig:
         """
         save back to server_config.yaml.
         """
-        self.save_to_yaml_file(ServerConfig.get_config_path())
+        self.config.save_to_yaml_file(ServerConfig.get_config_path())

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache
-from djvuviewer.mw_server import ServerConfig, ServerTester
+from djvuviewer.mw_server import ServerConfig, ServerProfile
 from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 from djvuviewer.version import Version
 
@@ -103,8 +103,8 @@ class DjVuMigration(BaseCmd):
             self.show_info()
             handled = True
         if args.test:
-            server_config = ServerConfig.get_instance()
-            tester = ServerTester(server_config)
+            server_config = ServerConfig.of_yaml()
+            profile = ServerProfile(server_config)
             if getattr(args, "write", False):
                 tester.write_back()
             rows = tester.run()
