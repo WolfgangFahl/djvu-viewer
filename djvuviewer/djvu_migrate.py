@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache
+from djvuviewer.mw_server import ServerConfig, ServerTester
 from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 from djvuviewer.version import Version
 
@@ -75,6 +76,16 @@ class DjVuMigration(BaseCmd):
                 "Default: simple"
             ),
         )
+        parser.add_argument(
+            "--test",
+            action="store_true",
+            help="Check test files on all servers: bundled state, size, djvudump timing",
+        )
+        parser.add_argument(
+            "--write",
+            action="store_true",
+            help="With --test: write updated migrated/djvudumpMs back to server_config.yaml",
+        )
         return parser
 
     def handle_args(self, args: Namespace) -> bool:
@@ -90,6 +101,14 @@ class DjVuMigration(BaseCmd):
         handled = super().handle_args(args)
         if args.info:
             self.show_info()
+            handled = True
+        if args.test:
+            server_config = ServerConfig.get_instance()
+            tester = ServerTester(server_config)
+            if getattr(args, "write", False):
+                tester.write_back()
+            rows = tester.run()
+            tester.show(rows, tablefmt=getattr(args, "format", "simple"))
             handled = True
         return handled
 

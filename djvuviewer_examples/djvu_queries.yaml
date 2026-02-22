@@ -71,6 +71,33 @@
 
 # --- DjVu SQLite queries (run against the real DjVu SQLite db via DjVuManager) ---
 
+# Valid bundled entries: bundled=1, filesize not null, ordered small to large
+'valid_bundled':
+  param_list:
+    - name: limit
+      type: int
+      default_value: 10000
+  sql: |
+    SELECT
+      path, filename, page_count, filesize, iso_date
+    FROM DjVu
+    WHERE bundled = 1
+      AND filesize IS NOT NULL
+    ORDER BY filesize ASC
+    LIMIT {{ limit }}
+
+# Count of valid bundled vs total
+'valid_bundled_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as total,
+      sum(CASE WHEN bundled = 1 AND filesize IS NOT NULL THEN 1 ELSE 0 END) as valid_bundled,
+      sum(CASE WHEN bundled = 1 AND filesize IS NULL THEN 1 ELSE 0 END) as bundled_no_size,
+      sum(CASE WHEN bundled = 0 OR bundled IS NULL THEN 1 ELSE 0 END) as not_bundled,
+      round(sum(CASE WHEN bundled = 1 AND filesize IS NOT NULL THEN filesize ELSE 0 END)/1024/1024/1024.0, 2) as valid_gb
+    FROM DjVu
+
 # Gesamtanzahl der Dateien und Seiten ermitteln
 'total':
   param_list:
