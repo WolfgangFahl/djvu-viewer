@@ -25,4 +25,6 @@ class TestMwServer(Basetest):
     def test_server_config(self):
         """Test server config loading"""
         print(self.server_config)
+        self.server_config.run()
+        self.server_config.save()
         pass

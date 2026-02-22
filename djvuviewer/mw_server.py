@@ -24,7 +24,6 @@ class ImageFolder:
     fs: str
     total: Optional[int] = None
     migrated: Optional[int] = None
-    target: bool = False
     statMs: Optional[float] = None
     readMs: Optional[float] = None
     speedMBs: Optional[float] = None
@@ -69,11 +68,21 @@ class TestFile(DjVu):
 
 
 @lod_storable
+class SetupLocation:
+    """
+    A server/folder location for migration.
+    """
+    server: Optional[str] = None
+    folder: Optional[str] = None
+
+
+@lod_storable
 class ServerConfig:
     """
     Server configuration loaded from ~/.djvuviewer/server_config.yaml.
     Only image stores marked target: true are writable for migration.
     """
+    folders: Dict[str, SetupLocation] = field(default_factory=dict)
 
     test_files: List[TestFile] = field(default_factory=list)
     servers: Dict[str, Server] = field(default_factory=dict)
@@ -92,23 +101,8 @@ class ServerConfig:
         """
         if yaml_path is None:
             yaml_path = cls.get_config_path()
-        server_config = cls.load_from_yaml_file(cls.get_config_path())
+        server_config = cls.load_from_yaml_file(yaml_path)
         return server_config
-
-
-class ServerTester:
-    """
-    Runs DjVu file checks across all servers and image stores in ServerConfig.
-    """
-
-    def __init__(self, server_config: ServerConfig):
-        """
-        Initialize with a ServerConfig instance.
-
-        Args:
-            server_config: Loaded server configuration.
-        """
-        self.server_config = server_config
 
     def check_djvu(
         self, server: Server, imagefolder: ImageFolder, djvu: TestFile
@@ -159,16 +153,15 @@ class ServerTester:
         """
         Check all test files on all servers/image stores.
         """
-        for _server_name, server in self.server_config.servers.items():
+        for _server_name, server in self.servers.items():
             for _image_name, imagefolder in server.imagefolders.items():
-                for tf in self.server_config.test_files:
+                for tf in self.test_files:
                     djvudump_ms = self.check_djvu(server, imagefolder, tf)
                     if djvudump_ms:
                         imagefolder.djvudumpMs = djvudump_ms
 
-    def write_back(self) -> None:
+    def save(self) -> None:
         """
-        Run checks and save back to server_config.yaml.
+        save back to server_config.yaml.
         """
-        self.run()
-        self.server_config.save_to_yaml_file(ServerConfig.get_config_path())
+        self.save_to_yaml_file(ServerConfig.get_config_path())
