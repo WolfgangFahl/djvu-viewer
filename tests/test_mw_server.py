@@ -4,8 +4,10 @@ Created on 2026-02-21
 @author: wf
 """
 
-from basemkit.basetest import Basetest
 import unittest
+
+from basemkit.basetest import Basetest
+
 from djvuviewer.mw_server import ServerConfig, ServerProfile
 
 
@@ -61,4 +63,3 @@ class TestMwServer(Basetest):
 
         # --- first call: must go remote ---
         djvu_paths = server.find_djvu_images(folder_name)
-

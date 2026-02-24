@@ -79,7 +79,7 @@
     - name: pattern
       type: str
       default_value: ""
-    - name: timestamp_tolerance_secs
+    - name: timestamp_precision_secs
       type: int
       default_value: 60
   sql: |
@@ -94,6 +94,6 @@
     FROM djvu d
     JOIN mw_images m ON '/images' || m.relpath = d.path
     WHERE d.bundled = 1
-      AND ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0 <= {{ timestamp_tolerance_secs }}
+      AND ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0 <= {{ timestamp_precision_secs }}
       AND d.path LIKE '%{{ pattern }}%'
     ORDER BY d.path

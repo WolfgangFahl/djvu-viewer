@@ -5,21 +5,21 @@ Created on 2026-02-20
 """
 
 import argparse
+import logging
 from argparse import ArgumentParser, Namespace
 from typing import List, Optional, Tuple
-
-import logging
 
 from basemkit.base_cmd import BaseCmd
 from ngwidgets.progress import TqdmProgressbar
 
 logger = logging.getLogger(__name__)
 
+from lodstorage.multilang_querymanager import MultiLanguageQueryManager
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache
 from djvuviewer.mw_server import Server, ServerConfig, ServerProfile
-from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 from djvuviewer.version import Version
 
 
@@ -301,7 +301,9 @@ class DjVuMigration(BaseCmd):
         for query_name in ["wiki_stats", "djvu_stats", "mw_images_stats"]:
             print(self.show_section(mlqm, query_name, fmt))
 
-    def migrate(self, pattern: str) -> Optional[List[dict]]:
+    def migrate(
+        self, pattern: str, timestamp_precision_secs: int
+    ) -> Optional[List[dict]]:
         """
         Check migration eligibility for DjVu files whose path contains *pattern*.
 
@@ -322,7 +324,11 @@ class DjVuMigration(BaseCmd):
         """
         fmt = getattr(self.args, "format", "simple")
         mlqm = self.prepare()
-        lod = self.get(mlqm, "djvu_migrate_candidates", {"pattern": pattern})
+        lod = self.get(
+            mlqm,
+            "djvu_migrate_candidates",
+            {"pattern": pattern, "timestamp_precision_secs": timestamp_precision_secs},
+        )
         if lod is not None:
             print(
                 self.show_section(

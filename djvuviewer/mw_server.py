@@ -12,9 +12,10 @@ from typing import Dict, List, Optional
 
 from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
+from mwstools_backend.remote import Remote
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu
-from mwstools_backend.remote import Remote
 from djvuviewer.lod_show import LodShow
 
 

@@ -3,8 +3,10 @@ Created on 2026-02-22
 
 @author: wf
 """
+
+from typing import Any, Dict, List
+
 from tabulate import tabulate
-from typing import Any,List,Dict
 
 
 class LodShow:

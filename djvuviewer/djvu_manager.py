@@ -5,10 +5,10 @@ Created on 2025-02-24
 """
 
 from basemkit.profiler import Profiler
+from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 from lodstorage.sql import SQLDB
 
 from djvuviewer.djvu_config import DjVuConfig
-from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 
 
 class DjVuManager:
