@@ -86,6 +86,18 @@ class DjVuMigration(BaseCmd):
             action="store_true",
             help="With --test: write updated migrated/djvudumpMs back to server_config.yaml",
         )
+        parser.add_argument(
+            "--migrate",
+            metavar="PATTERN",
+            default=None,
+            help=(
+                "Check migration eligibility for DjVu files matching PATTERN. "
+                "PATTERN is matched as a substring of the file path, e.g. '8', "
+                "'8/8d', or '8/8d/AB-Koeln-1929-1.djvu'. "
+                "Applies all migration rules: must exist in djvu DB, mw_images "
+                "cache, timestamps must match within 60s, file must be bundled."
+            ),
+        )
         return parser
 
     def handle_args(self, args: Namespace) -> bool:
@@ -109,6 +121,9 @@ class DjVuMigration(BaseCmd):
             profile.show(args.format)
             if getattr(args, "write", False):
                 profile.write_back()
+            handled = True
+        if args.migrate:
+            self.migrate(args.migrate)
             handled = True
         return handled
 
@@ -197,7 +212,10 @@ class DjVuMigration(BaseCmd):
         return mlqm
 
     def get(
-        self, mlqm: MultiLanguageQueryManager, query_name: str
+        self,
+        mlqm: MultiLanguageQueryManager,
+        query_name: str,
+        params: Optional[dict] = None,
     ) -> Optional[List[dict]]:
         """
         Run a named query against the federation database.
@@ -205,13 +223,14 @@ class DjVuMigration(BaseCmd):
         Args:
             mlqm: Federation MultiLanguageQueryManager from prepare().
             query_name: Named query defined in djvu_queries.yaml.
+            params: Optional parameter dict passed to the query.
 
         Returns:
             List of result dicts, or None on error.
         """
         lod = None
         try:
-            lod = mlqm.query(query_name)
+            lod = mlqm.query(query_name, params or {})
         except Exception as ex:
             logger.warning("%s failed: %s", query_name, ex)
         return lod
@@ -221,6 +240,7 @@ class DjVuMigration(BaseCmd):
         mlqm: MultiLanguageQueryManager,
         query_name: str,
         fmt: str,
+        params: Optional[dict] = None,
     ) -> str:
         """
         Render one info section via Query.documentQueryResult.
@@ -229,11 +249,12 @@ class DjVuMigration(BaseCmd):
             mlqm: Federation MultiLanguageQueryManager from prepare().
             query_name: Named query to run and render.
             fmt: tabulate format string.
+            params: Optional parameter dict passed to the query.
 
         Returns:
             Rendered string for the section.
         """
-        lod = self.get(mlqm, query_name)
+        lod = self.get(mlqm, query_name, params)
         if lod is None:
             result = f"{query_name}: (nicht verfügbar)"
         else:
@@ -250,7 +271,35 @@ class DjVuMigration(BaseCmd):
         for query_name in ["wiki_stats", "djvu_stats", "mw_images_stats"]:
             print(self.show_section(mlqm, query_name, fmt))
 
+    def migrate(self, pattern: str) -> Optional[List[dict]]:
+        """
+        Check migration eligibility for DjVu files whose path contains *pattern*.
 
+        Loads the federation DB (djvu + mw_images + wiki tables) and runs the
+        named query ``djvu_migrate_candidates`` which enforces all migration rules:
+
+        - exists in djvu DB
+        - exists in mw_images API cache
+        - timestamps agree within 60 seconds
+        - file is bundled
+
+        Args:
+            pattern: Substring matched against djvu.path, e.g. ``'8'``,
+                     ``'8/8d'``, or ``'8/8d/AB-Koeln-1929-1.djvu'``.
+
+        Returns:
+            List of candidate dicts, or None on error.
+        """
+        fmt = getattr(self.args, "format", "simple")
+        mlqm = self.prepare()
+        lod = self.get(mlqm, "djvu_migrate_candidates", {"pattern": pattern})
+        if lod is not None:
+            print(
+                self.show_section(
+                    mlqm, "djvu_migrate_candidates", fmt, {"pattern": pattern}
+                )
+            )
+        return lod
 
 
 def main(argv: Optional[List[str]] = None) -> int:

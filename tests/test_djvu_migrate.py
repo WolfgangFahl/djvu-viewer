@@ -5,8 +5,6 @@ Created on 2026-02-20
 """
 
 import argparse
-import pathlib
-import time
 from unittest.mock import MagicMock, patch
 
 from basemkit.basetest import Basetest
@@ -19,7 +17,7 @@ from djvuviewer.mw_server import ImageFolder, Server, ServerConfig
 from djvuviewer.wiki_images import MediaWikiImage
 
 
-class TestDjVuMigration(Basetest):
+class TestDjVuMigrate(Basetest):
     """
     Test DjVu migration tool
     """
@@ -30,14 +28,14 @@ class TestDjVuMigration(Basetest):
         """
         Basetest.setUp(self, debug=debug, profile=profile)
         self.config = DjVuConfig(is_example=True)
+        args=argparse.Namespace()
+        self.migration=DjVuMigration(args)
 
     def test_extract_djvu(self):
         """
         Test extract_djvu returns table name 'djvu' and expected stats keys
         """
-        migration = DjVuMigration.__new__(DjVuMigration)
-        migration.config = self.config
-        table, lod = migration.extract_djvu()
+        table, lod =  self.migration.extract_djvu()
         self.assertEqual(table, "djvu")
         self.assertIsNotNone(lod)
         self.assertGreater(len(lod), 0)
@@ -91,9 +89,7 @@ class TestDjVuMigration(Basetest):
         Federated query: find files present in mw_images but not in djvu and vice versa.
         Reveals the discrepancy between the MediaWiki API image list and the DjVu SQLite index.
         """
-        migration = DjVuMigration.__new__(DjVuMigration)
-        migration.config = self.config
-        mlqm = migration.prepare()
+        mlqm = self.migration.prepare()
 
         only_in_mw = mlqm.query("mw_images_not_in_djvu")
         only_in_djvu = mlqm.query("djvu_not_in_mw_images")
@@ -102,7 +98,7 @@ class TestDjVuMigration(Basetest):
         self.assertIsInstance(only_in_djvu, list)
         if self.debug:
             for query_name in ["mw_images_not_in_djvu", "djvu_not_in_mw_images"]:
-                print(migration.show_section(mlqm, query_name, "simple"))
+                print(self.migration.show_section(mlqm, query_name, "simple"))
             print(f"in mw_images not in djvu: {len(only_in_mw)}")
             print(f"in djvu not in mw_images: {len(only_in_djvu)}")
 
@@ -110,8 +106,14 @@ class TestDjVuMigration(Basetest):
         """
         Test show_info runs without error using example config
         """
-        migration = DjVuMigration.__new__(DjVuMigration)
-        migration.config = self.config
-        migration.args = argparse.Namespace(info=True, format="simple")
-        migration.show_info()
+        self.migration.args = argparse.Namespace(info=True, format="simple")
+        self.migration.show_info()
+
+    def test_migrate(self):
+        """
+        test migrate
+        """
+        pattern="0/00"
+        self.migration.migrate(pattern)
+        pass
 

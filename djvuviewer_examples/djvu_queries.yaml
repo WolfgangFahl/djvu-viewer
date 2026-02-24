@@ -69,6 +69,34 @@
     ORDER BY d.path
     LIMIT {{ limit }}
 
+# Federated: migration candidates matching a path pattern, checked against all 6 rules:
+#   1. exists in djvu DB
+#   2. exists in mw_images API cache
+#   3. timestamp difference <= 60 seconds
+#   4. file is bundled in djvu DB
+#   5. (target existence must be checked separately at copy time)
+# pattern is matched as a substring of djvu.path (e.g. '8', '8/8d', '8/8d/AB-Koeln-1929-1.djvu')
+'djvu_migrate_candidates':
+  param_list:
+    - name: pattern
+      type: str
+      default_value: ""
+  sql: |
+    SELECT
+      d.path,
+      d.iso_date       AS djvu_date,
+      m.timestamp      AS mw_date,
+      d.filesize,
+      d.page_count,
+      d.bundled,
+      ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0 AS timestamp_diff_secs
+    FROM djvu d
+    JOIN mw_images m ON '/images' || m.relpath = d.path
+    WHERE d.bundled = 1
+      AND ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0 <= 60
+      AND d.path LIKE '%{{ pattern }}%'
+    ORDER BY d.path
+
 # --- DjVu SQLite queries (run against the real DjVu SQLite db via DjVuManager) ---
 
 # Valid bundled entries: bundled=1, filesize not null, ordered small to large
