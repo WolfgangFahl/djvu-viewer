@@ -341,6 +341,7 @@ class TestDjVu(Basetest):
             "all_djvu": {"limit": 50},
             "djvu_for_path": {"path": "/images/1/1e/AB1953-Gohr.djvu"},
             "pages_of_djvu": {"djvu_path": "/images/f/ff/AB1932-Ramrath.djvu "},
+            "valid_bundled": {"limit": 50},
         }
         djvm = DjVuManager(config=self.config)
         djvm.sql_db.debug = self.debug

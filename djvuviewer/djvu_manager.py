@@ -44,7 +44,9 @@ class DjVuManager:
         if param_dict is None:
             param_dict = {}
         query = self.mlqm.query4Name(query_name)
-        sql_query = query.params.apply_parameters_with_check(param_dict)
+        sql_query = query.params.apply_parameters_with_check(
+            param_dict, query.param_list
+        )
         lod = self.sql_db.query(sql_query, params=param_dict)
         return lod
 

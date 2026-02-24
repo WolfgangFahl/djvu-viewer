@@ -67,33 +67,24 @@
     ORDER BY d.path
     LIMIT {{ limit }}
 
-# Federated: migration candidates matching a path pattern, checked against all rules:
-#   1. exists in djvu DB
-#   2. exists in mw_images API cache
-#   3. timestamp difference <= timestamp_tolerance_secs
-#   4. file is bundled in djvu DB
-#   5. (target existence must be checked separately at copy time)
-# pattern is matched as a substring of djvu.path (e.g. '8', '8/8d', '8/8d/AB-Koeln-1929-1.djvu')
-'djvu_migrate_candidates':
+# Rule 1: file exists in djvu DB — returns the djvu record for the given path
+'djvu_for_relpath':
   param_list:
-    - name: pattern
+    - name: path
       type: str
-      default_value: ""
-    - name: timestamp_precision_secs
-      type: int
-      default_value: 60
+      default_value: "/images/0/00/Ev-g1816.djvu"
   sql: |
-    SELECT
-      d.path,
-      d.iso_date                                                          AS djvu_date,
-      m.timestamp                                                         AS mw_date,
-      d.filesize,
-      d.page_count,
-      d.bundled,
-      ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0      AS timestamp_diff_secs
-    FROM djvu d
-    JOIN mw_images m ON '/images' || m.relpath = d.path
-    WHERE d.bundled = 1
-      AND ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0 <= {{ timestamp_precision_secs }}
-      AND d.path LIKE '%{{ pattern }}%'
-    ORDER BY d.path
+    SELECT path, iso_date, filesize, page_count, bundled
+    FROM djvu
+    WHERE path = '{{ path }}'
+
+# Rule 2: file exists in mw_images API cache — returns the mw record for the given relpath
+'mw_images_for_relpath':
+  param_list:
+    - name: relpath
+      type: str
+      default_value: "/0/00/Ev-g1816.djvu"
+  sql: |
+    SELECT relpath, filename, timestamp, size
+    FROM mw_images
+    WHERE relpath = '{{ relpath }}'

@@ -65,11 +65,19 @@ class TestDjVuMigrate(Basetest):
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_migrate(self):
         """
-        test migrate
+        Test migrate applies all 6 migration rules per file from the source
+        server filelist and returns only eligible candidates.
         """
         pattern = "0/00"
-        self.migration.migrate(pattern, timestamp_precision_secs=86400)
-        pass
+        candidates = self.migration.migrate(pattern, timestamp_precision_secs=86400)
+        self.assertIsInstance(candidates, list)
+        for row in candidates:
+            for key in ["path", "djvu_date", "mw_date", "filesize", "page_count"]:
+                self.assertIn(key, row)
+        if self.debug:
+            print(f"migrate('{pattern}'): {len(candidates)} candidate(s)")
+            for row in candidates:
+                print(f"  {row['path']}")
 
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_wiki_image_links(self):
