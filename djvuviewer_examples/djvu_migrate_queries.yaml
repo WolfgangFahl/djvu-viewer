@@ -1,0 +1,99 @@
+#
+# Federation SQL queries for DjVu migration
+# Run against the djvu_migrate in-memory SQLite db loaded by DjVuMigration.prepare()
+# Tables: djvu (from DjVu SQLite), mw_images (from MediaWiki API cache), wiki (from MariaDB)
+# WF 2026-02-24
+#
+
+# Stats for the djvu table
+'djvu_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      min(iso_date) as oldest,
+      max(iso_date) as newest,
+      max(page_count) as max_pages,
+      round(avg(page_count), 1) as avg_pages,
+      max(filesize) as max_filesize,
+      round(avg(filesize), 0) as avg_filesize
+    FROM djvu
+
+# Stats for the mw_images table
+'mw_images_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      min(timestamp) as oldest,
+      max(timestamp) as newest
+    FROM mw_images
+
+# Stats for the wiki table
+'wiki_stats':
+  param_list:
+  sql: |
+    SELECT
+      count(*) as files,
+      min(oldest) as oldest,
+      max(newest) as newest
+    FROM wiki
+
+# Federated: mw_images entries not present in djvu (join on '/images'||relpath = path)
+'mw_images_not_in_djvu':
+  param_list:
+    - name: limit
+      type: int
+      default_value: 10
+  sql: |
+    SELECT m.relpath, m.filename, m.timestamp, m.size
+    FROM mw_images m
+    LEFT JOIN djvu d ON '/images' || m.relpath = d.path
+    WHERE d.path IS NULL
+    ORDER BY m.relpath
+    LIMIT {{ limit }}
+
+# Federated: djvu entries not present in mw_images (join on path = '/images'||relpath)
+'djvu_not_in_mw_images':
+  param_list:
+    - name: limit
+      type: int
+      default_value: 10
+  sql: |
+    SELECT d.path, d.iso_date, d.filesize, d.page_count
+    FROM djvu d
+    LEFT JOIN mw_images m ON d.path = '/images' || m.relpath
+    WHERE m.relpath IS NULL
+    ORDER BY d.path
+    LIMIT {{ limit }}
+
+# Federated: migration candidates matching a path pattern, checked against all rules:
+#   1. exists in djvu DB
+#   2. exists in mw_images API cache
+#   3. timestamp difference <= timestamp_tolerance_secs
+#   4. file is bundled in djvu DB
+#   5. (target existence must be checked separately at copy time)
+# pattern is matched as a substring of djvu.path (e.g. '8', '8/8d', '8/8d/AB-Koeln-1929-1.djvu')
+'djvu_migrate_candidates':
+  param_list:
+    - name: pattern
+      type: str
+      default_value: ""
+    - name: timestamp_tolerance_secs
+      type: int
+      default_value: 60
+  sql: |
+    SELECT
+      d.path,
+      d.iso_date                                                          AS djvu_date,
+      m.timestamp                                                         AS mw_date,
+      d.filesize,
+      d.page_count,
+      d.bundled,
+      ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0      AS timestamp_diff_secs
+    FROM djvu d
+    JOIN mw_images m ON '/images' || m.relpath = d.path
+    WHERE d.bundled = 1
+      AND ABS(JULIANDAY(d.iso_date) - JULIANDAY(m.timestamp)) * 86400.0 <= {{ timestamp_tolerance_secs }}
+      AND d.path LIKE '%{{ pattern }}%'
+    ORDER BY d.path
