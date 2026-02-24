@@ -37,6 +37,9 @@ class DjVuConfig:
     queries_path: Optional[str] = (
         None  # Path for YAML files with named parameterized queries (djvu SQLite)
     )
+    migrate_queries_path: Optional[str] = (
+        None  # Path for YAML file with federation queries for djvu_migrate in-memory db
+    )
     wiki_queries_path: Optional[str] = (
         None  # Path for YAML files with wiki MariaDB queries
     )
@@ -73,6 +76,10 @@ class DjVuConfig:
             self.endpoints_path = os.path.join(examples_path, "endpoints.yaml")
         if self.queries_path is None:
             self.queries_path = os.path.join(examples_path, "djvu_queries.yaml")
+        if self.migrate_queries_path is None:
+            self.migrate_queries_path = os.path.join(
+                examples_path, "djvu_migrate_queries.yaml"
+            )
         if self.wiki_queries_path is None:
             self.wiki_queries_path = os.path.join(examples_path, "wiki_queries.yaml")
         if self.is_example:
@@ -120,10 +127,10 @@ class DjVuConfig:
             wiki_url = urllib.parse.quote(wiki_url)
         return wiki_url
 
-    def normalize_relpath(self,relpath:str):
+    def normalize_relpath(self, relpath: str):
         if relpath.startswith("/images"):
             relpath = relpath.replace("/images", "")
-        return relpath;
+        return relpath
 
     def full_path(self, relpath: str) -> str:
         """Get full DjVu path by prepending images_path to relative path.
@@ -134,7 +141,7 @@ class DjVuConfig:
         Returns:
             Absolute filesystem path to DjVu file
         """
-        relpath=self.normalize_relpath(relpath)
+        relpath = self.normalize_relpath(relpath)
         full_path = f"{self.images_path}{relpath}"
         return full_path
 

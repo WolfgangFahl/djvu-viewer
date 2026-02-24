@@ -14,3 +14,21 @@
     FROM image
     WHERE img_media_type = 'OFFICE'
       AND img_minor_mime = 'vnd.djvu'
+
+# MediaWiki pages that embed the given image file (via imagelinks table)
+# filename is the bare filename without path and without 'File:' prefix
+# e.g. 'AB-Koeln-1929-1.djvu'
+'wiki_image_links':
+  param_list:
+    - name: filename
+      type: str
+      default_value: "02_Amt_Loewenburg.djvu"
+  sql: |
+    SELECT
+      CONVERT(p.page_title USING utf8) AS page_title,
+      p.page_namespace,
+      il_from_namespace
+    FROM imagelinks
+    JOIN page p ON p.page_id = il_from
+    WHERE il_to = '{{ filename }}'
+    ORDER BY p.page_title

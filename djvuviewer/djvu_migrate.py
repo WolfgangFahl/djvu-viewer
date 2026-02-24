@@ -187,6 +187,36 @@ class DjVuMigration(BaseCmd):
             logger.warning("wiki extract failed: %s", ex)
         return "wiki", lod
 
+    def wiki_image_links(self, filename: str) -> Optional[List[dict]]:
+        """
+        Find all MediaWiki pages that embed the given DjVu image file.
+
+        Queries the imagelinks table in the wiki MariaDB (genwiki39) for all
+        pages that link to *filename*.
+
+        Args:
+            filename: Bare filename without path and without 'File:' prefix,
+                      e.g. 'AB-Koeln-1929-1.djvu'.
+
+        Returns:
+            List of dicts with keys page_title, page_namespace,
+            il_from_namespace, or None on error.
+        """
+        lod = None
+        if not self.config.wiki_queries_path:
+            return lod
+        try:
+            mlqm = MultiLanguageQueryManager(
+                yaml_path=self.config.wiki_queries_path,
+                endpoint_name=self.config.wiki_endpoint,
+                endpoints_path=None,
+                languages=["sql"],
+            )
+            lod = mlqm.query("wiki_image_links", {"filename": filename})
+        except Exception as ex:
+            logger.warning("wiki_image_links failed for %s: %s", filename, ex)
+        return lod
+
     def prepare(self) -> MultiLanguageQueryManager:
         """
         Extract all sources and load them into the single djvu_migrate
@@ -197,7 +227,7 @@ class DjVuMigration(BaseCmd):
             ready for named queries.
         """
         mlqm = MultiLanguageQueryManager(
-            yaml_path=self.config.queries_path,
+            yaml_path=self.config.migrate_queries_path,
             endpoint_name="djvu_migrate",
             endpoints_path=self.config.endpoints_path,
             languages=["sql"],

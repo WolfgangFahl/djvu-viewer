@@ -5,6 +5,7 @@ Created on 2026-02-20
 """
 
 import argparse
+import unittest
 from unittest.mock import MagicMock, patch
 
 from basemkit.basetest import Basetest
@@ -28,14 +29,14 @@ class TestDjVuMigrate(Basetest):
         """
         Basetest.setUp(self, debug=debug, profile=profile)
         self.config = DjVuConfig(is_example=True)
-        args=argparse.Namespace()
-        self.migration=DjVuMigration(args)
+        args = argparse.Namespace()
+        self.migration = DjVuMigration(args)
 
     def test_extract_djvu(self):
         """
         Test extract_djvu returns table name 'djvu' and expected stats keys
         """
-        table, lod =  self.migration.extract_djvu()
+        table, lod = self.migration.extract_djvu()
         self.assertEqual(table, "djvu")
         self.assertIsNotNone(lod)
         self.assertGreater(len(lod), 0)
@@ -109,11 +110,32 @@ class TestDjVuMigrate(Basetest):
         self.migration.args = argparse.Namespace(info=True, format="simple")
         self.migration.show_info()
 
+    @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_migrate(self):
         """
         test migrate
         """
-        pattern="0/00"
+        pattern = "0/00"
         self.migration.migrate(pattern)
         pass
 
+    @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
+    def test_wiki_image_links(self):
+        """
+        Test wiki_image_links returns pages that embed a known DjVu file.
+        Uses '02_Amt_Loewenburg.djvu' which is confirmed present in imagelinks.
+        """
+        filename = "02_Amt_Loewenburg.djvu"
+        lod = self.migration.wiki_image_links(filename)
+        self.assertIsNotNone(lod, "wiki_image_links must return a list, not None")
+        self.assertIsInstance(lod, list)
+        self.assertGreater(
+            len(lod), 0, f"Expected at least one page linking to {filename}"
+        )
+        for row in lod:
+            self.assertIn("page_title", row, "Each row must have page_title")
+            self.assertIn("page_namespace", row, "Each row must have page_namespace")
+        if self.debug:
+            print(f"wiki_image_links('{filename}'): {len(lod)} page(s)")
+            for row in lod:
+                print(f"  ns={row['page_namespace']} title={row['page_title']}")
