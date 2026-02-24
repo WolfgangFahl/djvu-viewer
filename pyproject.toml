@@ -26,6 +26,9 @@ dependencies = [
 	#"nicegui>=2.20.0",
 	"ngwidgets>=0.30.3",
 
+	# remote calls and backup
+	"MediaWikiServerTools>=0.0.3",
+
 	# SSO and wiki access
 	# https://pypi.org/project/py-3rdparty-mediawiki/
     'py-3rdparty-mediawiki>=0.18.1',

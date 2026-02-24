@@ -1,5 +1,15 @@
 # AGENTS.md - Development Guide for djvu-viewer
 
+CRITICAL: NEVER EVER DO ANY ACTION READING, MODIFYING OR RUNNING without explaing the plan Each set of intended actions needs to be explained in the format: I understood that <YOUR ANALYSIS> so that i plan to <GOALS YOU PURSUE> by <ACTIONS TO BE CONFIRMED> confirm with go! YOU WILL NEVER PROCEED WITH OUT POSITIVE CONFIRMATION by go!
+
+## SYSTEMATIC APPROACH AND ABSTRACTION
+We are not Hackers but Software Architects. Therefore we use Abstractions if available. We love clean reaable python code.
+We hate debugging bits and bytes of non working libraries  that is only a last restort
+POKING AROUND IS STRICTLY FORBIDDEN!
+
+Every tool execution has a real cost in time and money. We keep track of what we did in the past in our wikis so ask for information sources instead
+of searching yourself.
+
 ## Project Overview
 
 djvu-viewer is a Python project for viewing and converting DjVu files, with integration for MediaWiki-based genealogy archives. It uses FastAPI for the web interface and provides CLI tools for batch processing.
@@ -138,6 +148,56 @@ class DjVuPage(BaseFile):
     valid: bool = False
     width: Optional[int] = field(default=None, kw_only=True)
 ```
+
+### Return Variable Style
+
+Always assign the return value to a named local variable before returning it. Never return an expression directly.
+
+```python
+# correct
+def getLabelText(self) -> str:
+    labelText = self.target.getLabelText(self.modelElement)
+    return labelText
+
+# wrong
+def getLabelText(self) -> str:
+    return self.target.getLabelText(self.modelElement)
+```
+
+**Rationale:** The named variable serves as a natural debugger breakpoint location. You can inspect or print the value before it is returned without restructuring the code.
+
+The variable name should reflect what the value represents (e.g. `labelText`, `markup`, `pageTitle`, `ptype`), not a generic name like `result`.
+
+### Single Return Point
+
+Each function should have a single `return` statement at the end, achieved by initializing the return variable before any branching and updating it through the logic, rather than returning early from multiple places. The exception is early-exit guard clauses at the very top of a function (e.g. returning `None` when a precondition is not met), which are acceptable when the alternative would create deeply nested `if/else` blocks that harm readability.
+
+```python
+# correct — single return, no excessive nesting
+def getColor(self, value: int) -> str:
+    color = "grey"
+    if value > 0:
+        color = "green"
+    elif value < 0:
+        color = "red"
+    return color
+
+# acceptable — early-exit guard avoids deep nesting
+def process(self, data) -> str:
+    if data is None:
+        return None
+    markup = self.render(data)
+    return markup
+
+# wrong — multiple returns scattered through logic
+def getColor(self, value: int) -> str:
+    if value > 0:
+        return "green"
+    elif value < 0:
+        return "red"
+    return "grey"
+```
+
 
 ### Error Handling
 - Use try/except with specific exception types

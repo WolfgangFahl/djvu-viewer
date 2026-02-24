@@ -6,14 +6,16 @@ MediaWiki Server handling
 @author: wf
 """
 
+import time
 from dataclasses import field
-import pathlib
 from typing import Dict, List, Optional
-from basemkit.profiler import Profiler
 
-from mwstools_backend.remote import Remote
+from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
+from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu
+from mwstools_backend.remote import Remote
+from djvuviewer.lod_show import LodShow
 
 
 @lod_storable
@@ -40,6 +42,52 @@ class Server:
     imagefolders: Dict[str, ImageFolder] = field(default_factory=dict)
     is_local: Optional[bool] = False
 
+    def find_djvu_images(
+        self,
+        imagefolder_name: str,
+        expiry_secs: int = 86400,
+    ) -> List[str]:
+        """
+        Find all .djvu files in the hex subdirectories (0-f) of an image folder
+        on a remote server.  Results are cached in
+        ~/.djvuviewer/{imagefolder_name}/djvu_filelist.txt and reused until
+        the cache is older than *expiry_secs* seconds.
+
+        Args:
+            server: The server that hosts the image folder.
+            imagefolder_name: Short name used as the local cache directory.
+            expiry_secs: Cache lifetime in seconds (default: 86400 = 24 h).
+
+        Returns:
+            Sorted list of relative .djvu file paths found under the hex dirs.
+        """
+        imagefolder = self.imagefolders.get(imagefolder_name)
+        if not imagefolder:
+            raise Exception(f"invalid image folder name {imagefolder_name}")
+        cache_dir = DjVuConfig.get_config_dir() / imagefolder_name
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / "djvu_filelist.txt"
+
+        cache_valid = (
+            cache_file.exists()
+            and cache_file.stat().st_size > 0
+            and (time.time() - cache_file.stat().st_mtime) < expiry_secs
+        )
+        if cache_valid:
+            djvu_paths = cache_file.read_text().splitlines()
+            return djvu_paths
+
+        cmd = f"find {imagefolder.path} -type f -path '*/[0-9a-f]/*.djvu' 2>/dev/null"
+        remote = Remote(host=self.hostname)
+        result = remote.run(cmd)
+        raw_output = result.stdout or ""
+        djvu_paths = sorted(
+            line.strip() for line in raw_output.splitlines() if line.strip()
+        )
+
+        cache_file.write_text("\n".join(djvu_paths))
+        return djvu_paths
+
 
 @lod_storable
 class TestFile(DjVu):
@@ -49,22 +97,6 @@ class TestFile(DjVu):
 
     bundled_size: Optional[int] = None
     unbundled_stub_size: Optional[int] = None
-
-    @property
-    def hash_path(self) -> Optional[str]:
-        """Extract hash path from path (e.g., 'c/c7' from '/images/c/c7/file.djvu')."""
-        if self.path:
-            parts = self.path.rsplit("/", 2)
-            if len(parts) >= 2:
-                return parts[-2]
-        return None
-
-    @property
-    def name(self) -> Optional[str]:
-        """Extract filename from path (e.g., 'file.djvu')."""
-        if self.path:
-            return self.path.rsplit("/", 1)[-1]
-        return None
 
 
 @lod_storable
@@ -94,7 +126,9 @@ class ServerConfig:
         """
         Returns the standard location: ~/.djvuviewer/server_config.yaml.
         """
-        return str(pathlib.Path.home() / ".djvuviewer" / "server_config.yaml")
+        config_dir = DjVuConfig.get_config_dir()
+        config_path = str(config_dir / "server_config.yaml")
+        return config_path
 
     @classmethod
     def of_yaml(cls, yaml_path: str = None) -> "ServerConfig":
@@ -123,6 +157,7 @@ class ServerProfile:
             self.config = ServerConfig.of_yaml(yaml_path)
         else:
             self.config = config
+        self.djvu_config = DjVuConfig.get_instance()
         self.debug = debug
         self.verbose = verbose
 
@@ -141,11 +176,12 @@ class ServerProfile:
         Returns:
             djvudumpMs or None if check failed.
         """
-        remote=Remote(host=server.hostname)
-        filepath = f"{imagefolder.path}/{djvu.hash_path}/{djvu.name}"
-        cmd=f"djvudump {filepath}"
+        remote = Remote(host=server.hostname)
+        relpath = self.djvu_config.normalize_relpath(djvu.path)
+        filepath = f"{imagefolder.path}{relpath}"
+        cmd = f"djvudump {filepath}"
         profiler = Profiler(f"{cmd}", profile=self.debug or self.verbose)
-        result=remote.run(cmd)
+        result = remote.run(cmd)
         output = result.stdout
         elapsed_sec = profiler.time()
         djvudump_ms = round(elapsed_sec * 1000, 1)
@@ -159,16 +195,32 @@ class ServerProfile:
             djvu.bundled = False
         return djvudump_ms
 
+    def imagefolder_gen(self):
+        """
+        generate a loop over all servers and imagefolders
+        """
+        for _server_name, server in self.config.servers.items():
+            for _image_name, imagefolder in server.imagefolders.items():
+                yield server, imagefolder
+
+    def show(self, tablefmt: str):
+        slod = []
+        ilod = []
+        for server, imagefolder in self.imagefolder_gen():
+            ilod.append(imagefolder.to_dict())
+        LodShow.show(ilod, tablefmt)
+
     def run(self):
         """
         Check all test files on all servers/image stores.
         """
-        for _server_name, server in self.config.servers.items():
-            for _image_name, imagefolder in server.imagefolders.items():
-                for tf in self.config.test_files:
-                    djvudump_ms = self.check_djvu(server, imagefolder, tf)
-                    if djvudump_ms:
-                        imagefolder.djvudumpMs = djvudump_ms
+        for server, imagefolder in self.imagefolder_gen():
+            for tf in self.config.test_files:
+                if self.debug:
+                    print(f"checking sever {server.hostname} ...")
+                djvudump_ms = self.check_djvu(server, imagefolder, tf)
+                if djvudump_ms:
+                    imagefolder.djvudumpMs = djvudump_ms
 
     def save(self) -> None:
         """

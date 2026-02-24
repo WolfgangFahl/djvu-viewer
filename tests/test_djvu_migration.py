@@ -5,6 +5,8 @@ Created on 2026-02-20
 """
 
 import argparse
+import pathlib
+import time
 from unittest.mock import MagicMock, patch
 
 from basemkit.basetest import Basetest
@@ -13,6 +15,7 @@ from ngwidgets.progress import Progressbar
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_migrate import DjVuMigration
 from djvuviewer.djvu_wikimages import DjVuImagesCache
+from djvuviewer.mw_server import ImageFolder, Server, ServerConfig
 from djvuviewer.wiki_images import MediaWikiImage
 
 
@@ -111,3 +114,4 @@ class TestDjVuMigration(Basetest):
         migration.config = self.config
         migration.args = argparse.Namespace(info=True, format="simple")
         migration.show_info()
+

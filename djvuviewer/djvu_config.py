@@ -120,6 +120,11 @@ class DjVuConfig:
             wiki_url = urllib.parse.quote(wiki_url)
         return wiki_url
 
+    def normalize_relpath(self,relpath:str):
+        if relpath.startswith("/images"):
+            relpath = relpath.replace("/images", "")
+        return relpath;
+
     def full_path(self, relpath: str) -> str:
         """Get full DjVu path by prepending images_path to relative path.
 
@@ -127,22 +132,30 @@ class DjVuConfig:
             path: Relative path to DjVu file
 
         Returns:
-            Absolute filesytem path to DjVu file
+            Absolute filesystem path to DjVu file
         """
-        if relpath.startswith("/images"):
-            relpath = relpath.replace("/images", "")
+        relpath=self.normalize_relpath(relpath)
         full_path = f"{self.images_path}{relpath}"
         return full_path
+
+    @classmethod
+    def get_config_dir(cls) -> str:
+        """
+        Returns the standard location for the config directory: $HOME/.djvuviewer
+        """
+        home = pathlib.Path.home()
+        config_dir = home / ".djvuviewer"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir
 
     @classmethod
     def get_config_file_path(cls) -> str:
         """
         Returns the standard location for the config file: $HOME/.djvuviewer/config.yaml
         """
-        home = pathlib.Path.home()
-        config_dir = home / ".djvuviewer"
-        config_dir.mkdir(parents=True, exist_ok=True)
-        return str(config_dir / "config.yaml")
+        config_dir = cls.get_config_dir()
+        config_file_path = str(config_dir / "config.yaml")
+        return config_file_path
 
     @classmethod
     def get_instance(cls, test: bool = False) -> "DjVuConfig":

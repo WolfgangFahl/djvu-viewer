@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache
-from djvuviewer.mw_server import ServerConfig, ServerProfile
+from djvuviewer.mw_server import Server, ServerConfig, ServerProfile
 from lodstorage.multilang_querymanager import MultiLanguageQueryManager
 from djvuviewer.version import Version
 
@@ -104,11 +104,11 @@ class DjVuMigration(BaseCmd):
             handled = True
         if args.test:
             server_config = ServerConfig.of_yaml()
-            profile = ServerProfile(server_config)
+            profile = ServerProfile(server_config, debug=args.debug)
+            profile.run()
+            profile.show(args.format)
             if getattr(args, "write", False):
-                tester.write_back()
-            rows = tester.run()
-            tester.show(rows, tablefmt=getattr(args, "format", "simple"))
+                profile.write_back()
             handled = True
         return handled
 
@@ -249,6 +249,8 @@ class DjVuMigration(BaseCmd):
         mlqm = self.prepare()
         for query_name in ["wiki_stats", "djvu_stats", "mw_images_stats"]:
             print(self.show_section(mlqm, query_name, fmt))
+
+
 
 
 def main(argv: Optional[List[str]] = None) -> int:
