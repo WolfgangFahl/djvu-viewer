@@ -6,18 +6,55 @@ MediaWiki Server handling
 @author: wf
 """
 
-import time
 from dataclasses import field
+import time
 from typing import Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
-from mwstools_backend.remote import Remote
-
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu
 from djvuviewer.djvu_manager import DjVuManager
+from mwstools_backend.remote import Remote
+
 from djvuviewer.lod_show import LodShow
+from dataclasses import dataclass
+
+@dataclass
+class MediaWikiHash:
+    """
+    support MediaWiki file hash encoding
+    """
+    hash:str
+
+    @property
+    def path(self)->str:
+        return path
+
+    @property
+    def value(self)->int:
+        return value
+
+    @classmethod
+    def of_value(cls,value:int):
+
+    @classmethod
+    def of_filename(cls,str):
+
+
+
+@lod_storable
+class DjVuToBeMigrated(DjVu):
+    """
+    DjVu File ready for migration
+    """
+
+    @classmethod
+    def hash_to_pattern(cls,hash:str):
+        """
+        convert a mediawiki hash value to a pattern
+        """
+
 
 
 @lod_storable
@@ -358,72 +395,8 @@ class ServerProfile:
         scp_command = f"scp {source_path} {target_path}"
         return scp_command
 
-    def check_file_eligibility(self, djvu_path: str) -> dict:
-        """
-        Check if a file is eligible for migration.
 
-        Args:
-            djvu_path: Path to djvu file
-
-        Returns:
-            Dict with eligible, reason, and check results
-        """
-
-        result = {
-            "path": djvu_path,
-            "eligible": False,
-            "reason": "",
-            "checks": {},
-        }
-
-        # Get djvu record
-        djvu_records = self.djvu_manager.query("djvu_for_path", {"path": djvu_path})
-        if not djvu_records:
-            result["reason"] = "not found in djvu DB"
-            return result
-
-        djvu_record = djvu_records[0]
-        bundled_db = djvu_record.get("bundled", False)
-        filesize = djvu_record.get("filesize", 0)
-        page_count = djvu_record.get("page_count", 0)
-
-        # Get page records for dimensions
-        pages = self.djvu_manager.query(
-            "all_pages_for_path", {"djvu_path": djvu_path, "limit": 10000}
-        )
-
-        if not pages:
-            result["reason"] = "no page records found"
-            return result
-
-        # Calculate min_uncompressed using first available server
-        source_server, _ = self.get_folder_server("source")
-        min_uncompressed = source_server.calculate_min_uncompressed_size(pages)
-        bundled_size = source_server.check_bundled_by_size(filesize, min_uncompressed)
-
-        # Store check results
-        result["checks"] = {
-            "bundled_db": bundled_db,
-            "bundled_size": bundled_size,
-            "filesize": filesize,
-            "min_uncompressed": min_uncompressed,
-            "page_count": page_count,
-        }
-
-        # Determine eligibility
-        if not bundled_db:
-            result["reason"] = "not bundled (DB)"
-        elif not bundled_size:
-            result["reason"] = (
-                f"unbundled stub (filesize {filesize} < min {min_uncompressed})"
-            )
-        else:
-            result["eligible"] = True
-            result["reason"] = "eligible"
-
-        return result
-
-    def files_tomigrate(self, pattern: str, limit: Optional[int] = None) -> List[dict]:
+    def files_tomigrate(self, pattern: str, limit: Optional[int] = None) -> List[DjVuToBeMigrated]:
         """
         Filter files matching pattern for DjVu files needing to be migrated
 
@@ -441,13 +414,24 @@ class ServerProfile:
         )
 
         # Check eligibility for each
-        results = []
+        djvu_files = []
         for djvu_record in djvu_records:
-            djvu_path = djvu_record.get("path")
-            check_result = self.check_file_eligibility(djvu_path)
-            results.append(check_result)
+            djvu_files.append(self.create_file_tomigrate(djvu_record))
 
-        return results
+        return djvu_files
+
+    def create_file_tomigrate(self,djvu_record:Dict[str,object])->DjVuToBeMigrated:
+        """
+
+        """
+        file_tomigrate=DjVuToBeMigrated()
+        djvu_path=djvu_record.get("path")
+        page_records = self.djvu_manager.query(
+            "all_pages_for_path", {"djvu_path": djvu_path, "limit": 10000}
+        )
+        return file_tomigrate
+
+
 
     def show_migration_plan(self, eligible_files: List[dict], execute: bool):
         """

@@ -1,0 +1,201 @@
+#!/bin/bash
+#
+# Copyright (C) 2005-2025 BITPlan GmbH
+#
+# content index files creation
+
+# source messaging functions
+source bash_messages
+
+# configuration
+base=/home/wf/content
+db=$base/prod_images_content.db
+sqlite_import=$base/sqlite_import.py
+endpoints_yaml=$base/endpoints.yaml
+website=https://gitlab.genealogy.net/genwiki/update-auf-1.39/-/issues/28
+
+# default directory to index
+dir=/mnt/images
+range=""
+dry_run=false
+
+# performance tracking
+files_min=0
+
+# show usage information
+usage() {
+  cat << EOF
+Usage: createcontent [options]
+
+Create content index files and optionally import them into SQLite database.
+
+Options:
+  -dir <path>       Directory to process (default: $dir)
+  -range <start-end> Process MediaWiki hash bucket range (format: 0/00-f/ff)
+  --dry             Dry run: show directories in range without processing
+  -find             Create content index file using unix find with timestamps
+  -db               Import csv content file into sqlite database using python script
+EOF
+  exit 0
+}
+
+# loop through bucket range
+loop_buckets() {
+  local base_dir="$dir"
+  
+  # parse range: 0/00-f/ff
+  local start_part=$(echo "$range" | cut -d'-' -f1)
+  local end_part=$(echo "$range" | cut -d'-' -f2)
+  
+  local start_first=$(echo "$start_part" | cut -d'/' -f1)
+  local start_second=$(echo "$start_part" | cut -d'/' -f2)
+  local end_first=$(echo "$end_part" | cut -d'/' -f1)
+  local end_second=$(echo "$end_part" | cut -d'/' -f2)
+  
+  # convert hex to decimal
+  local start_first_dec=$((16#$start_first))
+  local start_second_dec=$((16#$start_second))
+  local end_first_dec=$((16#$end_first))
+  local end_second_dec=$((16#$end_second))
+  
+  action "Processing buckets $start_first/$start_second to $end_first/$end_second in $base_dir"
+  
+  for ((first_dec=start_first_dec; first_dec<=end_first_dec; first_dec++)); do
+    local first=$(printf "%x" $first_dec)
+    
+    # MediaWiki structure: first level X contains X0 to Xf
+    # so second level for first level 0 is 00-0f, for 1 is 10-1f, etc.
+    local base_second=$((first_dec * 16))
+    local sec_start=$base_second
+    local sec_end=$((base_second + 15))
+    
+    # adjust for partial ranges at boundaries
+    if [ $first_dec -eq $start_first_dec ] && [ $start_second_dec -gt $sec_start ]; then
+      sec_start=$start_second_dec
+    fi
+    
+    if [ $first_dec -eq $end_first_dec ] && [ $end_second_dec -lt $sec_end ]; then
+      sec_end=$end_second_dec
+    fi
+    
+    for ((second_dec=sec_start; second_dec<=sec_end; second_dec++)); do
+      local second=$(printf "%02x" $second_dec)
+      dir="$base_dir/$first/$second"
+      
+      if [ "$dry_run" = true ]; then
+        if [ -d "$dir" ]; then
+          success "$dir exists"
+        else
+          warn "$dir does not exist"
+        fi
+      else
+        if [ -d "$dir" ]; then
+          process_directory
+        fi
+      fi
+    done
+  done
+}
+
+# create endpoints.yaml
+create_endpoints_yaml() {
+  action "Creating endpoints.yaml"
+  cat > "$endpoints_yaml" << EOF
+# endpoints for filesearch/content database
+# created at $(date -I) by $0 script
+endpoints:
+  content:
+    lang: sql
+    database: sqlite
+    website: $website
+    endpoint: $db
+EOF
+  success "Created $endpoints_yaml"
+}
+
+# create content index file for directory
+process_directory() {
+  local start_time=$(date +%s)
+  local timestamp="$(date -Iseconds)"
+  action "Processing directory $dir at $timestamp"
+  
+  # create filename from full path: /mnt/images/0/01 -> mnt_images_0_01
+  postfix=$(echo "$dir" | sed 's|^/||' | sed 's|/|_|g')
+  target=$base/content_${postfix}.txt
+  
+  # skip if already exists
+  if [ -f "$target" ]; then
+    warn "Skipping $dir - file already exists: $target"
+    return 0
+  fi
+  
+  cd $dir || error "Cannot access directory $dir"
+  
+  echo "# content of $dir created at $timestamp" > $target
+  # This is the actual command that may take hours for millions of files
+  # via a mounted directory e.g. on NFS or CIFS/storagebox
+  # find all files and output pipe-delimited: path|size|mtime|ctime|user|group|permissions
+  # example: ./file.txt|1234|2025-11-20T13:45:30+01:00|2025-11-19T10:20:15+01:00|wf|wf|644
+  # see: man find (search for -printf: %p=path %s=size %T+=mtime %C+=ctime %u=user %g=group %m=mode)
+  find . -type f -printf "%p|%s|%T+|%C+|%u|%g|%m\n" >> $target
+  
+  # calculate stats
+  local end_time=$(date +%s)
+  timestamp="$(date -Iseconds)"
+  echo "# finished at $timestamp" >> $target
+  
+  # count files (exclude comment lines)
+  local file_count=$(grep -v "^#" "$target" | wc -l)
+  local duration=$((end_time - start_time))
+  
+  if [ $duration -gt 0 ]; then
+    local minutes=$(echo "scale=2; $duration / 60" | bc)
+    files_min=$(echo "scale=0; $file_count / $minutes" | bc)
+    success "Created content file $target at $timestamp"
+    action "Stats: $file_count files in $minutes minutes = $files_min files/min"
+  else
+    success "Created content file $target at $timestamp"
+    action "Stats: $file_count files"
+  fi
+}
+
+# import content file into sqlite database
+import_to_sqlite() {
+  postfix=$(echo "$dir" | sed 's|^/||' | sed 's|/|_|g')
+  target=$base/content_${postfix}.txt
+  action "Importing $target into database"
+  python3 "$sqlite_import" "$db" "$target" "$dir"
+  success "Import completed"
+}
+
+# handle command line options
+while [ "$1" != "" ]; do
+  option="$1"
+  case $option in
+    -dir)
+      dir="$2"
+      shift
+      ;;
+    --dry)
+      dry_run=true
+      ;;
+    -range)
+      range="$2"
+      loop_buckets
+      shift
+      ;;
+    -find)
+      process_directory
+      ;;
+    -db)
+      create_endpoints_yaml
+      import_to_sqlite
+      ;;
+    *)
+      usage
+      ;;
+  esac
+  shift
+done
+
+exit 0

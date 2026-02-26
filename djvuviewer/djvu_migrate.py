@@ -50,6 +50,7 @@ class DjVuMigration(BaseCmd):
         self.djvu_config = DjVuConfig.get_instance()
         self.server_config = ServerConfig.of_yaml()
 
+
     def add_arguments(self, parser: ArgumentParser) -> ArgumentParser:
         """
         Add migration-specific arguments.

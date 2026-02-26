@@ -25,13 +25,13 @@ class TestDjVuMigrate(Basetest):
         Basetest.setUp(self, debug=debug, profile=profile)
         args = argparse.Namespace()
         self.migration = DjVuMigration(args)
+        self.migration.configure_profile(debug=debug)
 
     def test_update_profile(self):
         """
         Test updating the profile
         """
         write = False
-        self.migration.configure_profile(debug=self.debug)
         self.migration.update_profile(tablefmt="mediawiki", write=write)
 
     def test_extract_djvu(self):
@@ -75,11 +75,11 @@ class TestDjVuMigrate(Basetest):
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_migrate(self):
         """
-        Test migrate applies all 6 migration rules per file from the source
-        server filelist and returns only eligible candidates.
+        Test migrate for the given pattern
         """
         pattern = "0/00"
-        self.migration.migrate(pattern, timestamp_precision_secs=86400)
+        limit=1
+        self.migration.migrate(pattern,limit)
 
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_wiki_image_links(self):
