@@ -97,6 +97,20 @@ class DjVuPage(BaseFile):
             self.page_key = f"{self.djvu_path}{anchor}"
 
     @property
+    def uncompressed_size(self) -> int:
+        """
+        Calculate minimum uncompressed size for this page.
+
+        Args:
+            pages: List of page dicts with width and height
+
+        Returns:
+            width × height (grayscale, 1 byte per pixel)
+        """
+        uncompressed_size = self.width * self.height
+        return uncompressed_size
+
+    @property
     def png_file(self) -> str:
         """
         Returns the PNG file name derived from the DjVu file path and page index.

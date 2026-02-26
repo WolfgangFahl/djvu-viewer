@@ -13,7 +13,8 @@ from djvuviewer.djvu_config import DjVuConfig
 
 class DjVuManager:
     """
-    manager for DjVu files
+    manager for DjVu file metadata using named parameterized queries and a in memory database
+    for federated queries
     """
 
     def __init__(self, config: DjVuConfig):

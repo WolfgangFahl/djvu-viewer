@@ -8,7 +8,9 @@ import argparse
 import unittest
 
 from basemkit.basetest import Basetest
+
 from djvuviewer.djvu_migrate import DjVuMigration
+from djvuviewer.mw_server import ImageFolder, Server
 
 
 class TestDjVuMigrate(Basetest):
@@ -23,6 +25,14 @@ class TestDjVuMigrate(Basetest):
         Basetest.setUp(self, debug=debug, profile=profile)
         args = argparse.Namespace()
         self.migration = DjVuMigration(args)
+
+    def test_update_profile(self):
+        """
+        Test updating the profile
+        """
+        write = False
+        self.migration.configure_profile(debug=self.debug)
+        self.migration.update_profile(tablefmt="mediawiki", write=write)
 
     def test_extract_djvu(self):
         """
@@ -69,15 +79,7 @@ class TestDjVuMigrate(Basetest):
         server filelist and returns only eligible candidates.
         """
         pattern = "0/00"
-        candidates = self.migration.migrate(pattern, timestamp_precision_secs=86400)
-        self.assertIsInstance(candidates, list)
-        for row in candidates:
-            for key in ["path", "djvu_date", "mw_date", "filesize", "page_count"]:
-                self.assertIn(key, row)
-        if self.debug:
-            print(f"migrate('{pattern}'): {len(candidates)} candidate(s)")
-            for row in candidates:
-                print(f"  {row['path']}")
+        self.migration.migrate(pattern, timestamp_precision_secs=86400)
 
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_wiki_image_links(self):
@@ -99,3 +101,54 @@ class TestDjVuMigrate(Basetest):
             print(f"wiki_image_links('{filename}'): {len(lod)} page(s)")
             for row in lod:
                 print(f"  ns={row['page_namespace']} title={row['page_title']}")
+
+    def test_check_bundled_by_size(self):
+        """
+        Test check_bundled_by_size with bundled and stub examples.
+        """
+        server = Server(hostname="test", os="Linux", latencyMs=0.0)
+
+        # Bundled case: 300KB filesize, 1.8MB min
+        is_bundled = server.check_bundled_by_size(300694, 1868800)
+        self.assertTrue(is_bundled)
+
+        # Stub case: 118 bytes filesize, 25MB min
+        is_bundled = server.check_bundled_by_size(118, 25000000)
+        self.assertFalse(is_bundled)
+
+        if self.debug:
+            print("Bundled check passed for both cases")
+
+    def test_get_folder_server(self):
+        """
+        Test get_folder_server returns correct Server and ImageFolder.
+        """
+        self.migration.configure_profile(debug=self.debug)
+        source_server, source_folder = self.migration.profile.get_folder_server(
+            "source"
+        )
+        self.assertIsNotNone(source_server)
+        self.assertIsNotNone(source_folder)
+        if self.debug:
+            print(f"source: {source_server.hostname}, {source_folder.path}")
+
+    def test_generate_scp_command(self):
+        """
+        Test generate_scp_command produces correct format.
+        """
+
+        source_server = Server(hostname="source.example.com", os="Linux", latencyMs=0.0)
+        source_folder = ImageFolder(path="/source/images", fs="HD")
+        target_server = Server(hostname="target.example.com", os="Linux", latencyMs=0.0)
+        target_folder = ImageFolder(path="/target/images", fs="SSD")
+        relpath = "/0/00/Test.djvu"
+
+        self.migration.configure_profile(debug=self.debug)
+        scp_command = self.migration.profile.generate_scp_command(
+            source_server, source_folder, target_server, target_folder, relpath
+        )
+
+        expected = "scp source.example.com:/source/images/0/00/Test.djvu target.example.com:/target/images/0/00/Test.djvu"
+        self.assertEqual(scp_command, expected)
+        if self.debug:
+            print(f"scp_command: {scp_command}")

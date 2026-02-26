@@ -105,6 +105,10 @@ from fastapi import FastAPI
 from djvuviewer.packager import Packager
 ```
 
+imports are at the the top of the file and sorted later by our blackisort script. For this to work
+we avoid inline imports. Inline imports only makes sense for optional libraries that might otherwise make
+our modules fail
+
 ### Type Hints
 - Use `Optional[T]` instead of `Union[T, None]`
 - Use type hints for all function parameters and return types

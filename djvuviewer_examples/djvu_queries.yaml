@@ -96,6 +96,23 @@
     FROM DjVu
     WHERE path= "{{ path }}"
 
+# DjVu-Datensätze nach Pfad-Pattern filtern
+'djvu_by_path_pattern':
+  param_list:
+    - name: pattern
+      type: str
+      default_value: "0/00"
+    - name: limit
+      type: int
+      default_value: 10000
+  sql: |
+    SELECT
+      *
+    FROM DjVu
+    WHERE path LIKE '%{{ pattern }}%'
+    ORDER BY path
+    LIMIT {{ limit }}
+
 # Alle Bild-Datensätze mit konfigurierbarem Limit abrufen
 'all_pages':
   param_list:

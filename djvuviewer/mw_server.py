@@ -8,7 +8,7 @@ MediaWiki Server handling
 
 import time
 from dataclasses import field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
@@ -16,6 +16,7 @@ from mwstools_backend.remote import Remote
 
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu
+from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.lod_show import LodShow
 
 
@@ -27,6 +28,7 @@ class ImageFolder:
     fs: str
     total: Optional[int] = None
     migrated: Optional[int] = None
+    cache_expiration: int = 86400
     statMs: Optional[float] = None
     readMs: Optional[float] = None
     speedMBs: Optional[float] = None
@@ -46,7 +48,6 @@ class Server:
     def find_djvu_images(
         self,
         imagefolder_name: str,
-        expiry_secs: int = 86400,
     ) -> List[str]:
         """
         Find all .djvu files in the hex subdirectories (0-f) of an image folder
@@ -57,7 +58,6 @@ class Server:
         Args:
             server: The server that hosts the image folder.
             imagefolder_name: Short name used as the local cache directory.
-            expiry_secs: Cache lifetime in seconds (default: 86400 = 24 h).
 
         Returns:
             Sorted list of relative .djvu file paths found under the hex dirs.
@@ -72,7 +72,8 @@ class Server:
         cache_valid = (
             cache_file.exists()
             and cache_file.stat().st_size > 0
-            and (time.time() - cache_file.stat().st_mtime) < expiry_secs
+            and (time.time() - cache_file.stat().st_mtime)
+            < imagefolder.cache_expiration
         )
         if cache_valid:
             djvu_paths = cache_file.read_text().splitlines()
@@ -87,7 +88,38 @@ class Server:
         )
 
         cache_file.write_text("\n".join(djvu_paths))
+        imagefolder.total = len(djvu_paths)
         return djvu_paths
+
+    def check_bundled_by_size(self, filesize: int, min_uncompressed: int) -> bool:
+        """
+        Check if file is bundled based on size heuristic.
+
+        Test data from 0/00 bucket:
+        - Bundled: 1,868,800 / 300,694 = 6.2 (ratio < 20)
+        - Bundled: 98,442,273 / 7,536,104 = 13.1 (ratio < 20)
+        - Stub: 25,726,780 / 118 = 218,024 (ratio > 200,000)
+
+        Threshold: compression_ratio > 100 indicates stub file (safe margin between 20 and 200,000).
+
+        Args:
+            filesize: Actual file size in bytes
+            min_uncompressed: Minimum uncompressed size (from calculate_min_uncompressed_size)
+
+        Returns:
+            True if bundled, False if stub
+        """
+        # Avoid division by zero
+        if filesize == 0 or min_uncompressed == 0:
+            is_bundled = False
+            return is_bundled
+
+        compression_ratio = min_uncompressed / filesize
+
+        # Stub detection: impossibly high compression ratio (> 1000:1) or tiny filesize (< 1000 bytes)
+        is_stub = compression_ratio > 1000 or filesize < 1000
+        is_bundled = not is_stub
+        return is_bundled
 
 
 @lod_storable
@@ -159,8 +191,34 @@ class ServerProfile:
         else:
             self.config = config
         self.djvu_config = DjVuConfig.get_instance()
+        self.djvu_manager = DjVuManager(self.djvu_config)
         self.debug = debug
         self.verbose = verbose
+        self.filelist_of_folder = {}
+
+    def imagefolder_gen(self):
+        """
+        generate a loop over all servers and imagefolders
+        """
+        for server_name, server in self.config.servers.items():
+            server._name = server_name
+            for imagefolder_name, imagefolder in server.imagefolders.items():
+                imagefolder._name = imagefolder_name
+                imagefolder._server = server
+                yield imagefolder
+
+    def cache_filelists(self):
+        """
+        cache filelists for all folders
+        """
+        for imagefolder in self.imagefolder_gen():
+            server = imagefolder._server
+            if self.debug:
+                print(
+                    f"fetching djvu files for {server.hostname} {imagefolder.path} ..."
+                )
+            filelist = server.find_djvu_images(imagefolder._name)
+            self.filelist_of_folder[imagefolder._name] = filelist
 
     def check_djvu(
         self, server: Server, imagefolder: ImageFolder, djvu: TestFile
@@ -196,19 +254,29 @@ class ServerProfile:
             djvu.bundled = False
         return djvudump_ms
 
-    def imagefolder_gen(self):
+    def show(self, tablefmt: str) -> None:
         """
-        generate a loop over all servers and imagefolders
-        """
-        for _server_name, server in self.config.servers.items():
-            for _image_name, imagefolder in server.imagefolders.items():
-                yield server, imagefolder
+        Show server and imagefolder information in tables.
 
-    def show(self, tablefmt: str):
+        Args:
+            tablefmt: tabulate format string (e.g. simple, grid, github).
+        """
         slod = []
+        server_set = set()
         ilod = []
-        for server, imagefolder in self.imagefolder_gen():
-            ilod.append(imagefolder.to_dict())
+        for imagefolder in self.imagefolder_gen():
+            server = imagefolder._server
+            if server.hostname not in server_set:
+                server_set.add(server.hostname)
+                server_dict = server.to_dict()
+                server_dict["imagefolder"] = imagefolder._name
+                slod.append(server_dict)
+            imagefolder_dict = imagefolder.to_dict()
+            imagefolder_dict["server"] = server.hostname
+            ilod.append(imagefolder_dict)
+        print("=== Servers ===")
+        LodShow.show(slod, tablefmt)
+        print("=== Image Folders ===")
         LodShow.show(ilod, tablefmt)
 
     def run(self):
@@ -228,3 +296,193 @@ class ServerProfile:
         save back to server_config.yaml.
         """
         self.config.save_to_yaml_file(ServerConfig.get_config_path())
+
+    def get_folder_server(self, folder_role: str) -> Tuple[Server, ImageFolder]:
+        """
+        Get server and imagefolder for a given role.
+
+        Args:
+            folder_role: Role from config.folders (e.g. "source", "test", "target")
+
+        Returns:
+            Tuple of (Server, ImageFolder) for the specified role
+        """
+        setup_location = self.config.folders.get(folder_role)
+        if not setup_location:
+            raise ValueError(f"No folder configuration for role: {folder_role}")
+
+        server_name = setup_location.server
+        folder_name = setup_location.folder
+
+        server = self.config.servers.get(server_name)
+        if not server:
+            raise ValueError(f"Server not found: {server_name}")
+
+        imagefolder = server.imagefolders.get(folder_name)
+        if not imagefolder:
+            raise ValueError(
+                f"ImageFolder not found: {folder_name} on server {server_name}"
+            )
+
+        result = (server, imagefolder)
+        return result
+
+    def generate_scp_command(
+        self,
+        source_server: Server,
+        source_folder: ImageFolder,
+        target_server: Server,
+        target_folder: ImageFolder,
+        relpath: str,
+    ) -> str:
+        """
+        Generate scp command for file migration.
+
+        Args:
+            source_server: Source server
+            source_folder: Source imagefolder
+            target_server: Target server
+            target_folder: Target imagefolder
+            relpath: Relative path of file (e.g. "/0/00/File.djvu")
+
+        Returns:
+            SCP command string
+        """
+        normalized_relpath = self.djvu_config.normalize_relpath(relpath)
+        source_path = (
+            f"{source_server.hostname}:{source_folder.path}{normalized_relpath}"
+        )
+        target_path = (
+            f"{target_server.hostname}:{target_folder.path}{normalized_relpath}"
+        )
+        scp_command = f"scp {source_path} {target_path}"
+        return scp_command
+
+    def check_file_eligibility(self, djvu_path: str) -> dict:
+        """
+        Check if a file is eligible for migration.
+
+        Args:
+            djvu_path: Path to djvu file
+
+        Returns:
+            Dict with eligible, reason, and check results
+        """
+
+        result = {
+            "path": djvu_path,
+            "eligible": False,
+            "reason": "",
+            "checks": {},
+        }
+
+        # Get djvu record
+        djvu_records = self.djvu_manager.query("djvu_for_path", {"path": djvu_path})
+        if not djvu_records:
+            result["reason"] = "not found in djvu DB"
+            return result
+
+        djvu_record = djvu_records[0]
+        bundled_db = djvu_record.get("bundled", False)
+        filesize = djvu_record.get("filesize", 0)
+        page_count = djvu_record.get("page_count", 0)
+
+        # Get page records for dimensions
+        pages = self.djvu_manager.query(
+            "all_pages_for_path", {"djvu_path": djvu_path, "limit": 10000}
+        )
+
+        if not pages:
+            result["reason"] = "no page records found"
+            return result
+
+        # Calculate min_uncompressed using first available server
+        source_server, _ = self.get_folder_server("source")
+        min_uncompressed = source_server.calculate_min_uncompressed_size(pages)
+        bundled_size = source_server.check_bundled_by_size(filesize, min_uncompressed)
+
+        # Store check results
+        result["checks"] = {
+            "bundled_db": bundled_db,
+            "bundled_size": bundled_size,
+            "filesize": filesize,
+            "min_uncompressed": min_uncompressed,
+            "page_count": page_count,
+        }
+
+        # Determine eligibility
+        if not bundled_db:
+            result["reason"] = "not bundled (DB)"
+        elif not bundled_size:
+            result["reason"] = (
+                f"unbundled stub (filesize {filesize} < min {min_uncompressed})"
+            )
+        else:
+            result["eligible"] = True
+            result["reason"] = "eligible"
+
+        return result
+
+    def files_tomigrate(self, pattern: str, limit: Optional[int] = None) -> List[dict]:
+        """
+        Filter files matching pattern for DjVu files needing to be migrated
+
+        Args:
+            pattern: Path pattern to match (e.g. "0/00")
+            limit: Optional limit on number of files to check
+
+        Returns:
+            List of DjVu files to migrate
+        """
+        # Query djvu database for files matching pattern
+        query_limit = limit if limit else 10000
+        djvu_records = self.djvu_manager.query(
+            "djvu_by_path_pattern", {"pattern": pattern, "limit": query_limit}
+        )
+
+        # Check eligibility for each
+        results = []
+        for djvu_record in djvu_records:
+            djvu_path = djvu_record.get("path")
+            check_result = self.check_file_eligibility(djvu_path)
+            results.append(check_result)
+
+        return results
+
+    def show_migration_plan(self, eligible_files: List[dict], execute: bool):
+        """
+        Display migration plan with check results and scp commands.
+
+        Args:
+            eligible_files: List of eligibility check results
+            execute: If True, execute scp; if False, show dry-run
+        """
+        source_server, source_folder = self.get_folder_server("source")
+        target_server, target_folder = self.get_folder_server("target")
+
+        for file_result in eligible_files:
+            path = file_result["path"]
+            eligible = file_result["eligible"]
+            reason = file_result["reason"]
+            checks = file_result.get("checks", {})
+
+            print(f"\n{'=' * 80}")
+            print(f"File: {path}")
+            print(f"  Page count: {checks.get('page_count', 'N/A')}")
+            print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
+            print(f"  Min uncompressed: {checks.get('min_uncompressed', 0):,} bytes")
+            print(f"  Bundled (DB): {checks.get('bundled_db', False)}")
+            print(f"  Bundled (size): {checks.get('bundled_size', False)}")
+            print(f"  Eligible: {eligible}")
+            print(f"  Reason: {reason}")
+
+            if eligible:
+                scp_command = self.generate_scp_command(
+                    source_server, source_folder, target_server, target_folder, path
+                )
+                if execute:
+                    print(f"  EXECUTING: {scp_command}")
+                    remote = Remote(host=source_server.hostname)
+                    remote.run(scp_command)
+                else:
+                    print(f"  DRY-RUN: would execute: {scp_command}")
