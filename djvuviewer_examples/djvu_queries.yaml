@@ -127,7 +127,7 @@
     LIMIT {{ limit }}
 
 # Alle Bild-Datensätze für einen Pfad mit konfigurierbarem Limit abrufen
-'all_pages_for_path':
+'pages_of_djvu':
   param_list:
     - name: limit
       type: int
@@ -142,19 +142,6 @@
     WHERE djvu_path= "{{ djvu_path }}"
     ORDER BY page_index
     LIMIT {{ limit }}
-
-# Seiten nach DjVu-Pfad abrufen
-'pages_of_djvu':
-  param_list:
-    - name: djvu_path
-      type: text
-      default_value: /images//a/a1/Treuen-Vogtland-AB-1905.djvu
-  sql: |
-    SELECT
-      *
-    FROM page
-    WHERE djvu_path = "{{ djvu_path }}"
-    ORDER BY page_index
 
 # Gültige und ungültige Seiten pro DjVu zählen
 'djvu_by_valid_pages':

@@ -28,6 +28,8 @@ class DjVuToBeMigrated(DjVu):
     DjVu File ready for migration
     """
 
+    ready: bool = False
+
 
 @lod_storable
 class ImageFolder:
@@ -75,11 +77,11 @@ class Server:
         Returns:
             List of pipe-separated file records found in that bucket.
         """
-        filelist=[]
+        filelist = []
         imagefolder = self.imagefolders.get(imagefolder_name)
         if not imagefolder:
             raise Exception(f"invalid image folder name {imagefolder_name}")
-        cache_dir = DjVuConfig.get_config_dir() /"djvu_filelists"/ imagefolder_name
+        cache_dir = DjVuConfig.get_config_dir() / "djvu_filelists" / imagefolder_name
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_file = cache_dir / f"{mw_hash.hash_value}.txt"
 
@@ -110,37 +112,6 @@ class Server:
             print(f"caching {bucket_path} failed with {str(ex)}")
 
         return filelist
-
-    def check_bundled_by_size(self, filesize: int, min_uncompressed: int) -> bool:
-        """
-        Check if file is bundled based on size heuristic.
-
-        Test data from 0/00 bucket:
-        - Bundled: 1,868,800 / 300,694 = 6.2 (ratio < 20)
-        - Bundled: 98,442,273 / 7,536,104 = 13.1 (ratio < 20)
-        - Stub: 25,726,780 / 118 = 218,024 (ratio > 200,000)
-
-        Threshold: compression_ratio > 100 indicates stub file (safe margin between 20 and 200,000).
-
-        Args:
-            filesize: Actual file size in bytes
-            min_uncompressed: Minimum uncompressed size (from calculate_min_uncompressed_size)
-
-        Returns:
-            True if bundled, False if stub
-        """
-        # Avoid division by zero
-        if filesize == 0 or min_uncompressed == 0:
-            is_bundled = False
-            return is_bundled
-
-        compression_ratio = min_uncompressed / filesize
-
-        # Stub detection: impossibly high compression ratio (> 1000:1) or tiny filesize (< 1000 bytes)
-        is_stub = compression_ratio > 1000 or filesize < 1000
-        is_bundled = not is_stub
-        return is_bundled
-
 
 @lod_storable
 class TestFile(DjVu):
@@ -226,7 +197,7 @@ class ServerProfile:
                 imagefolder._server = server
                 yield imagefolder
 
-    def cache_filelists(self, limit:int=256,progress_bar=None):
+    def cache_filelists(self, limit: int = 256, progress_bar=None):
         """
         Cache filelists for all image folders, bucketed by all 256 MediaWiki
         hash values.  Each bucket's file records are fetched via find -printf
@@ -244,7 +215,7 @@ class ServerProfile:
                     f"fetching djvu files for {server.hostname} {imagefolder.path} ..."
                 )
             if progress_bar is not None:
-                progress_bar.total=limit
+                progress_bar.total = limit
             for value in range(limit):
                 mw_hash = MediaWikiHash.of_value(value)
                 filelist = server.find_djvu_images(imagefolder._name, mw_hash)
@@ -417,7 +388,17 @@ class ServerProfile:
         return djvu_files
 
     def create_file_tomigrate(self, djvu_record: Dict[str, object]) -> DjVuToBeMigrated:
-        """ """
+        """
+        Decide whether the given djvu_record is ready for migration.
+
+        Args:
+            djvu_record: Dictionary containing DjVu file metadata fields
+                (path, page_count, bundled, filesize, package_filesize,
+                iso_date, package_iso_date).
+
+        Returns:
+            DjVuToBeMigrated: Migration candidate with ready flag set accordingly.
+        """
         file_tomigrate = DjVuToBeMigrated(
             path=djvu_record.get("path"),
             page_count=djvu_record.get("page_count"),
@@ -428,44 +409,47 @@ class ServerProfile:
             package_iso_date=djvu_record.get("package_iso_date"),
         )
         page_records = self.djvu_manager.query(
-            "all_pages_for_path", {"djvu_path": file_tomigrate.path, "limit": 10000}
+            "pages_of_djvu", {"djvu_path": file_tomigrate.path, "limit": 10000}
         )
+        # check the readiness conditions
+        # Check if file is bundled based on size heuristic.
+        # Test data from 0/00 bucket:
+        # - Bundled: 1,868,800 / 300,694 = 6.2 (ratio < 20)
+        # - Bundled: 98,442,273 / 7,536,104 = 13.1 (ratio < 20)
+        # - Stub: 25,726,780 / 118 = 218,024 (ratio > 200,000)
+        compression_ratio = min_uncompressed / file_tomigrate.filesize
+
+
         return file_tomigrate
 
-    def show_migration_plan(self, eligible_files: List[dict], execute: bool):
+    def show_migration_plan(
+        self, files_tomigrate: List[DjVuToBeMigrated], execute: bool
+    ):
         """
         Display migration plan with check results and scp commands.
 
         Args:
-            eligible_files: List of eligibility check results
+            file_tomigrate: List of files to migrate
             execute: If True, execute scp; if False, show dry-run
         """
         source_server, source_folder = self.get_folder_server("source")
         target_server, target_folder = self.get_folder_server("target")
 
-        for file_result in eligible_files:
-            path = file_result["path"]
-            eligible = file_result["eligible"]
-            reason = file_result["reason"]
-            checks = file_result.get("checks", {})
-
-            print(f"\n{'=' * 80}")
-            print(f"File: {path}")
-            print(f"  Page count: {checks.get('page_count', 'N/A')}")
-            print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
-            print(f"  Min uncompressed: {checks.get('min_uncompressed', 0):,} bytes")
-            print(f"  Bundled (DB): {checks.get('bundled_db', False)}")
-            print(f"  Bundled (size): {checks.get('bundled_size', False)}")
-            print(f"  Eligible: {eligible}")
-            print(f"  Reason: {reason}")
-
-            if eligible:
-                scp_command = self.generate_scp_command(
-                    source_server, source_folder, target_server, target_folder, path
+        for df in files_tomigrate:
+            if not df.ready:
+                print("❌")
+            else:
+                scp = self.generate_scp_command(
+                    source_server, source_folder, target_server, target_folder, df.path
                 )
+                print(f"✅ {df.path}: {scp}")
+                # print(f"  Page count: {checks.get('page_count', 'N/A')}")
+                # print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
+                # print(f"  Min uncompressed: {checks.get('min_uncompressed', 0):,} bytes")
+                # print(f"  Bundled (DB): {checks.get('bundled_db', False)}")
+                # print(f"  Bundled (size): {checks.get('bundled_size', False)}")
+
                 if execute:
-                    print(f"  EXECUTING: {scp_command}")
+                    print(f"{scp}")
                     remote = Remote(host=source_server.hostname)
-                    remote.run(scp_command)
-                else:
-                    print(f"  DRY-RUN: would execute: {scp_command}")
+                    remote.run(scp)
