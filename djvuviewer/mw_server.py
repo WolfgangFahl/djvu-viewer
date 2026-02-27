@@ -6,21 +6,21 @@ MediaWiki Server handling
 @author: wf
 """
 
-import os
-import time
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
+import time
 from typing import Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
-from mwstools_backend.remote import Remote
-
+from djvuviewer.content_indexer import ContentIndexer
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.lod_show import LodShow
 from djvuviewer.mw_hash import MediaWikiHash
+from mwstools_backend.remote import Remote
 
 
 @dataclass
@@ -81,6 +81,13 @@ class DjVuToBeMigrated(DjVu):
     """
 
     ready: bool = False
+
+    @property
+    def bundled_marker(self) -> str:
+        """
+        Returns a Unicode icon indicating if the item is bundled (📦) or not bundled (🔗)
+        """
+        return "📦" if self.bundled else "🔗"
 
 
 @lod_storable
@@ -143,8 +150,8 @@ class Server:
     ) -> List[str]:
         """
         Find all .djvu files in a single hash bucket subfolder of an image
-        folder on a remote server.  Results are cached in
-        ~/.djvuviewer/{imagefolder_name}/{hash_value}/filelist.txt and reused
+        folder on a remote server.  Results are cached in a per-bucket file
+        under the config cache directory and reused
         until the cache is older than imagefolder.cache_expiration seconds.
 
         The remote find command uses -printf to emit pipe-separated metadata:
@@ -209,7 +216,7 @@ class SetupLocation:
 @lod_storable
 class ServerConfig:
     """
-    Server configuration loaded from ~/.djvuviewer/server_config.yaml.
+    Server configuration loaded from the config directory.
     Only image stores marked target: true are writable for migration.
     """
 
@@ -217,14 +224,21 @@ class ServerConfig:
     _instance: Optional["ServerConfig"] = None
 
     folders: Dict[str, SetupLocation] = field(default_factory=dict)
-
+    files_db_path: Optional[str] = None
     test_files: List[TestFile] = field(default_factory=list)
     servers: Dict[str, Server] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """
+        Set files_db_path default relative to the config directory if not provided.
+        """
+        if not self.files_db_path:
+            self.files_db_path = str(DjVuConfig.get_config_dir() / "files_cache.db")
 
     @classmethod
     def get_config_path(cls) -> str:
         """
-        Returns the standard location: ~/.djvuviewer/server_config.yaml.
+        Returns the standard location for server_config.yaml.
         """
         config_dir = DjVuConfig.get_config_dir()
         config_path = str(config_dir / "server_config.yaml")
@@ -259,7 +273,7 @@ class ServerConfig:
         Get the ServerConfig singleton instance.
 
         If test=True or no config file exists, load from the bundled examples.
-        Otherwise load from ~/.djvuviewer/server_config.yaml.
+        Otherwise load from the standard config path.
 
         Args:
             test: If True, always use the example config (skips user config file).
@@ -309,7 +323,7 @@ class ServerProfile:
                 imagefolder._server = server
                 yield imagefolder
 
-    def cache_filelists(self, limit: int = 256, progress_bar=None):
+    def cache_filelists(self, limit: int = 256, progress_bar: Optional=None):
         """
         Cache filelists for all image folders, bucketed by all 256 MediaWiki
         hash values.  Each bucket's file records are fetched via find -printf
@@ -332,6 +346,39 @@ class ServerProfile:
                 filelist = server.find_djvu_images(imagefolder._name, bucket_index)
                 if progress_bar is not None:
                     progress_bar.update(1)
+        pass
+
+    def index_filelists(self, progress_bar:Optional=None) -> int:
+        """
+        Import all cached bucket filelist files into a single SQLite database
+        via ContentIndexer.  Only existing cache files are imported; missing
+        buckets are silently skipped.
+
+        Args:
+            progress_bar: Optional progress bar advanced once per bucket file.
+
+        Returns:
+            Total number of records imported.
+        """
+        files_db_path = self.config.files_db_path
+        if not files_db_path:
+            raise ValueError("files_db_path not set in server_config")
+        indexer = ContentIndexer(db_path=files_db_path)
+        total_imported = 0
+        for imagefolder in self.imagefolder_gen():
+            for bucket_index in range(256):
+                bucket = Bucket.of_index(
+                    bucket_index, imagefolder.path, str(imagefolder.get_cache_dir())
+                )
+                cache_file = bucket.cache_file
+                if cache_file.exists() and cache_file.stat().st_size > 0:
+                    imported = indexer.import_file(
+                        content_file=str(cache_file),
+                        directory=imagefolder._name,
+                        progressbar=progress_bar,
+                    )
+                    total_imported += imported
+        return total_imported
 
     def cache_expiration(self) -> float:
         """
@@ -561,9 +608,9 @@ class ServerProfile:
             file_tomigrate.compression_ratio = -1
             pass
         else:
-            file_tomigrate.compression_ratio = (
-                min_uncompressed / file_tomigrate.filesize
-            )
+            cr = min_uncompressed / file_tomigrate.filesize
+            file_tomigrate.compression_ratio = cr
+            file_tomigrate.ready = cr < 1000  # heuristic
 
         return file_tomigrate
 
@@ -582,12 +629,12 @@ class ServerProfile:
 
         for df in files_tomigrate:
             if not df.ready:
-                print(f"❌ {df.compression_ratio:.1f}")
+                print(f"❌ {df.bundled_marker} {df.path}:{df.compression_ratio:.1f}")
             else:
                 scp = self.generate_scp_command(
                     source_server, source_folder, target_server, target_folder, df.path
                 )
-                print(f"✅ {df.path}: {scp}")
+                print(f"✅ {df.bundled_marker}: {df.path}: {scp}")
                 # print(f"  Page count: {checks.get('page_count', 'N/A')}")
                 # print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
                 # print(f"  Min uncompressed: {checks.get('min_uncompressed', 0):,} bytes")
