@@ -6,6 +6,7 @@ MediaWiki Server handling
 @author: wf
 """
 
+import os
 from dataclasses import field
 import time
 from typing import Dict, List, Optional, Tuple
@@ -113,6 +114,7 @@ class Server:
 
         return filelist
 
+
 @lod_storable
 class TestFile(DjVu):
     """
@@ -158,10 +160,23 @@ class ServerConfig:
     def of_yaml(cls, yaml_path: str = None) -> "ServerConfig":
         """
         Load and return ServerConfig from the standard config path.
+        Preserves any leading header comments for round-trip fidelity.
         """
         if yaml_path is None:
             yaml_path = cls.get_config_path()
-        server_config = cls.load_from_yaml_file(yaml_path)
+        server_config = cls.load_from_yaml_file(yaml_path, with_header_comment=True)
+        return server_config
+
+    @classmethod
+    def of_example(cls) -> "ServerConfig":
+        """
+        Load and return ServerConfig from the bundled examples directory.
+        Parallel to DjVuConfig.get_instance(test=True).
+        Preserves any leading header comments for round-trip fidelity.
+        """
+        examples_path = DjVuConfig.get_examples_path()
+        yaml_path = os.path.join(examples_path, "server_config.yaml")
+        server_config = cls.load_from_yaml_file(yaml_path, with_header_comment=True)
         return server_config
 
 
@@ -295,9 +310,11 @@ class ServerProfile:
 
     def save(self) -> None:
         """
-        save back to server_config.yaml.
+        save back to server_config.yaml, preserving the header comment.
         """
-        self.config.save_to_yaml_file(ServerConfig.get_config_path())
+        self.config.save_to_yaml_file(
+            ServerConfig.get_config_path(), with_header_comment=True
+        )
 
     def get_folder_server(self, folder_role: str) -> Tuple[Server, ImageFolder]:
         """
@@ -408,8 +425,11 @@ class ServerProfile:
             iso_date=djvu_record.get("iso_date"),
             package_iso_date=djvu_record.get("package_iso_date"),
         )
-        page_records = self.djvu_manager.query(
-            "pages_of_djvu", {"djvu_path": file_tomigrate.path, "limit": 10000}
+        size_records = self.djvu_manager.query(
+            "min_uncompressed_for_path", {"djvu_path": file_tomigrate.path}
+        )
+        min_uncompressed = (
+            size_records[0].get("min_uncompressed", 0) if size_records else 0
         )
         # check the readiness conditions
         # Check if file is bundled based on size heuristic.
@@ -417,8 +437,14 @@ class ServerProfile:
         # - Bundled: 1,868,800 / 300,694 = 6.2 (ratio < 20)
         # - Bundled: 98,442,273 / 7,536,104 = 13.1 (ratio < 20)
         # - Stub: 25,726,780 / 118 = 218,024 (ratio > 200,000)
-        compression_ratio = min_uncompressed / file_tomigrate.filesize
-
+        if not file_tomigrate.filesize:
+            file_tomigrate.ready = False
+            file_tomigrate.compression_ratio = -1
+            pass
+        else:
+            file_tomigrate.compression_ratio = (
+                min_uncompressed / file_tomigrate.filesize
+            )
 
         return file_tomigrate
 
@@ -437,7 +463,7 @@ class ServerProfile:
 
         for df in files_tomigrate:
             if not df.ready:
-                print("❌")
+                print(f"❌ {df.compression_ratio:.1f}")
             else:
                 scp = self.generate_scp_command(
                     source_server, source_folder, target_server, target_folder, df.path

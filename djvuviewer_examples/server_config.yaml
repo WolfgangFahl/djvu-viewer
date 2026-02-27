@@ -1,0 +1,38 @@
+# djvu-viewer example server configuration
+# used in CI and for local testing without a real server setup
+# see https://github.com/WolfgangFahl/djvu-viewer/wiki/Help#Configuration
+folders:
+  source:
+    server: example
+    folder: example.images
+  test:
+    server: example
+    folder: example.images
+  target:
+    server: example
+    folder: example.tmp
+
+servers:
+  example:
+    hostname: localhost
+    os: Linux
+    latencyMs: 0.0
+    is_local: true
+    imagefolders:
+      example.images:
+        path: djvuviewer_examples/images
+        fs: HD
+      example.tmp:
+        path: /tmp/djvumigration
+        fs: HD
+test_files:
+- path: /images/c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu
+  page_count: 3
+  bundled: false
+  bundled_size: 49834
+- path: /images/f/ff/AB1932-Ramrath.djvu
+  page_count: 2
+  bundled: true
+- path: /images/1/1e/AB1953-Gohr.djvu
+  page_count: 2
+  bundled: true

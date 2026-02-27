@@ -143,6 +143,18 @@
     ORDER BY page_index
     LIMIT {{ limit }}
 
+# Gesamte unkomprimierte Dateigröße aller Seiten eines DjVu-Pfades
+'min_uncompressed_for_path':
+  param_list:
+    - name: djvu_path
+      type: str
+      default_value: "/images/1/1e/AB1953-Gohr.djvu"
+  sql: |
+    SELECT
+      SUM(width*height) AS min_uncompressed
+    FROM page
+    WHERE djvu_path = "{{ djvu_path }}"
+
 # Gültige und ungültige Seiten pro DjVu zählen
 'djvu_by_valid_pages':
   param_list:

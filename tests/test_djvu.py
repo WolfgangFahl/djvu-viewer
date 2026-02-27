@@ -22,6 +22,7 @@ from djvuviewer.djvu_image_job import ImageJob
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_processor import DjVuProcessor
 from djvuviewer.download import Download
+from djvuviewer.mw_server import ServerConfig
 from djvuviewer.packager import PackageMode
 from djvuviewer.wiki_images import MediaWikiImage
 
@@ -55,11 +56,11 @@ class TestDjVu(Basetest):
         self.config = DjVuConfig.get_instance(test=force_test)
         self.config.backup_path = self.backup_path
         self.limit = 50 if not self.local else 50  # 10000000
+        server_config = (
+            ServerConfig.of_yaml() if self.local else ServerConfig.of_example()
+        )
         self.test_tuples = [
-            ("/images/c/c7/AB1938_Kreis-Beckum_Inhaltsverz.djvu", 3, False),
-            ("/images/c/ce/Plauen-AB-1938.djvu", 2, True),
-            ("/images/f/ff/AB1932-Ramrath.djvu", 2, True),
-            ("/images/1/1e/AB1953-Gohr.djvu", 2, True),
+            (tf.path, tf.page_count, tf.bundled) for tf in server_config.test_files
         ]
         self.test_bundles = None
         self.test_tuples_2024 = [

@@ -12,7 +12,6 @@ from basemkit.basetest import Basetest
 from djvuviewer.djvu_migrate import DjVuMigration
 from djvuviewer.mw_server import ImageFolder, Server
 from djvuviewer.mw_hash import MediaWikiHash
-from ngwidgets.progress import TqdmProgressbar
 
 class TestDjVuMigrate(Basetest):
     """
@@ -80,7 +79,7 @@ class TestDjVuMigrate(Basetest):
         """
         mw_hash=MediaWikiHash("00")
         pattern=mw_hash.path
-        limit=1
+        limit=100000
         self.migration.migrate(pattern=pattern,limit=limit)
 
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
