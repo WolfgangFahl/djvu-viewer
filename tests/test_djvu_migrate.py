@@ -26,8 +26,7 @@ class TestDjVuMigrate(Basetest):
         Basetest.setUp(self, debug=debug, profile=profile)
         args = argparse.Namespace()
         self.migration = DjVuMigration(args)
-        progress_bar=TqdmProgressbar(total=256,desc="caching filelists",unit="hash buckets") if debug else None
-        self.migration.configure_profile(progress_bar=progress_bar,debug=debug)
+        self.migration.configure_profile(debug=debug)
 
     def test_update_profile(self):
         """

@@ -68,6 +68,11 @@ class DjVuMigration(BaseCmd):
             help="Show migration statistics from all sources",
         )
         parser.add_argument(
+            "--cache",
+            action="store_true",
+            help="cache djvu filestat records",
+        )
+        parser.add_argument(
             "--progress",
             action="store_true",
             help="Show progress bar",
@@ -117,7 +122,7 @@ class DjVuMigration(BaseCmd):
         )
         return parser
 
-    def configure_profile(self, debug: bool = False, progress_bar=None):
+    def configure_profile(self, debug: bool = False):
         """
         configure my profile
 
@@ -127,7 +132,6 @@ class DjVuMigration(BaseCmd):
                 hash bucket (256 steps per image folder).
         """
         self.profile = ServerProfile(self.server_config, debug=debug)
-        self.profile.cache_filelists(limit=3,progress_bar=progress_bar)
 
     def handle_args(self, args: Namespace) -> bool:
         """
@@ -140,17 +144,17 @@ class DjVuMigration(BaseCmd):
             True if handled
         """
         handled = super().handle_args(args)
-        optional_progress_bar = (
-            TqdmProgressbar(total=256, desc="caching filelists")
-            if getattr(args, "progress", False)
-            else None
-        )
         self.configure_profile(
-            debug=args.debug, optional_progress_bar=optional_progress_bar
+            debug=args.debug
         )
         if args.info:
             self.show_info()
             handled = True
+        if args.cache:
+            limit=args.limit if args.limit else 256
+            progress_bar=TqdmProgressbar(total=limit,desc="caching filelists",unit="hash buckets")
+            self.profile.cache_filelists(limit=limit,progress_bar=progress_bar)
+            pass
         if args.test:
             self.update_profile(
                 tablefmt=args.format, write=getattr(args, "write", False)
