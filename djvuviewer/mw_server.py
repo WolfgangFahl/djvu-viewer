@@ -142,6 +142,9 @@ class ServerConfig:
     Only image stores marked target: true are writable for migration.
     """
 
+    # singleton
+    _instance: Optional["ServerConfig"] = None
+
     folders: Dict[str, SetupLocation] = field(default_factory=dict)
 
     test_files: List[TestFile] = field(default_factory=list)
@@ -178,6 +181,29 @@ class ServerConfig:
         yaml_path = os.path.join(examples_path, "server_config.yaml")
         server_config = cls.load_from_yaml_file(yaml_path, with_header_comment=True)
         return server_config
+
+    @classmethod
+    def get_instance(cls, test: bool = False) -> "ServerConfig":
+        """
+        Get the ServerConfig singleton instance.
+
+        If test=True or no config file exists, load from the bundled examples.
+        Otherwise load from ~/.djvuviewer/server_config.yaml.
+
+        Args:
+            test: If True, always use the example config (skips user config file).
+
+        Returns:
+            ServerConfig instance.
+        """
+        if cls._instance is None:
+            config_path = cls.get_config_path()
+            if os.path.exists(config_path) and not test:
+                server_config = cls.of_yaml(config_path)
+            else:
+                server_config = cls.of_example()
+            cls._instance = server_config
+        return cls._instance
 
 
 class ServerProfile:

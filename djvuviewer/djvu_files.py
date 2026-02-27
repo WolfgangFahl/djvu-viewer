@@ -185,7 +185,7 @@ class DjVuFiles:
                     page_limit = 10000
                 if page_limit > 0:
                     djvu_page_records = self.dvm.query(
-                        "all_pages_for_path",
+                        "pages_of_djvu",
                         param_dict={"djvu_path": djvu_file.path, "limit": page_limit},
                     )
                     for djvu_page_record in djvu_page_records:

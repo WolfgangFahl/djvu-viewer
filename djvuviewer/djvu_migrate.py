@@ -4,20 +4,20 @@ Created on 2026-02-20
 @author: wf
 """
 
+from argparse import ArgumentParser, Namespace
 import argparse
 import logging
-from argparse import ArgumentParser, Namespace
 from typing import List, Optional, Tuple
 
 from basemkit.base_cmd import BaseCmd
-from lodstorage.multilang_querymanager import MultiLanguageQueryManager
-from ngwidgets.progress import TqdmProgressbar
-
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache
 from djvuviewer.mw_server import ServerConfig, ServerProfile
 from djvuviewer.version import Version
+from lodstorage.multilang_querymanager import MultiLanguageQueryManager
+from ngwidgets.progress import Progressbar, TqdmProgressbar
+
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,9 @@ class DjVuMigration(BaseCmd):
         super().__init__(Version())
         self.args = args
         self.djvu_config = DjVuConfig.get_instance()
-        self.server_config = ServerConfig.of_yaml()
+        self.server_config = ServerConfig.get_instance(
+            test=getattr(args, "test", False)
+        )
         self.progress_bar = None
 
     def add_arguments(self, parser: ArgumentParser) -> ArgumentParser:
@@ -66,6 +68,11 @@ class DjVuMigration(BaseCmd):
             "--info",
             action="store_true",
             help="Show migration statistics from all sources",
+        )
+        parser.add_argument(
+            "--test",
+            action="store_true",
+            help="test mode with example files - dry run only",
         )
         parser.add_argument(
             "--cache",
@@ -88,8 +95,9 @@ class DjVuMigration(BaseCmd):
             ),
         )
         parser.add_argument(
-            "--test",
+            "--profile-servers",
             action="store_true",
+            dest="profile_servers",
             help="Check test files on all servers: bundled state, size, djvudump timing",
         )
         parser.add_argument(
@@ -144,18 +152,18 @@ class DjVuMigration(BaseCmd):
             True if handled
         """
         handled = super().handle_args(args)
-        self.configure_profile(
-            debug=args.debug
-        )
+        self.configure_profile(debug=args.debug)
         if args.info:
             self.show_info()
             handled = True
         if args.cache:
-            limit=args.limit if args.limit else 256
-            progress_bar=TqdmProgressbar(total=limit,desc="caching filelists",unit="hash buckets")
-            self.profile.cache_filelists(limit=limit,progress_bar=progress_bar)
+            limit = args.limit if args.limit else 256
+            progress_bar = TqdmProgressbar(
+                total=limit, desc="caching filelists", unit="hash buckets"
+            )
+            self.profile.cache_filelists(limit=limit, progress_bar=progress_bar)
             pass
-        if args.test:
+        if args.profile_servers:
             self.update_profile(
                 tablefmt=args.format, write=getattr(args, "write", False)
             )
@@ -168,7 +176,7 @@ class DjVuMigration(BaseCmd):
         return handled
 
     def update_profile(
-        self, tablefmt: str, write: bool = False, optional_progress_bar=None
+        self, tablefmt: str, write: bool = False, progress_bar: Optional[Progressbar]=None
     ):
         """
         update the profile
@@ -176,10 +184,10 @@ class DjVuMigration(BaseCmd):
         Args:
             tablefmt: Table format for display.
             write: Whether to persist the updated profile.
-            optional_progress_bar: Optional progress bar advanced once per
+            progress_bar: Optional progress bar advanced once per
                 hash bucket (256 steps per image folder).
         """
-        self.profile.cache_filelists(optional_progress_bar=optional_progress_bar)
+        self.profile.cache_filelists(progress_bar=progress_bar)
         self.profile.run()
         self.profile.show(tablefmt)
         if write:
@@ -355,7 +363,7 @@ class DjVuMigration(BaseCmd):
         Prepare the federation db and display all migration statistics.
         """
         fmt = getattr(self.args, "format", "simple")
-        mlqm = self.prepare()
+        mlqm = self.prepareMLQM()
         for query_name in ["wiki_stats", "djvu_stats", "mw_images_stats"]:
             print(self.show_section(mlqm, query_name, fmt))
 
@@ -381,9 +389,7 @@ class DjVuMigration(BaseCmd):
             execute: If True, execute scp; if False, dry-run (default: False)
 
         """
-        files_tomigrate = self.profile.files_tomigrate(
-            pattern=pattern, limit=limit
-        )
+        files_tomigrate = self.profile.files_tomigrate(pattern=pattern, limit=limit)
         self.profile.show_migration_plan(files_tomigrate, execute)
 
 

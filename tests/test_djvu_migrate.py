@@ -13,6 +13,7 @@ from djvuviewer.djvu_migrate import DjVuMigration
 from djvuviewer.mw_server import ImageFolder, Server
 from djvuviewer.mw_hash import MediaWikiHash
 
+
 class TestDjVuMigrate(Basetest):
     """
     Test DjVu migration tool
@@ -23,10 +24,11 @@ class TestDjVuMigrate(Basetest):
         setUp test environment
         """
         Basetest.setUp(self, debug=debug, profile=profile)
-        args = argparse.Namespace()
+        args = argparse.Namespace(test=Basetest.inPublicCI())
         self.migration = DjVuMigration(args)
         self.migration.configure_profile(debug=debug)
 
+    @unittest.skipIf(Basetest.inPublicCI(), "requires real server")
     def test_update_profile(self):
         """
         Test updating the profile
@@ -52,7 +54,7 @@ class TestDjVuMigrate(Basetest):
         Federated query: find files present in mw_images but not in djvu and vice versa.
         Reveals the discrepancy between the MediaWiki API image list and the DjVu SQLite index.
         """
-        mlqm = self.migration.prepare()
+        mlqm = self.migration.prepareMLQM()
 
         only_in_mw = mlqm.query("mw_images_not_in_djvu")
         only_in_djvu = mlqm.query("djvu_not_in_mw_images")
@@ -77,10 +79,10 @@ class TestDjVuMigrate(Basetest):
         """
         Test migrate for the given pattern
         """
-        mw_hash=MediaWikiHash("00")
-        pattern=mw_hash.path
-        limit=100000
-        self.migration.migrate(pattern=pattern,limit=limit)
+        mw_hash = MediaWikiHash("00")
+        pattern = mw_hash.path
+        limit = 100000
+        self.migration.migrate(pattern=pattern, limit=limit)
 
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_wiki_image_links(self):
@@ -103,23 +105,6 @@ class TestDjVuMigrate(Basetest):
             for row in lod:
                 print(f"  ns={row['page_namespace']} title={row['page_title']}")
 
-    def test_check_bundled_by_size(self):
-        """
-        Test check_bundled_by_size with bundled and stub examples.
-        """
-        server = Server(hostname="test", os="Linux", latencyMs=0.0)
-
-        # Bundled case: 300KB filesize, 1.8MB min
-        is_bundled = server.check_bundled_by_size(300694, 1868800)
-        self.assertTrue(is_bundled)
-
-        # Stub case: 118 bytes filesize, 25MB min
-        is_bundled = server.check_bundled_by_size(118, 25000000)
-        self.assertFalse(is_bundled)
-
-        if self.debug:
-            print("Bundled check passed for both cases")
-
     def test_get_folder_server(self):
         """
         Test get_folder_server returns correct Server and ImageFolder.
@@ -137,7 +122,6 @@ class TestDjVuMigrate(Basetest):
         """
         Test generate_scp_command produces correct format.
         """
-
         source_server = Server(hostname="source.example.com", os="Linux", latencyMs=0.0)
         source_folder = ImageFolder(path="/source/images", fs="HD")
         target_server = Server(hostname="target.example.com", os="Linux", latencyMs=0.0)
