@@ -10,8 +10,8 @@ import unittest
 from basemkit.basetest import Basetest
 
 from djvuviewer.djvu_migrate import DjVuMigration
-from djvuviewer.mw_server import ImageFolder, Server
 from djvuviewer.mw_hash import MediaWikiHash
+from djvuviewer.mw_server import ImageFolder, Server
 
 
 class TestDjVuMigrate(Basetest):
@@ -104,6 +104,19 @@ class TestDjVuMigrate(Basetest):
             print(f"wiki_image_links('{filename}'): {len(lod)} page(s)")
             for row in lod:
                 print(f"  ns={row['page_namespace']} title={row['page_title']}")
+
+    def test_cache_expiration(self):
+        """
+        Test cache_expiration returns a float:
+          0 when no cache files exist,
+          negative when cache has expired,
+          positive when still fresh.
+        """
+        profile = self.migration.profile
+        result = profile.cache_expiration()
+        self.assertIsInstance(result, (int, float))
+        if self.debug:
+            print(f"cache_expiration: {result}")
 
     def test_get_folder_server(self):
         """

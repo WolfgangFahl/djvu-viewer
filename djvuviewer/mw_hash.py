@@ -4,8 +4,8 @@ Created on 2026-02-26
 @author: wf
 """
 
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 
 
 @dataclass
@@ -14,7 +14,7 @@ class MediaWikiHash:
     support MediaWiki file hash encoding
     """
 
-    hash_value: str # e.g. c7
+    hash_value: str  # e.g. c7
 
     @property
     def path(self) -> str:

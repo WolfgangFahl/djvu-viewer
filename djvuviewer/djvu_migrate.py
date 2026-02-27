@@ -4,20 +4,20 @@ Created on 2026-02-20
 @author: wf
 """
 
-from argparse import ArgumentParser, Namespace
 import argparse
 import logging
+from argparse import ArgumentParser, Namespace
 from typing import List, Optional, Tuple
 
 from basemkit.base_cmd import BaseCmd
+from lodstorage.multilang_querymanager import MultiLanguageQueryManager
+from ngwidgets.progress import Progressbar, TqdmProgressbar
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.djvu_wikimages import DjVuImagesCache
 from djvuviewer.mw_server import ServerConfig, ServerProfile
 from djvuviewer.version import Version
-from lodstorage.multilang_querymanager import MultiLanguageQueryManager
-from ngwidgets.progress import Progressbar, TqdmProgressbar
-
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +176,10 @@ class DjVuMigration(BaseCmd):
         return handled
 
     def update_profile(
-        self, tablefmt: str, write: bool = False, progress_bar: Optional[Progressbar]=None
+        self,
+        tablefmt: str,
+        write: bool = False,
+        progress_bar: Optional[Progressbar] = None,
     ):
         """
         update the profile

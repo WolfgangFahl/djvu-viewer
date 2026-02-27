@@ -7,20 +7,71 @@ MediaWiki Server handling
 """
 
 import os
-from dataclasses import field
 import time
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
+from mwstools_backend.remote import Remote
+
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import DjVu
 from djvuviewer.djvu_manager import DjVuManager
-from mwstools_backend.remote import Remote
-
 from djvuviewer.lod_show import LodShow
 from djvuviewer.mw_hash import MediaWikiHash
-from djvuviewer import mw_hash
+
+
+@dataclass
+class Bucket(MediaWikiHash):
+    """
+    A MediaWiki hash bucket with its server image path and local cache path.
+    """
+
+    image_path: str = ""
+    cache_path: str = ""
+
+    @property
+    def bucket_path(self) -> str:
+        """
+        Full path of the bucket directory on the server.
+
+        Returns:
+            Absolute path combining image_path and the hash path.
+        """
+        bucket_path = f"{self.image_path}/{self.path}"
+        return bucket_path
+
+    @property
+    def cache_file(self):
+        """
+        Local cache file path for this bucket.
+
+        Returns:
+            Path object for the cache file.
+        """
+        cache_file = Path(self.cache_path) / f"{self.hash_value}.txt"
+        return cache_file
+
+    @classmethod
+    def of_index(cls, bucket_index: int, image_path: str, cache_path: str) -> "Bucket":
+        """
+        Create a Bucket from a bucket index and paths.
+
+        Args:
+            bucket_index: Integer 0-255 identifying the MediaWiki hash bucket.
+            image_path: Server-side image folder path.
+            cache_path: Local cache directory path.
+
+        Returns:
+            Bucket instance.
+        """
+        mw_hash = MediaWikiHash.of_value(bucket_index)
+        bucket = cls(
+            hash_value=mw_hash.hash_value, image_path=image_path, cache_path=cache_path
+        )
+        return bucket
 
 
 @lod_storable
@@ -46,6 +97,34 @@ class ImageFolder:
     speedMBs: Optional[float] = None
     djvudumpMs: Optional[float] = None
 
+    def get_cache_dir(self):
+        """
+        get my cache directory
+        """
+        cache_dir = DjVuConfig.get_config_dir() / "djvu_filelists" / self._name
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir
+
+    def expiration_of_bucket(self, bucket_index: int) -> float:
+        """
+        Return the seconds until the cache file for the given bucket expires.
+
+        Args:
+            bucket_index: Integer 0-255 identifying the MediaWiki hash bucket.
+
+        Returns:
+            0       if the cache file does not exist or is empty
+            > 0     seconds remaining until expiry
+            < 0     seconds past expiry (already expired)
+        """
+        bucket = Bucket.of_index(bucket_index, self.path, str(self.get_cache_dir()))
+        cache_file = bucket.cache_file
+        if not cache_file.exists() or cache_file.stat().st_size == 0:
+            return 0
+        age = time.time() - cache_file.stat().st_mtime
+        expiration = self.cache_expiration - age
+        return expiration
+
 
 @lod_storable
 class Server:
@@ -60,7 +139,7 @@ class Server:
     def find_djvu_images(
         self,
         imagefolder_name: str,
-        mw_hash: MediaWikiHash,
+        bucket_index: int,
     ) -> List[str]:
         """
         Find all .djvu files in a single hash bucket subfolder of an image
@@ -82,23 +161,15 @@ class Server:
         imagefolder = self.imagefolders.get(imagefolder_name)
         if not imagefolder:
             raise Exception(f"invalid image folder name {imagefolder_name}")
-        cache_dir = DjVuConfig.get_config_dir() / "djvu_filelists" / imagefolder_name
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / f"{mw_hash.hash_value}.txt"
-
-        cache_valid = (
-            cache_file.exists()
-            and cache_file.stat().st_size > 0
-            and (time.time() - cache_file.stat().st_mtime)
-            < imagefolder.cache_expiration
+        bucket = Bucket.of_index(
+            bucket_index, imagefolder.path, str(imagefolder.get_cache_dir())
         )
-        if cache_valid:
-            filelist = cache_file.read_text().splitlines()
+        if imagefolder.expiration_of_bucket(bucket_index) > 0:
+            filelist = bucket.cache_file.read_text().splitlines()
             return filelist
 
-        bucket_path = f"{imagefolder.path}/{mw_hash.path}"
         cmd = (
-            f"find {bucket_path} -type f -name '*.djvu'"
+            f"find {bucket.bucket_path} -type f -name '*.djvu'"
             f" -printf '%p|%s|%T+|%C+|%u|%g|%m\\n' | iconv -f iso-8859-1 -t utf-8//IGNORE 2>/dev/null"
         )
         try:
@@ -108,9 +179,9 @@ class Server:
             filelist = sorted(
                 line.strip() for line in raw_output.splitlines() if line.strip()
             )
-            cache_file.write_text("\n".join(filelist))
+            bucket.cache_file.write_text("\n".join(filelist))
         except Exception as ex:
-            print(f"caching {bucket_path} failed with {str(ex)}")
+            print(f"caching {bucket.bucket_path} failed with {str(ex)}")
 
         return filelist
 
@@ -257,11 +328,33 @@ class ServerProfile:
                 )
             if progress_bar is not None:
                 progress_bar.total = limit
-            for value in range(limit):
-                mw_hash = MediaWikiHash.of_value(value)
-                filelist = server.find_djvu_images(imagefolder._name, mw_hash)
+            for bucket_index in range(limit):
+                filelist = server.find_djvu_images(imagefolder._name, bucket_index)
                 if progress_bar is not None:
                     progress_bar.update(1)
+
+    def cache_expiration(self) -> float:
+        """
+        Return the number of seconds until the next cache refresh is due,
+        based on the oldest cache file across all imagefolders and their
+        cache_expiration settings.
+
+        Returns:
+            0     if any expected cache file is missing (cache incomplete)
+            > 0   seconds remaining until the oldest cache file expires
+            < 0   seconds past expiry of the oldest cache file (already expired)
+        """
+        oldest_remaining = None
+        for imagefolder in self.imagefolder_gen():
+            for bucket_index in range(256):
+                remaining = imagefolder.expiration_of_bucket(bucket_index)
+                if remaining == 0:
+                    return 0
+                if oldest_remaining is None or remaining < oldest_remaining:
+                    oldest_remaining = remaining
+        if oldest_remaining is None:
+            return 0
+        return oldest_remaining
 
     def check_djvu(
         self, server: Server, imagefolder: ImageFolder, djvu: TestFile

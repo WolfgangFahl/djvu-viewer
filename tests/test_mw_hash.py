@@ -22,11 +22,11 @@ class TestMediaWikiHash(Basetest):
         Test MediaWikiHash.of_filename with real MediaWiki examples
         """
         test_cases = [
-            ("AB1938_Kreis-Beckum_Inhaltsverz.djvu", "c/c7","c7", 199),
-            ("Auenheim-Frauweiler_Dokument-1693-03-09.djvu", "b/b8","b8", 184),
+            ("AB1938_Kreis-Beckum_Inhaltsverz.djvu", "c/c7", "c7", 199),
+            ("Auenheim-Frauweiler_Dokument-1693-03-09.djvu", "b/b8", "b8", 184),
         ]
 
-        for filename, path,hash_value, value in test_cases:
+        for filename, path, hash_value, value in test_cases:
             with self.subTest(filename=filename, hash=hash, value=value):
                 mw_hash = MediaWikiHash.of_filename(filename)
                 self.assertEqual(mw_hash.path, path)
@@ -44,10 +44,9 @@ class TestMediaWikiHash(Basetest):
                 mw_hash = MediaWikiHash.of_value(value)
                 self.assertEqual(mw_hash.hash_value, hash_value)
                 self.assertEqual(mw_hash.value, value)
-                self.assertEqual(mw_hash.path,path)
+                self.assertEqual(mw_hash.path, path)
             with self.subTest(hash_value=hash_value):
                 mw_hash = MediaWikiHash(hash_value)
                 self.assertEqual(mw_hash.hash_value, hash_value)
                 self.assertEqual(mw_hash.value, value)
-                self.assertEqual(mw_hash.path,path)
-
+                self.assertEqual(mw_hash.path, path)
