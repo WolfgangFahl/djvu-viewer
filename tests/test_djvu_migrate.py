@@ -11,7 +11,8 @@ from basemkit.basetest import Basetest
 
 from djvuviewer.djvu_migrate import DjVuMigration
 from djvuviewer.mw_server import ImageFolder, Server
-
+from djvuviewer.mw_hash import MediaWikiHash
+from ngwidgets.progress import TqdmProgressbar
 
 class TestDjVuMigrate(Basetest):
     """
@@ -25,7 +26,8 @@ class TestDjVuMigrate(Basetest):
         Basetest.setUp(self, debug=debug, profile=profile)
         args = argparse.Namespace()
         self.migration = DjVuMigration(args)
-        self.migration.configure_profile(debug=debug)
+        progress_bar=TqdmProgressbar(total=256,desc="caching filelists",unit="hash buckets") if debug else None
+        self.migration.configure_profile(progress_bar=progress_bar,debug=debug)
 
     def test_update_profile(self):
         """
@@ -77,9 +79,10 @@ class TestDjVuMigrate(Basetest):
         """
         Test migrate for the given pattern
         """
-        pattern = "0/00"
+        mw_hash=MediaWikiHash("00")
+        pattern=mw_hash.path
         limit=1
-        self.migration.migrate(pattern,limit)
+        self.migration.migrate(pattern=pattern,limit=limit)
 
     @unittest.skipIf(Basetest.inPublicCI(), "wiki DB not available in CI")
     def test_wiki_image_links(self):

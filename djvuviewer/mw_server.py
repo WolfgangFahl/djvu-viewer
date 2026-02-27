@@ -18,29 +18,8 @@ from djvuviewer.djvu_manager import DjVuManager
 from mwstools_backend.remote import Remote
 
 from djvuviewer.lod_show import LodShow
-from dataclasses import dataclass
-
-@dataclass
-class MediaWikiHash:
-    """
-    support MediaWiki file hash encoding
-    """
-    hash:str
-
-    @property
-    def path(self)->str:
-        return path
-
-    @property
-    def value(self)->int:
-        return value
-
-    @classmethod
-    def of_value(cls,value:int):
-
-    @classmethod
-    def of_filename(cls,str):
-
+from djvuviewer.mw_hash import MediaWikiHash
+from djvuviewer import mw_hash
 
 
 @lod_storable
@@ -48,13 +27,6 @@ class DjVuToBeMigrated(DjVu):
     """
     DjVu File ready for migration
     """
-
-    @classmethod
-    def hash_to_pattern(cls,hash:str):
-        """
-        convert a mediawiki hash value to a pattern
-        """
-
 
 
 @lod_storable
@@ -85,26 +57,31 @@ class Server:
     def find_djvu_images(
         self,
         imagefolder_name: str,
+        mw_hash: MediaWikiHash,
     ) -> List[str]:
         """
-        Find all .djvu files in the hex subdirectories (0-f) of an image folder
-        on a remote server.  Results are cached in
-        ~/.djvuviewer/{imagefolder_name}/djvu_filelist.txt and reused until
-        the cache is older than *expiry_secs* seconds.
+        Find all .djvu files in a single hash bucket subfolder of an image
+        folder on a remote server.  Results are cached in
+        ~/.djvuviewer/{imagefolder_name}/{hash_value}/filelist.txt and reused
+        until the cache is older than imagefolder.cache_expiration seconds.
+
+        The remote find command uses -printf to emit pipe-separated metadata:
+            path|size|mtime|ctime|user|group|mode
 
         Args:
-            server: The server that hosts the image folder.
             imagefolder_name: Short name used as the local cache directory.
+            mw_hash: The hash bucket (e.g. "c/c7") to search within.
 
         Returns:
-            Sorted list of relative .djvu file paths found under the hex dirs.
+            List of pipe-separated file records found in that bucket.
         """
+        filelist=[]
         imagefolder = self.imagefolders.get(imagefolder_name)
         if not imagefolder:
             raise Exception(f"invalid image folder name {imagefolder_name}")
-        cache_dir = DjVuConfig.get_config_dir() / imagefolder_name
+        cache_dir = DjVuConfig.get_config_dir() /"djvu_filelists"/ imagefolder_name
         cache_dir.mkdir(parents=True, exist_ok=True)
-        cache_file = cache_dir / "djvu_filelist.txt"
+        cache_file = cache_dir / f"{mw_hash.hash_value}.txt"
 
         cache_valid = (
             cache_file.exists()
@@ -113,20 +90,26 @@ class Server:
             < imagefolder.cache_expiration
         )
         if cache_valid:
-            djvu_paths = cache_file.read_text().splitlines()
-            return djvu_paths
+            filelist = cache_file.read_text().splitlines()
+            return filelist
 
-        cmd = f"find {imagefolder.path} -type f -path '*/[0-9a-f]/*.djvu' 2>/dev/null"
-        remote = Remote(host=self.hostname)
-        result = remote.run(cmd)
-        raw_output = result.stdout or ""
-        djvu_paths = sorted(
-            line.strip() for line in raw_output.splitlines() if line.strip()
+        bucket_path = f"{imagefolder.path}/{mw_hash.path}"
+        cmd = (
+            f"find {bucket_path} -type f -name '*.djvu'"
+            f" -printf '%p|%s|%T+|%C+|%u|%g|%m\\n' | iconv -f iso-8859-1 -t utf-8//IGNORE 2>/dev/null"
         )
+        try:
+            remote = Remote(host=self.hostname)
+            result = remote.run(cmd)
+            raw_output = result.stdout or ""
+            filelist = sorted(
+                line.strip() for line in raw_output.splitlines() if line.strip()
+            )
+            cache_file.write_text("\n".join(filelist))
+        except Exception as ex:
+            print(f"caching {bucket_path} failed with {str(ex)}")
 
-        cache_file.write_text("\n".join(djvu_paths))
-        imagefolder.total = len(djvu_paths)
-        return djvu_paths
+        return filelist
 
     def check_bundled_by_size(self, filesize: int, min_uncompressed: int) -> bool:
         """
@@ -231,7 +214,6 @@ class ServerProfile:
         self.djvu_manager = DjVuManager(self.djvu_config)
         self.debug = debug
         self.verbose = verbose
-        self.filelist_of_folder = {}
 
     def imagefolder_gen(self):
         """
@@ -244,9 +226,16 @@ class ServerProfile:
                 imagefolder._server = server
                 yield imagefolder
 
-    def cache_filelists(self):
+    def cache_filelists(self, limit:int=256,progress_bar=None):
         """
-        cache filelists for all folders
+        Cache filelists for all image folders, bucketed by all 256 MediaWiki
+        hash values.  Each bucket's file records are fetched via find -printf
+        and stored in a per-bucket cache file.
+
+        Args:
+            progress_bar: Optional progress bar instance (e.g. a
+                NiceGUI or tqdm progress bar) that will be advanced once per
+                bucket via .update(1).  Pass None to skip.
         """
         for imagefolder in self.imagefolder_gen():
             server = imagefolder._server
@@ -254,8 +243,13 @@ class ServerProfile:
                 print(
                     f"fetching djvu files for {server.hostname} {imagefolder.path} ..."
                 )
-            filelist = server.find_djvu_images(imagefolder._name)
-            self.filelist_of_folder[imagefolder._name] = filelist
+            if progress_bar is not None:
+                progress_bar.total=limit
+            for value in range(limit):
+                mw_hash = MediaWikiHash.of_value(value)
+                filelist = server.find_djvu_images(imagefolder._name, mw_hash)
+                if progress_bar is not None:
+                    progress_bar.update(1)
 
     def check_djvu(
         self, server: Server, imagefolder: ImageFolder, djvu: TestFile
@@ -395,14 +389,16 @@ class ServerProfile:
         scp_command = f"scp {source_path} {target_path}"
         return scp_command
 
-
-    def files_tomigrate(self, pattern: str, limit: Optional[int] = None) -> List[DjVuToBeMigrated]:
+    def files_tomigrate(
+        self, pattern: str, limit: Optional[int] = None
+    ) -> List[DjVuToBeMigrated]:
         """
         Filter files matching pattern for DjVu files needing to be migrated
 
         Args:
             pattern: Path pattern to match (e.g. "0/00")
             limit: Optional limit on number of files to check
+            progress_bar: Optional progress_bar
 
         Returns:
             List of DjVu files to migrate
@@ -420,18 +416,21 @@ class ServerProfile:
 
         return djvu_files
 
-    def create_file_tomigrate(self,djvu_record:Dict[str,object])->DjVuToBeMigrated:
-        """
-
-        """
-        file_tomigrate=DjVuToBeMigrated()
-        djvu_path=djvu_record.get("path")
+    def create_file_tomigrate(self, djvu_record: Dict[str, object]) -> DjVuToBeMigrated:
+        """ """
+        file_tomigrate = DjVuToBeMigrated(
+            path=djvu_record.get("path"),
+            page_count=djvu_record.get("page_count"),
+            bundled=djvu_record.get("bundled"),
+            filesize=djvu_record.get("filesize"),
+            package_filesize=djvu_record.get("package_filesize"),
+            iso_date=djvu_record.get("iso_date"),
+            package_iso_date=djvu_record.get("package_iso_date"),
+        )
         page_records = self.djvu_manager.query(
-            "all_pages_for_path", {"djvu_path": djvu_path, "limit": 10000}
+            "all_pages_for_path", {"djvu_path": file_tomigrate.path, "limit": 10000}
         )
         return file_tomigrate
-
-
 
     def show_migration_plan(self, eligible_files: List[dict], execute: bool):
         """

@@ -49,7 +49,7 @@ class DjVuMigration(BaseCmd):
         self.args = args
         self.djvu_config = DjVuConfig.get_instance()
         self.server_config = ServerConfig.of_yaml()
-
+        self.progress_bar = None
 
     def add_arguments(self, parser: ArgumentParser) -> ArgumentParser:
         """
@@ -66,6 +66,11 @@ class DjVuMigration(BaseCmd):
             "--info",
             action="store_true",
             help="Show migration statistics from all sources",
+        )
+        parser.add_argument(
+            "--progress",
+            action="store_true",
+            help="Show progress bar",
         )
         parser.add_argument(
             "--format",
@@ -112,12 +117,17 @@ class DjVuMigration(BaseCmd):
         )
         return parser
 
-    def configure_profile(self, debug: bool = False):
+    def configure_profile(self, debug: bool = False, progress_bar=None):
         """
         configure my profile
+
+        Args:
+            debug: Enable debug output.
+            åprogress_bar: Optional progress bar advanced once per
+                hash bucket (256 steps per image folder).
         """
         self.profile = ServerProfile(self.server_config, debug=debug)
-        self.profile.cache_filelists()
+        self.profile.cache_filelists(limit=3,progress_bar=progress_bar)
 
     def handle_args(self, args: Namespace) -> bool:
         """
@@ -130,7 +140,14 @@ class DjVuMigration(BaseCmd):
             True if handled
         """
         handled = super().handle_args(args)
-        self.configure_profile(debug=args.debug)
+        optional_progress_bar = (
+            TqdmProgressbar(total=256, desc="caching filelists")
+            if getattr(args, "progress", False)
+            else None
+        )
+        self.configure_profile(
+            debug=args.debug, optional_progress_bar=optional_progress_bar
+        )
         if args.info:
             self.show_info()
             handled = True
@@ -146,11 +163,19 @@ class DjVuMigration(BaseCmd):
             handled = True
         return handled
 
-    def update_profile(self, tablefmt: str, write: bool = False):
+    def update_profile(
+        self, tablefmt: str, write: bool = False, optional_progress_bar=None
+    ):
         """
         update the profile
+
+        Args:
+            tablefmt: Table format for display.
+            write: Whether to persist the updated profile.
+            optional_progress_bar: Optional progress bar advanced once per
+                hash bucket (256 steps per image folder).
         """
-        self.profile.cache_filelists()
+        self.profile.cache_filelists(optional_progress_bar=optional_progress_bar)
         self.profile.run()
         self.profile.show(tablefmt)
         if write:
@@ -337,8 +362,7 @@ class DjVuMigration(BaseCmd):
         execute: bool = False,
     ):
         """
-        Check migration eligibility for DjVu files matching *pattern* from the
-        source server image folder.
+        migrate DjVu files matching *pattern* from the source server image folder.
 
         Applies bundled check with size heuristic per file:
           1. file exists in DjVu Images database (djvu table)
@@ -353,7 +377,9 @@ class DjVuMigration(BaseCmd):
             execute: If True, execute scp; if False, dry-run (default: False)
 
         """
-        files_tomigrate = self.profile.files_tomigrate(pattern, limit)
+        files_tomigrate = self.profile.files_tomigrate(
+            pattern=pattern, limit=limit
+        )
         self.profile.show_migration_plan(files_tomigrate, execute)
 
 
