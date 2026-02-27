@@ -20,7 +20,8 @@ from djvuviewer.djvu_core import DjVu
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.lod_show import LodShow
 from djvuviewer.mw_hash import MediaWikiHash
-from mwstools_backend.remote import Remote
+from mwstools_backend.remote import Remote, RunConfig
+from ngwidgets.progress import TqdmProgressbar
 
 
 @dataclass
@@ -98,6 +99,7 @@ class ImageFolder:
     fs: str
     total: Optional[int] = None
     migrated: Optional[int] = None
+    cache: Optional[bool] = False
     cache_expiration: int = 86400
     statMs: Optional[float] = None
     readMs: Optional[float] = None
@@ -147,6 +149,7 @@ class Server:
         self,
         imagefolder_name: str,
         bucket_index: int,
+        debug: bool = False,
     ) -> List[str]:
         """
         Find all .djvu files in a single hash bucket subfolder of an image
@@ -181,7 +184,8 @@ class Server:
         )
         try:
             remote = Remote(host=self.hostname)
-            result = remote.run(cmd)
+            run_config = RunConfig(tee=debug)
+            result = remote.run(cmd, run_config=run_config)
             raw_output = result.stdout or ""
             filelist = sorted(
                 line.strip() for line in raw_output.splitlines() if line.strip()
@@ -323,39 +327,48 @@ class ServerProfile:
                 imagefolder._server = server
                 yield imagefolder
 
-    def cache_filelists(self, limit: int = 256, progress_bar: Optional=None):
+    def cache_filelists(self, limit: int = 256, progress_bar: Optional = None):
         """
         Cache filelists for all image folders, bucketed by all 256 MediaWiki
         hash values.  Each bucket's file records are fetched via find -printf
         and stored in a per-bucket cache file.
+
+        Only caches imagefolders where imagefolder.cache is True.
 
         Args:
             progress_bar: Optional progress bar instance (e.g. a
                 NiceGUI or tqdm progress bar) that will be advanced once per
                 bucket via .update(1).  Pass None to skip.
         """
-        for imagefolder in self.imagefolder_gen():
+        imagefolders = [imgf for imgf in self.imagefolder_gen() if imgf.cache]
+        if progress_bar is not None:
+            progress_bar.total = limit * len(imagefolders)
+        for imagefolder in imagefolders:
             server = imagefolder._server
             if self.debug:
                 print(
                     f"fetching djvu files for {server.hostname} {imagefolder.path} ..."
                 )
             if progress_bar is not None:
-                progress_bar.total = limit
+                progress_bar.set_description(f"{server.hostname}:{imagefolder._name}")
             for bucket_index in range(limit):
-                filelist = server.find_djvu_images(imagefolder._name, bucket_index)
+                filelist = server.find_djvu_images(
+                    imagefolder._name, bucket_index, debug=self.debug or self.verbose
+                )
                 if progress_bar is not None:
                     progress_bar.update(1)
-        pass
+                yield imagefolder, filelist
 
-    def index_filelists(self, progress_bar:Optional=None) -> int:
+    def index_filelists(
+        self, limit: Optional[int] = 256, with_progress: bool = False
+    ) -> int:
         """
-        Import all cached bucket filelist files into a single SQLite database
-        via ContentIndexer.  Only existing cache files are imported; missing
-        buckets are silently skipped.
+        Cache and import all bucket filelist files into a single SQLite database
+        via ContentIndexer. Consumes cache_filelists generator internally.
 
         Args:
-            progress_bar: Optional progress bar advanced once per bucket file.
+            limit: Number of hash buckets to process (0-255, default 256).
+            with_progress: Whether to show a progress bar.
 
         Returns:
             Total number of records imported.
@@ -365,19 +378,25 @@ class ServerProfile:
             raise ValueError("files_db_path not set in server_config")
         indexer = ContentIndexer(db_path=files_db_path)
         total_imported = 0
-        for imagefolder in self.imagefolder_gen():
-            for bucket_index in range(256):
-                bucket = Bucket.of_index(
-                    bucket_index, imagefolder.path, str(imagefolder.get_cache_dir())
+        progress_bar = None
+        if with_progress:
+            imagefolders_count = len(
+                [imgf for imgf in self.imagefolder_gen() if imgf.cache]
+            )
+            total = limit * imagefolders_count
+            progress_bar = TqdmProgressbar(
+                total=total,
+                desc="indexing filelists",
+                unit="buckets",
+            )
+        for imagefolder, filelist in self.cache_filelists(
+            limit=limit, progress_bar=progress_bar
+        ):
+            if filelist:
+                imported = indexer.import_lines(
+                    lines=filelist, directory=imagefolder._name
                 )
-                cache_file = bucket.cache_file
-                if cache_file.exists() and cache_file.stat().st_size > 0:
-                    imported = indexer.import_file(
-                        content_file=str(cache_file),
-                        directory=imagefolder._name,
-                        progressbar=progress_bar,
-                    )
-                    total_imported += imported
+                total_imported += imported
         return total_imported
 
     def cache_expiration(self) -> float:
@@ -423,7 +442,8 @@ class ServerProfile:
         filepath = f"{imagefolder.path}{relpath}"
         cmd = f"djvudump {filepath}"
         profiler = Profiler(f"{cmd}", profile=self.debug or self.verbose)
-        result = remote.run(cmd)
+        run_config = RunConfig(tee=self.debug or self.verbose)
+        result = remote.run(cmd, run_config=run_config)
         output = result.stdout
         elapsed_sec = profiler.time()
         djvudump_ms = round(elapsed_sec * 1000, 1)
@@ -644,4 +664,5 @@ class ServerProfile:
                 if execute:
                     print(f"{scp}")
                     remote = Remote(host=source_server.hostname)
-                    remote.run(scp)
+                    run_config = RunConfig(tee=self.debug or self.verbose)
+                    remote.run(scp, run_config=run_config)

@@ -158,14 +158,7 @@ class DjVuMigration(BaseCmd):
             handled = True
         if args.cache:
             limit = args.limit if args.limit else 256
-            progress_bar = TqdmProgressbar(
-                total=limit, desc="caching filelists", unit="hash buckets"
-            )
-            self.profile.cache_filelists(limit=limit, progress_bar=progress_bar)
-            progress_bar = TqdmProgressbar(
-                total=limit, desc="indexing filelists", unit="hash buckets"
-            )
-            self.profile.index_filelists(progress_bar=progress_bar)
+            self.profile.index_filelists(limit=limit, with_progress=args.progress)
             handled = True
         if args.profile_servers:
             self.update_profile(

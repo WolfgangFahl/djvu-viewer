@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from lodstorage.sql import SQLDB
+from lodstorage.sql import SQLDB, EntityInfo
 from ngwidgets.progress import TqdmProgressbar
 
 logger = logging.getLogger(__name__)
@@ -79,6 +79,55 @@ class ContentIndexer:
             encoding_issue = 1
         return encoding_issue
 
+    def import_lines(
+        self,
+        lines: List[str],
+        directory: str,
+    ) -> int:
+        """
+        Import lines directly from memory into database.
+
+        Args:
+            lines: List of pipe-separated file records
+            directory: Directory name for the content
+
+        Returns:
+            Number of records imported
+        """
+        records = []
+        for line in lines:
+            line = line.strip()
+            if line.startswith("#") or not line:
+                continue
+
+            parts = line.split("|")
+            if len(parts) >= 4:
+                filepath = parts[0]
+                path = os.path.dirname(filepath)
+                filename = os.path.basename(filepath)
+                name_part, ext = os.path.splitext(filename)
+                ext = ext.lstrip(".").lower() if ext else ""
+                encoding_issue = self.check_encoding_issue(filepath)
+
+                record = {
+                    "directory": directory,
+                    "path": path,
+                    "filename": filename,
+                    "ext": ext,
+                    "size": parts[1],
+                    "mtime": parts[2],
+                    "ctime": parts[3],
+                    "encoding_issue": encoding_issue,
+                }
+                records.append(record)
+
+        if records:
+            entity_info = EntityInfo(records, "files", primaryKey=None, quiet=True)
+            self.sqldb.store(records, entity_info, replace=True)
+
+        imported_count = len(records)
+        return imported_count
+
     def import_file(
         self,
         content_file: str,
@@ -101,53 +150,8 @@ class ContentIndexer:
             logger.warning(f"Content file not found: {content_file}")
             return 0
 
-        # Count total lines for progress bar
-        total_lines = 0
         with open(content_file, encoding="utf-8", errors="replace") as f:
-            total_lines = sum(1 for line in f if not line.strip().startswith("#"))
+            lines = f.readlines()
 
-        if progressbar is None:
-            progressbar = TqdmProgressbar(
-                total=total_lines, desc=f"Importing {directory}", unit="lines"
-            )
-
-        records = []
-        with open(content_file, encoding="utf-8", errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                # Skip comment lines
-                if line.startswith("#") or not line:
-                    continue
-
-                parts = line.split("|")
-                if len(parts) >= 4:
-                    filepath = parts[0]
-                    # Split into path and filename
-                    path = os.path.dirname(filepath)
-                    filename = os.path.basename(filepath)
-                    # Extract extension properly
-                    name_part, ext = os.path.splitext(filename)
-                    ext = ext.lstrip(".").lower() if ext else ""
-                    # Check for encoding issues
-                    encoding_issue = self.check_encoding_issue(filepath)
-
-                    record = {
-                        "directory": directory,
-                        "path": path,
-                        "filename": filename,
-                        "ext": ext,
-                        "size": parts[1],
-                        "mtime": parts[2],
-                        "ctime": parts[3],
-                        "encoding_issue": encoding_issue,
-                    }
-                    records.append(record)
-                    progressbar.update(1)
-
-        # Bulk insert
-        if records:
-            self.sqldb.store(records, "files", replace=True)
-
-        progressbar.close()
-        imported_count = len(records)
+        imported_count = self.import_lines(lines, directory)
         return imported_count

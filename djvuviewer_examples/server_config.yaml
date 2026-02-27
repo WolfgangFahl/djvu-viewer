@@ -22,6 +22,7 @@ servers:
       example.images:
         path: djvuviewer_examples/images
         fs: HD
+        cache: true
       example.tmp:
         path: /tmp/djvumigration
         fs: HD
