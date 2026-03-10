@@ -83,7 +83,7 @@ class DjVuToBeMigrated(DjVu):
     """
 
     ready: bool = False
-    min_uncompressed: float=0
+    min_uncompressed: float = 0
 
     @property
     def bundled_marker(self) -> str:
@@ -108,6 +108,7 @@ class DjVuToBeMigrated(DjVu):
             cr = self.min_uncompressed / self.filesize
             self.compression_ratio = cr
             self.ready = cr < 1000  # heuristic
+
 
 @lod_storable
 class ImageFolder:
@@ -505,14 +506,11 @@ class ServerProfile:
         Returns:
             djvudumpMs or None if check failed.
         """
-        remote = Remote(host=server.hostname)
         relpath = self.djvu_config.normalize_relpath(djvu.path)
         filepath = f"{imagefolder.path}{relpath}"
         cmd = f"djvudump {filepath}"
         profiler = Profiler(f"{cmd}", profile=self.debug or self.verbose)
-        run_config = RunConfig(tee=self.debug or self.verbose)
-        result = remote.run(cmd, run_config=run_config)
-        output = result.stdout
+        output = server.run_remote(cmd, debug=self.debug or self.verbose)
         elapsed_sec = profiler.time()
         djvudump_ms = round(elapsed_sec * 1000, 1)
 
@@ -678,11 +676,12 @@ class ServerProfile:
                 f"{target_server.hostname}:{target_folder.path}{normalized_relpath}"
             )
             df.check_readiness()
+            original_iso_date = df.iso_date
             if not df.ready:
                 # according to the database record the file is small let's check the real situation
                 source_file_path = f"{source_folder.path}{normalized_relpath}"
                 source_server.set_remote_fileinfo(
-                    df,source_file_path, debug=self.debug or self.verbose
+                    df, source_file_path, debug=self.debug or self.verbose
                 )
                 # reassess
                 df.check_readiness()
@@ -694,8 +693,14 @@ class ServerProfile:
             else:
                 scp_command = f"scp -p {source_path} {target_path}"
                 relpath = self.djvu_config.normalize_relpath(df.path)
+                # Touch back the file if the copied file is newer than original
+                touch_date=original_iso_date if (
+                    df.iso_date
+                        and original_iso_date
+                        and df.iso_date > original_iso_date
+                    ) else ""
                 script = (
-                    f"{self.config.migration_script} {relpath}"
+                    f"{self.config.migration_script} {relpath} {touch_date}"
                     if self.config.migration_script
                     else ""
                 )
@@ -710,10 +715,11 @@ class ServerProfile:
 
                 if execute:
                     print(f"{scp_command}")
-                    run_config = RunConfig(tee=self.debug or self.verbose)
-                    remote = Remote(host=source_server.hostname)
-                    remote.run(scp_command, run_config=run_config)
+                    source_server.run_remote(
+                        scp_command, debug=self.debug or self.verbose
+                    )
                     if script:
                         print(f"{script}")
-                        remote = Remote(host=target_server.hostname)
-                        remote.run(script, run_config=run_config)
+                        target_server.run_remote(
+                            script, debug=self.debug or self.verbose
+                        )
