@@ -6,24 +6,24 @@ MediaWiki Server handling
 @author: wf
 """
 
-import os
-import time
 from copy import copy
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
+import subprocess
+import time
 from typing import Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
-from mwstools_backend.remote import Remote, RunConfig
-from ngwidgets.progress import TqdmProgressbar
-
 from djvuviewer.content_indexer import ContentIndexer
 from djvuviewer.djvu_config import DjVuConfig
 from djvuviewer.djvu_core import BaseFile, DjVu
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.lod_show import LodShow
 from djvuviewer.mw_hash import MediaWikiHash
+from mwstools_backend.remote import Remote, RunConfig
+from ngwidgets.progress import TqdmProgressbar
 
 
 @dataclass
@@ -167,7 +167,7 @@ class Server:
     imagefolders: Dict[str, ImageFolder] = field(default_factory=dict)
     is_local: Optional[bool] = False
 
-    def run_remote(self, cmd: str, debug: bool = False) -> str:
+    def run_remote(self, cmd: str, debug: bool = False) -> subprocess.CompletedProcess:
         """
         Execute a command on the remote server.
 
@@ -176,20 +176,18 @@ class Server:
             debug: If True, show command output during execution
 
         Returns:
-            Command stdout output as string
+            CompletedProcess
 
         Raises:
             Exception: If the remote command execution fails
         """
-        raw_output = ""
         try:
             remote = Remote(host=self.hostname)
-            run_config = RunConfig(tee=debug)
+            run_config = RunConfig(tee=debug, do_log=debug)
             result = remote.run(cmd, run_config=run_config)
-            raw_output = result.stdout or ""
         except Exception as ex:
             raise Exception(f"remote command on {self.hostname} failed: {str(ex)}")
-        return raw_output
+        return result
 
     def set_remote_fileinfo(
         self, base_file: BaseFile, file_path: str, debug: bool = False
@@ -202,19 +200,15 @@ class Server:
             file_path: Absolute path to the file on the remote server
             debug: If True, show command output during execution
         """
-        cmd = (
-            f"find '{file_path}' -maxdepth 0 -type f"
-            f" -printf '%p|%s|%T+|%C+|%u|%g|%m\\n' 2>/dev/null"
-        )
         try:
-            raw_output = self.run_remote(cmd, debug=debug)
-            if raw_output.strip():
-                line = raw_output.strip()
-                parts = line.split("|")
-                if len(parts) == 7:
-                    base_file.filename = os.path.basename(parts[0])
-                    base_file.filesize = int(parts[1]) if parts[1].isdigit() else 0
-                    base_file.iso_date = parts[2]
+            remote = Remote(host=self.hostname)
+            stats = remote.get_file_stats(file_path)
+            if stats is None:
+                base_file.filesize = -1
+            else:
+                base_file.filename = stats.basename
+                base_file.filesize = stats.size
+                base_file.iso_date = stats.modified_iso
         except Exception as ex:
             if debug:
                 print(f"set_remote_fileinfo for {file_path} failed: {str(ex)}")
@@ -257,7 +251,8 @@ class Server:
             f" -printf '%p|%s|%T+|%C+|%u|%g|%m\\n' | iconv -f iso-8859-1 -t utf-8//IGNORE 2>/dev/null"
         )
         try:
-            raw_output = self.run_remote(cmd, debug=debug)
+            remote_result = self.run_remote(cmd, debug=debug)
+            raw_output = remote_result.stdout
             filelist = sorted(
                 line.strip() for line in raw_output.splitlines() if line.strip()
             )
@@ -513,7 +508,8 @@ class ServerProfile:
         filepath = f"{imagefolder.path}{relpath}"
         cmd = f"djvudump {filepath}"
         profiler = Profiler(f"{cmd}", profile=self.debug or self.verbose)
-        output = server.run_remote(cmd, debug=self.debug or self.verbose)
+        remote_result = server.run_remote(cmd, debug=self.debug or self.verbose)
+        output = remote_result.stdout
         elapsed_sec = profiler.time()
         djvudump_ms = round(elapsed_sec * 1000, 1)
 
@@ -657,8 +653,22 @@ class ServerProfile:
         )
         return file_tomigrate
 
+    def print_status(self, message: str):
+        """
+        Print status message to stdout and optionally to logfile.
+
+        Args:
+            message: Status message to print
+        """
+        print(message)
+        if self.logfile:
+            with open(self.logfile, "a", encoding="utf-8") as log_file:
+                log_file.write(message + "\n")
+
     def show_migration_plan(
-        self, files_tomigrate: List[DjVuToBeMigrated], execute: bool
+        self,
+        files_tomigrate: List[DjVuToBeMigrated],
+        execute: bool,
     ):
         """
         Display migration plan with check results and scp commands.
@@ -689,7 +699,7 @@ class ServerProfile:
                 # reassess
                 df.check_readiness()
             if not df.ready:
-                print(
+                self.print_status(
                     f"❌ {df.bundled_marker} {df.path}:cr={df.compression_ratio:.1f} "
                 )
             else:
@@ -715,9 +725,7 @@ class ServerProfile:
                 target_file_check = copy(df)
                 target_file_path = f"{target_folder.path}{normalized_relpath}"
                 target_server.set_remote_fileinfo(
-                    target_file_check,
-                    target_file_path,
-                    debug=False
+                    target_file_check, target_file_path, debug=False
                 )
 
                 file_exists_on_target = (
@@ -725,11 +733,13 @@ class ServerProfile:
                 )
 
                 if file_exists_on_target:
-                    print(
+                    self.print_status(
                         f"ℹ️  {df.bundled_marker}: {df.path}: file already exists on target (size: {target_file_check.filesize:,} bytes) - skipping"
                     )
                 else:
-                    print(f"✅ {df.bundled_marker}: {df.path}: {scp_command} {script}")
+                    self.print_status(
+                        f"✅ {df.bundled_marker}: {df.path}: {scp_command} {script}"
+                    )
                     pass
                     # print(f"  Page count: {checks.get('page_count', 'N/A')}")
                     # print(f"  Filesize: {checks.get('filesize', 0):,} bytes")

@@ -128,6 +128,12 @@ class DjVuMigration(BaseCmd):
             action="store_true",
             help="Execute scp commands (default: dry-run showing intended commands)",
         )
+        parser.add_argument(
+            "--logfile",
+            metavar="PATH",
+            default=None,
+            help="Write migration plan output to logfile (in addition to stdout)",
+        )
         return parser
 
     def configure_profile(self, debug: bool = False):
@@ -136,10 +142,12 @@ class DjVuMigration(BaseCmd):
 
         Args:
             debug: Enable debug output.
-            åprogress_bar: Optional progress bar advanced once per
+            progress_bar: Optional progress bar advanced once per
                 hash bucket (256 steps per image folder).
         """
         self.profile = ServerProfile(self.server_config, debug=debug)
+        self.profile.logfile=self.args.logfile
+        pass
 
     def handle_args(self, args: Namespace) -> bool:
         """
@@ -390,7 +398,9 @@ class DjVuMigration(BaseCmd):
 
         """
         files_tomigrate = self.profile.files_tomigrate(pattern=pattern, limit=limit)
-        self.profile.show_migration_plan(files_tomigrate, execute)
+        self.profile.show_migration_plan(
+            files_tomigrate, execute
+        )
 
 
 def main(argv: Optional[List[str]] = None) -> int:
