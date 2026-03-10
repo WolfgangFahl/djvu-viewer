@@ -8,6 +8,7 @@ MediaWiki Server handling
 
 import os
 import time
+from copy import copy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -109,7 +110,7 @@ class DjVuToBeMigrated(DjVu):
             self.compression_ratio = cr
             self.ready = cr < 1000  # heuristic
             if self.ready:
-                self.bundled=True
+                self.bundled = True
 
 
 @lod_storable
@@ -691,38 +692,59 @@ class ServerProfile:
                 print(
                     f"❌ {df.bundled_marker} {df.path}:cr={df.compression_ratio:.1f} "
                 )
-
             else:
                 scp_command = f"scp -p {source_path} {target_path}"
                 relpath = self.djvu_config.normalize_relpath(df.path)
                 # Touch back the file if the copied file is newer than original
-                touch_date=original_iso_date if (
-                    df.iso_date
+                touch_date = (
+                    original_iso_date
+                    if (
+                        df.iso_date
                         and original_iso_date
                         and df.iso_date > original_iso_date
-                    ) else ""
+                    )
+                    else ""
+                )
                 script = (
                     f"{self.config.migration_script} {relpath} {touch_date}"
                     if self.config.migration_script
                     else ""
                 )
 
-                print(f"✅ {df.bundled_marker}: {df.path}: {scp_command} {script}")
-                pass
-                # print(f"  Page count: {checks.get('page_count', 'N/A')}")
-                # print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
-                # print(f"  Min uncompressed: {checks.get('min_uncompressed', 0):,} bytes")
-                # print(f"  Bundled (DB): {checks.get('bundled_db', False)}")
-                # print(f"  Bundled (size): {checks.get('bundled_size', False)}")
+                # Check if file already exists on target
+                target_file_check = copy(df)
+                target_file_path = f"{target_folder.path}{normalized_relpath}"
+                target_server.set_remote_fileinfo(
+                    target_file_check,
+                    target_file_path,
+                    debug=False
+                )
 
-                if execute:
-                    print(f"{scp_command}")
-                    source_server.run_remote(
-                        scp_command, debug=self.debug or self.verbose
+                file_exists_on_target = (
+                    target_file_check.filesize and target_file_check.filesize > 0
+                )
+
+                if file_exists_on_target:
+                    print(
+                        f"ℹ️  {df.bundled_marker}: {df.path}: file already exists on target (size: {target_file_check.filesize:,} bytes) - skipping"
                     )
-                    if script:
-                        print(f"{script}")
-                        target_server.run_remote(
-                            script, debug=self.debug or self.verbose
-                        )
+                else:
+                    print(f"✅ {df.bundled_marker}: {df.path}: {scp_command} {script}")
                     pass
+                    # print(f"  Page count: {checks.get('page_count', 'N/A')}")
+                    # print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
+                    # print(f"  Min uncompressed: {checks.get('min_uncompressed', 0):,} bytes")
+                    # print(f"  Bundled (DB): {checks.get('bundled_db', False)}")
+                    # print(f"  Bundled (size): {checks.get('bundled_size', False)}")
+
+                    if execute:
+                        print(f"{scp_command}")
+                        source_server.run_remote(
+                            scp_command, debug=self.debug or self.verbose
+                        )
+                        if script:
+                            print(f"{script}")
+                            target_server.run_remote(
+                                script, debug=self.debug or self.verbose
+                            )
+                        pass
