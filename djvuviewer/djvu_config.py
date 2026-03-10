@@ -127,7 +127,10 @@ class DjVuConfig:
             wiki_url = urllib.parse.quote(wiki_url)
         return wiki_url
 
-    def normalize_relpath(self, relpath: str):
+    def normalize_relpath(self, relpath: str)->str:
+        """
+        normalize the relative path
+        """
         if relpath.startswith("/images"):
             relpath = relpath.replace("/images", "")
         return relpath

@@ -88,7 +88,8 @@ class DjVuToBeMigrated(DjVu):
         """
         Returns a Unicode icon indicating if the item is bundled (📦) or not bundled (🔗)
         """
-        return "📦" if self.bundled else "🔗"
+        marker="📦" if self.bundled else "🔗"
+        return marker
 
 
 @lod_storable
@@ -231,6 +232,7 @@ class ServerConfig:
     files_db_path: Optional[str] = None
     test_files: List[TestFile] = field(default_factory=list)
     servers: Dict[str, Server] = field(default_factory=dict)
+    migration_script: Optional[str]=None
 
     def __post_init__(self):
         """
@@ -560,7 +562,7 @@ class ServerProfile:
         target_path = (
             f"{target_server.hostname}:{target_folder.path}{normalized_relpath}"
         )
-        scp_command = f"scp {source_path} {target_path}"
+        scp_command = f"scp -p {source_path} {target_path}"
         return scp_command
 
     def files_tomigrate(
@@ -654,7 +656,11 @@ class ServerProfile:
                 scp = self.generate_scp_command(
                     source_server, source_folder, target_server, target_folder, df.path
                 )
-                print(f"✅ {df.bundled_marker}: {df.path}: {scp}")
+                relpath = self.djvu_config.normalize_relpath(df.path)
+                script=f"{self.config.migration_script} {relpath}" if self.config.migration_script else ""
+
+                print(f"✅ {df.bundled_marker}: {df.path}: {scp} {script}")
+                pass
                 # print(f"  Page count: {checks.get('page_count', 'N/A')}")
                 # print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
                 # print(f"  Min uncompressed: {checks.get('min_uncompressed', 0):,} bytes")
@@ -663,6 +669,10 @@ class ServerProfile:
 
                 if execute:
                     print(f"{scp}")
-                    remote = Remote(host=source_server.hostname)
                     run_config = RunConfig(tee=self.debug or self.verbose)
+                    remote = Remote(host=source_server.hostname)
                     remote.run(scp, run_config=run_config)
+                    if script:
+                        print(f"{script}")
+                        remote = Remote(host=target_server.hostname)
+                        remote.run(script,run_config=run_config)
