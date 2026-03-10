@@ -403,7 +403,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     Returns:
         Exit code (0 for success, non-zero for failure)
     """
-    exit_code=DjVuMigration.main(argv)
+    exit_code = DjVuMigration.main(argv)
     return exit_code
 
 

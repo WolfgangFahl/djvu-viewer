@@ -6,22 +6,23 @@ MediaWiki Server handling
 @author: wf
 """
 
-from dataclasses import dataclass, field
 import os
-from pathlib import Path
 import time
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from basemkit.profiler import Profiler
 from basemkit.yamlable import lod_storable
+from mwstools_backend.remote import Remote, RunConfig
+from ngwidgets.progress import TqdmProgressbar
+
 from djvuviewer.content_indexer import ContentIndexer
 from djvuviewer.djvu_config import DjVuConfig
-from djvuviewer.djvu_core import DjVu
+from djvuviewer.djvu_core import BaseFile, DjVu
 from djvuviewer.djvu_manager import DjVuManager
 from djvuviewer.lod_show import LodShow
 from djvuviewer.mw_hash import MediaWikiHash
-from mwstools_backend.remote import Remote, RunConfig
-from ngwidgets.progress import TqdmProgressbar
 
 
 @dataclass
@@ -82,15 +83,31 @@ class DjVuToBeMigrated(DjVu):
     """
 
     ready: bool = False
+    min_uncompressed: float=0
 
     @property
     def bundled_marker(self) -> str:
         """
         Returns a Unicode icon indicating if the item is bundled (📦) or not bundled (🔗)
         """
-        marker="📦" if self.bundled else "🔗"
+        marker = "📦" if self.bundled else "🔗"
         return marker
 
+    def check_readiness(self):
+        # check the readiness conditions
+        # Check if file is bundled based on size heuristic.
+        # Test data from 0/00 bucket:
+        # - Bundled: 1,868,800 / 300,694 = 6.2 (ratio < 20)
+        # - Bundled: 98,442,273 / 7,536,104 = 13.1 (ratio < 20)
+        # - Stub: 25,726,780 / 118 = 218,024 (ratio > 200,000)
+        if not self.filesize:
+            self.ready = False
+            self.compression_ratio = -1
+            pass
+        else:
+            cr = self.min_uncompressed / self.filesize
+            self.compression_ratio = cr
+            self.ready = cr < 1000  # heuristic
 
 @lod_storable
 class ImageFolder:
@@ -146,6 +163,58 @@ class Server:
     imagefolders: Dict[str, ImageFolder] = field(default_factory=dict)
     is_local: Optional[bool] = False
 
+    def run_remote(self, cmd: str, debug: bool = False) -> str:
+        """
+        Execute a command on the remote server.
+
+        Args:
+            cmd: Command to execute on the remote server
+            debug: If True, show command output during execution
+
+        Returns:
+            Command stdout output as string
+
+        Raises:
+            Exception: If the remote command execution fails
+        """
+        raw_output = ""
+        try:
+            remote = Remote(host=self.hostname)
+            run_config = RunConfig(tee=debug)
+            result = remote.run(cmd, run_config=run_config)
+            raw_output = result.stdout or ""
+        except Exception as ex:
+            raise Exception(f"remote command on {self.hostname} failed: {str(ex)}")
+        return raw_output
+
+    def set_remote_fileinfo(
+        self, base_file: BaseFile, file_path: str, debug: bool = False
+    ) -> None:
+        """
+        Set fileinfo fields on a BaseFile instance from remote server metadata.
+
+        Args:
+            base_file: BaseFile instance to update (filesize, iso_date, filename)
+            file_path: Absolute path to the file on the remote server
+            debug: If True, show command output during execution
+        """
+        cmd = (
+            f"find '{file_path}' -maxdepth 0 -type f"
+            f" -printf '%p|%s|%T+|%C+|%u|%g|%m\\n' 2>/dev/null"
+        )
+        try:
+            raw_output = self.run_remote(cmd, debug=debug)
+            if raw_output.strip():
+                line = raw_output.strip()
+                parts = line.split("|")
+                if len(parts) == 7:
+                    base_file.filename = os.path.basename(parts[0])
+                    base_file.filesize = int(parts[1]) if parts[1].isdigit() else 0
+                    base_file.iso_date = parts[2]
+        except Exception as ex:
+            if debug:
+                print(f"set_remote_fileinfo for {file_path} failed: {str(ex)}")
+
     def find_djvu_images(
         self,
         imagefolder_name: str,
@@ -184,10 +253,7 @@ class Server:
             f" -printf '%p|%s|%T+|%C+|%u|%g|%m\\n' | iconv -f iso-8859-1 -t utf-8//IGNORE 2>/dev/null"
         )
         try:
-            remote = Remote(host=self.hostname)
-            run_config = RunConfig(tee=debug)
-            result = remote.run(cmd, run_config=run_config)
-            raw_output = result.stdout or ""
+            raw_output = self.run_remote(cmd, debug=debug)
             filelist = sorted(
                 line.strip() for line in raw_output.splitlines() if line.strip()
             )
@@ -232,7 +298,7 @@ class ServerConfig:
     files_db_path: Optional[str] = None
     test_files: List[TestFile] = field(default_factory=list)
     servers: Dict[str, Server] = field(default_factory=dict)
-    migration_script: Optional[str]=None
+    migration_script: Optional[str] = None
 
     def __post_init__(self):
         """
@@ -585,24 +651,9 @@ class ServerProfile:
         size_records = self.djvu_manager.query(
             "min_uncompressed_for_path", {"djvu_path": file_tomigrate.path}
         )
-        min_uncompressed = (
+        file_tomigrate.min_uncompressed = (
             size_records[0].get("min_uncompressed", 0) if size_records else 0
         )
-        # check the readiness conditions
-        # Check if file is bundled based on size heuristic.
-        # Test data from 0/00 bucket:
-        # - Bundled: 1,868,800 / 300,694 = 6.2 (ratio < 20)
-        # - Bundled: 98,442,273 / 7,536,104 = 13.1 (ratio < 20)
-        # - Stub: 25,726,780 / 118 = 218,024 (ratio > 200,000)
-        if not file_tomigrate.filesize:
-            file_tomigrate.ready = False
-            file_tomigrate.compression_ratio = -1
-            pass
-        else:
-            cr = min_uncompressed / file_tomigrate.filesize
-            file_tomigrate.compression_ratio = cr
-            file_tomigrate.ready = cr < 1000  # heuristic
-
         return file_tomigrate
 
     def show_migration_plan(
@@ -626,13 +677,28 @@ class ServerProfile:
             target_path = (
                 f"{target_server.hostname}:{target_folder.path}{normalized_relpath}"
             )
+            df.check_readiness()
             if not df.ready:
-                print(f"❌ {df.bundled_marker} {df.path}:{df.compression_ratio:.1f}")
+                # according to the database record the file is small let's check the real situation
+                source_file_path = f"{source_folder.path}{normalized_relpath}"
+                source_server.set_remote_fileinfo(
+                    df,source_file_path, debug=self.debug or self.verbose
+                )
+                # reassess
+                df.check_readiness()
+            if not df.ready:
+                print(
+                    f"❌ {df.bundled_marker} {df.path}:cr={df.compression_ratio:.1f} "
+                )
 
             else:
                 scp_command = f"scp -p {source_path} {target_path}"
                 relpath = self.djvu_config.normalize_relpath(df.path)
-                script=f"{self.config.migration_script} {relpath}" if self.config.migration_script else ""
+                script = (
+                    f"{self.config.migration_script} {relpath}"
+                    if self.config.migration_script
+                    else ""
+                )
 
                 print(f"✅ {df.bundled_marker}: {df.path}: {scp_command} {script}")
                 pass
@@ -650,4 +716,4 @@ class ServerProfile:
                     if script:
                         print(f"{script}")
                         remote = Remote(host=target_server.hostname)
-                        remote.run(script,run_config=run_config)
+                        remote.run(script, run_config=run_config)
