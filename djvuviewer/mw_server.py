@@ -108,6 +108,8 @@ class DjVuToBeMigrated(DjVu):
             cr = self.min_uncompressed / self.filesize
             self.compression_ratio = cr
             self.ready = cr < 1000  # heuristic
+            if self.ready:
+                self.bundled=True
 
 
 @lod_storable
@@ -723,3 +725,4 @@ class ServerProfile:
                         target_server.run_remote(
                             script, debug=self.debug or self.verbose
                         )
+                    pass
