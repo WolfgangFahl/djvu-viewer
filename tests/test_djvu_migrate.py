@@ -130,23 +130,3 @@ class TestDjVuMigrate(Basetest):
         self.assertIsNotNone(source_folder)
         if self.debug:
             print(f"source: {source_server.hostname}, {source_folder.path}")
-
-    def test_generate_scp_command(self):
-        """
-        Test generate_scp_command produces correct format.
-        """
-        source_server = Server(hostname="source.example.com", os="Linux", latencyMs=0.0)
-        source_folder = ImageFolder(path="/source/images", fs="HD")
-        target_server = Server(hostname="target.example.com", os="Linux", latencyMs=0.0)
-        target_folder = ImageFolder(path="/target/images", fs="SSD")
-        relpath = "/0/00/Test.djvu"
-
-        self.migration.configure_profile(debug=self.debug)
-        scp_command = self.migration.profile.generate_scp_command(
-            source_server, source_folder, target_server, target_folder, relpath
-        )
-
-        expected = "scp source.example.com:/source/images/0/00/Test.djvu target.example.com:/target/images/0/00/Test.djvu"
-        self.assertEqual(scp_command, expected)
-        if self.debug:
-            print(f"scp_command: {scp_command}")

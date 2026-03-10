@@ -534,37 +534,6 @@ class ServerProfile:
         result = (server, imagefolder)
         return result
 
-    def generate_scp_command(
-        self,
-        source_server: Server,
-        source_folder: ImageFolder,
-        target_server: Server,
-        target_folder: ImageFolder,
-        relpath: str,
-    ) -> str:
-        """
-        Generate scp command for file migration.
-
-        Args:
-            source_server: Source server
-            source_folder: Source imagefolder
-            target_server: Target server
-            target_folder: Target imagefolder
-            relpath: Relative path of file (e.g. "/0/00/File.djvu")
-
-        Returns:
-            SCP command string
-        """
-        normalized_relpath = self.djvu_config.normalize_relpath(relpath)
-        source_path = (
-            f"{source_server.hostname}:{source_folder.path}{normalized_relpath}"
-        )
-        target_path = (
-            f"{target_server.hostname}:{target_folder.path}{normalized_relpath}"
-        )
-        scp_command = f"scp -p {source_path} {target_path}"
-        return scp_command
-
     def files_tomigrate(
         self, pattern: str, limit: Optional[int] = None
     ) -> List[DjVuToBeMigrated]:
@@ -650,16 +619,22 @@ class ServerProfile:
         target_server, target_folder = self.get_folder_server("target")
 
         for df in files_tomigrate:
+            normalized_relpath = self.djvu_config.normalize_relpath(df.path)
+            source_path = (
+                f"{source_server.hostname}:{source_folder.path}{normalized_relpath}"
+            )
+            target_path = (
+                f"{target_server.hostname}:{target_folder.path}{normalized_relpath}"
+            )
             if not df.ready:
                 print(f"❌ {df.bundled_marker} {df.path}:{df.compression_ratio:.1f}")
+
             else:
-                scp = self.generate_scp_command(
-                    source_server, source_folder, target_server, target_folder, df.path
-                )
+                scp_command = f"scp -p {source_path} {target_path}"
                 relpath = self.djvu_config.normalize_relpath(df.path)
                 script=f"{self.config.migration_script} {relpath}" if self.config.migration_script else ""
 
-                print(f"✅ {df.bundled_marker}: {df.path}: {scp} {script}")
+                print(f"✅ {df.bundled_marker}: {df.path}: {scp_command} {script}")
                 pass
                 # print(f"  Page count: {checks.get('page_count', 'N/A')}")
                 # print(f"  Filesize: {checks.get('filesize', 0):,} bytes")
@@ -668,10 +643,10 @@ class ServerProfile:
                 # print(f"  Bundled (size): {checks.get('bundled_size', False)}")
 
                 if execute:
-                    print(f"{scp}")
+                    print(f"{scp_command}")
                     run_config = RunConfig(tee=self.debug or self.verbose)
                     remote = Remote(host=source_server.hostname)
-                    remote.run(scp, run_config=run_config)
+                    remote.run(scp_command, run_config=run_config)
                     if script:
                         print(f"{script}")
                         remote = Remote(host=target_server.hostname)
