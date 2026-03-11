@@ -146,7 +146,7 @@ class DjVuMigration(BaseCmd):
                 hash bucket (256 steps per image folder).
         """
         self.profile = ServerProfile(self.server_config, debug=debug)
-        self.profile.logfile=self.args.logfile
+        self.profile.logfile=getattr(self.args, "logfile", None)
         pass
 
     def handle_args(self, args: Namespace) -> bool:

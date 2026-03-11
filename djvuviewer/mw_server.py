@@ -182,9 +182,9 @@ class Server:
             Exception: If the remote command execution fails
         """
         try:
-            remote = Remote(host=self.hostname)
             run_config = RunConfig(tee=debug, do_log=debug)
-            result = remote.run(cmd, run_config=run_config)
+            remote = Remote(host=self.hostname,run_config=run_config)
+            result = remote.run(cmd)
         except Exception as ex:
             raise Exception(f"remote command on {self.hostname} failed: {str(ex)}")
         return result
@@ -201,10 +201,12 @@ class Server:
             debug: If True, show command output during execution
         """
         try:
-            remote = Remote(host=self.hostname)
+            run_config = RunConfig(tee=debug, do_log=debug)
+            remote = Remote(host=self.hostname,run_config=run_config)
+
             stats = remote.get_file_stats(file_path)
             if stats is None:
-                base_file.filesize = -1
+                base_file.filesize = None
             else:
                 base_file.filename = stats.basename
                 base_file.filesize = stats.size

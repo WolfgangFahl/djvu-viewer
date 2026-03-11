@@ -11,7 +11,7 @@ from basemkit.basetest import Basetest
 
 from djvuviewer.djvu_migrate import DjVuMigration
 from djvuviewer.mw_hash import MediaWikiHash
-from djvuviewer.mw_server import ImageFolder, Server
+from djvuviewer.mw_server import Server
 
 
 class TestDjVuMigrate(Basetest):

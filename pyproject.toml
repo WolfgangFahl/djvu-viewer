@@ -27,7 +27,7 @@ dependencies = [
 	"ngwidgets>=0.30.3",
 
 	# remote calls and backup
-	"MediaWikiServerTools>=0.0.3",
+	"MediaWikiServerTools>=0.0.4",
 
 	# SSO and wiki access
 	# https://pypi.org/project/py-3rdparty-mediawiki/
